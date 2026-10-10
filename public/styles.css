@@ -48,8 +48,6 @@ body::after {
 
 .output {
   margin: 0 0 8px;
-  font: inherit;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--fg);
 }
