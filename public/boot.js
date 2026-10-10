@@ -109,21 +109,28 @@ const GLYPHS = {
   '0': ['.###.', '#..##', '#.#.#', '##..#', '.###.'],
 };
 
-async function logo(word) {
-  const rows = ['', '', '', '', ''];
-  for (const ch of word) {
-    GLYPHS[ch].forEach((r, i) => {
-      rows[i] += r.replace(/#/g, '█').replace(/\./g, ' ') + ' ';
-    });
-  }
-  const pre = document.createElement('pre');
-  pre.className = 'logo';
-  out.appendChild(pre);
-  rows.forEach((r, i) => { rows[i] = r.trimEnd(); });
-  for (let i = 0; i < rows.length; i++) {
-    pre.textContent += (i ? '\n' : '') + rows[i];
-    scroll();
-    await wait(140);
+async function logo(words) {
+  const box = document.createElement('div');
+  box.className = 'logo';
+  out.appendChild(box);
+  for (const word of words) {
+    const row = document.createElement('div');
+    row.className = 'logo-row';
+    box.appendChild(row);
+    for (const ch of word) {
+      const g = document.createElement('div');
+      g.className = 'glyph';
+      GLYPHS[ch].forEach((r) => {
+        for (const px of r) {
+          const c = document.createElement('i');
+          if (px === '#') c.className = 'on';
+          g.appendChild(c);
+        }
+      });
+      row.appendChild(g);
+      scroll();
+      await wait(110);
+    }
   }
 }
 
@@ -267,7 +274,7 @@ async function boot() {
   line();
 
   await flash();
-  await logo('FSOCIETY00');
+  await logo(['FSOC', 'IETY', '00']);
   await glitch();
   line('//  access level: GUEST  //', 'dim');
   await wait(600);
