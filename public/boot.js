@@ -82,6 +82,21 @@ async function glitch() {
   screen.classList.remove('glitch');
 }
 
+async function blackout(ms = 1400) {
+  screen.style.opacity = '0';
+  await wait(ms);
+  out.innerHTML = '';
+  window.scrollTo(0, 0);
+  screen.style.opacity = '1';
+}
+
+async function flash() {
+  if (skip) return;
+  screen.classList.add('flash');
+  await sleep(180);
+  screen.classList.remove('flash');
+}
+
 async function boot() {
   await wait(600);
 
@@ -194,19 +209,30 @@ async function boot() {
   await wait(1300);
   line('trace failed.', 'warn');
   await wait(700);
+  await flash();
   await glitch();
-  line();
+  await blackout(1500);
 
   // 9) příběh
-  await type('hello, friend.', 'big', 70);
-  await wait(900);
+  await type('hello, friend.', 'big', 130);
+  await wait(500);
+  await flash();
+  await glitch();
+  await wait(1200);
   line();
-  await type('you were not supposed to find this place.');
-  await wait(700);
-  await type('someone left something here for you.');
-  await wait(700);
-  await type('find it.');
-  await wait(600);
+  await type('you should not be here.', '', 60);
+  await wait(1100);
+  await type('but you are.', 'warn', 90);
+  await wait(1300);
+  line();
+  await type('there is something hidden in this system.');
+  await wait(900);
+  await type('find it before they do.');
+  await wait(1300);
+  line();
+  await type('they are already looking for you.', 'warn', 70);
+  await glitch();
+  await wait(800);
   line();
 
   skipHint.hidden = true;
@@ -215,3 +241,4 @@ async function boot() {
 }
 
 boot();
+    
