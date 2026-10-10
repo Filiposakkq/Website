@@ -112,13 +112,30 @@ body::before {
 
 /* ASCII logo */
 .output .logo {
+  --cell: min(18px, calc((100vw - 48px) / 26));
   margin: 0.8em 0 0.4em;
-  font-family: inherit;
-  line-height: 1;
-  white-space: pre;
-  font-size: min(18px, calc((100vw - 40px) / 26));
-  color: var(--fg);
-  text-shadow: 0 0 10px var(--fg), 0 0 22px rgba(51, 255, 102, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cell);
+}
+
+.logo-row {
+  display: flex;
+  gap: var(--cell);
+}
+
+.glyph {
+  display: grid;
+  grid-template-columns: repeat(5, var(--cell));
+  grid-auto-rows: var(--cell);
+  gap: 2px;
+}
+
+.glyph i { display: block; }
+
+.glyph i.on {
+  background: var(--fg);
+  box-shadow: 0 0 6px var(--fg), 0 0 14px rgba(51, 255, 102, 0.5);
 }
 
 .flash { animation: flash 0.18s steps(2) 1; }
