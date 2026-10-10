@@ -2,26 +2,19 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>fsociety00</title>
-        <link rel="stylesheet" href="styles.css">
-        </head>
-        <body>
-          <div class="screen">
-  <div class="output">
-    <div>fsociety00-dat [version 1.0.0]</div>
-    <div>(c) E Corp. All rights reserved.</div>
-    <div>&nbsp;</div>
-    <div>Connecting to server...</div>
-    <div>Connection established.</div>
-    <div>&nbsp;</div>
-    <div>Type 'help' to list available commands.</div>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fsociety00</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="screen" id="screen">
+    <div class="output" id="output"></div>
+    <div class="line" id="promptLine" hidden>
+      <span class="prompt">root@fsociety00:~$</span>
+      <span class="cursor"></span>
+    </div>
+    <div class="skip" id="skipHint">tap to skip</div>
   </div>
-  <div class="line">
-    <span class="prompt">root@fsociety00:~$</span>
-    <span class="cursor"></span>
-  </div>
-          </div>
-                                        </body>
-                                        </html>
-                                        
+  <script src="boot.js"></script>
+</body>
+</html>
