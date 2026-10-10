@@ -2,67 +2,76 @@
 
 :root {
   --bg: #000;
-    --fg: #33ff66;
-      --dim: #1a8f3a;
-      }
+  --fg: #33ff66;
+  --dim: #1a8f3a;
+}
 
-      * { box-sizing: border-box; }
+* { box-sizing: border-box; }
 
-      html, body {
-        margin: 0;
-          height: 100%;
-            background: var(--bg);
-              color: var(--fg);
-                font-family: 'VT323', 'Courier New', monospace;
-                  font-size: 22px;
-                    line-height: 1.3;
-                    }
+html {
+  -webkit-text-size-adjust: 100%;
+}
 
-                    .screen {
-                      min-height: 100%;
-                        padding: 24px;
-                          text-shadow: 0 0 6px rgba(51, 255, 102, 0.6);
-                          }
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'VT323', 'Courier New', monospace;
+  font-size: clamp(18px, 4.8vw, 22px);
+  line-height: 1.3;
+}
 
-                          /* scanlines */
-                          body::after {
-                            content: "";
-                              position: fixed;
-                                inset: 0;
-                                  pointer-events: none;
-                                    background: repeating-linear-gradient(
-                                        to bottom,
-                                            rgba(0, 0, 0, 0) 0,
-                                                rgba(0, 0, 0, 0) 2px,
-                                                    rgba(0, 0, 0, 0.25) 3px
-                                                      );
-                                                      }
+.screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(12px, 4vw, 24px);
+  padding-left: max(clamp(12px, 4vw, 24px), env(safe-area-inset-left));
+  padding-right: max(clamp(12px, 4vw, 24px), env(safe-area-inset-right));
+  padding-bottom: max(clamp(12px, 4vw, 24px), env(safe-area-inset-bottom));
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.6);
+}
 
-                                                      .output {
-                                                        margin: 0 0 8px;
-                                                          font: inherit;
-                                                            white-space: pre-wrap;
-                                                              color: var(--fg);
-                                                              }
+/* scanlines */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.25) 3px
+  );
+}
 
-                                                              .line {
-                                                                display: flex;
-                                                                  gap: 10px;
-                                                                    align-items: center;
-                                                                    }
+.output {
+  margin: 0 0 8px;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg);
+}
 
-                                                                    .prompt { color: var(--dim); }
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+}
 
-                                                                    .cursor {
-                                                                      display: inline-block;
-                                                                        width: 10px;
-                                                                          height: 1.1em;
-                                                                            background: var(--fg);
-                                                                              box-shadow: 0 0 8px var(--fg);
-                                                                                animation: blink 1s steps(1) infinite;
-                                                                                }
+.prompt { color: var(--dim); }
 
-                                                                                @keyframes blink {
-                                                                                  50% { opacity: 0; }
-                                                                                  }
-                                                                                  
+.cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  background: var(--fg);
+  box-shadow: 0 0 8px var(--fg);
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
