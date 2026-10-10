@@ -97,6 +97,36 @@ async function flash() {
   screen.classList.remove('flash');
 }
 
+const GLYPHS = {
+  F: ['#####', '#....', '####.', '#....', '#....'],
+  S: ['.####', '#....', '.###.', '....#', '####.'],
+  O: ['.###.', '#...#', '#...#', '#...#', '.###.'],
+  C: ['.####', '#....', '#....', '#....', '.####'],
+  I: ['#####', '..#..', '..#..', '..#..', '#####'],
+  E: ['#####', '#....', '####.', '#....', '#####'],
+  T: ['#####', '..#..', '..#..', '..#..', '..#..'],
+  Y: ['#...#', '.#.#.', '..#..', '..#..', '..#..'],
+  '0': ['.###.', '#..##', '#.#.#', '##..#', '.###.'],
+};
+
+async function logo(word) {
+  const rows = ['', '', '', '', ''];
+  for (const ch of word) {
+    GLYPHS[ch].forEach((r, i) => {
+      rows[i] += r.replace(/#/g, '█').replace(/\./g, ' ') + ' ';
+    });
+  }
+  const pre = document.createElement('pre');
+  pre.className = 'logo';
+  out.appendChild(pre);
+  rows.forEach((r, i) => { rows[i] = r.trimEnd(); });
+  for (let i = 0; i < rows.length; i++) {
+    pre.textContent += (i ? '\n' : '') + rows[i];
+    scroll();
+    await wait(140);
+  }
+}
+
 async function boot() {
   await wait(600);
 
@@ -212,6 +242,7 @@ async function boot() {
   await flash();
   await glitch();
   await blackout(1500);
+  if (window.setRain) setRain(0.22);
 
   // 9) příběh
   await type('hello, friend.', 'big', 130);
@@ -233,6 +264,13 @@ async function boot() {
   await type('they are already looking for you.', 'warn', 70);
   await glitch();
   await wait(800);
+  line();
+
+  await flash();
+  await logo('FSOCIETY00');
+  await glitch();
+  line('//  access level: GUEST  //', 'dim');
+  await wait(600);
   line();
 
   skipHint.hidden = true;
