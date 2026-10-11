@@ -3,6 +3,7 @@ import { createLevel01 } from './level01.js';
 import { createTerminal } from './tty.js';
 import { installDeveloperMenu } from './developer-menu.js';
 import { createAudioController } from './audio.js';
+import { createCaseFile } from './casefile.js';
 
 const out = document.getElementById('output');
 const screen = document.getElementById('screen');
@@ -32,6 +33,10 @@ const SKIP_HOLD_MS = 3000;
 
 const motionReduced = () => motionPreference.matches || document.body.classList.contains('quiet-motion');
 let activeTrace = null;
+const caseFile = createCaseFile({
+  trigger: document.getElementById('caseTrigger'),
+  getTraceLeft: () => activeTrace?.left() ?? null,
+});
 const createTrace = (seconds) => {
   activeTrace?.halt(true);
   audio.play('trace-appear');
@@ -523,6 +528,7 @@ async function wipe(els) {
 
 // The remote session ends; the local terminal then powers down.
 async function gameOver(trace, reason) {
+  caseFile.setFailureOutcome(reason);
   closePrompt();
   ambientIntervals.forEach(clearInterval);
   ambientIntervals.clear();
@@ -663,6 +669,7 @@ async function resetGame() {
   skipToChoiceArmed = true;
   cancelSkipHold();
   trusted = null;
+  caseFile.start();
   setSkipHint('BOOT');
   line('LOCAL CONSOLE RESTORED', 'dim');
   audio.setScene('boot');
@@ -724,7 +731,11 @@ async function promptGhost(trace) {
   el.className = 'choice';
   el.textContent = '[1] ./ghost.sh';
   let tapped = false;
-  const go = () => { if (tapped) return; tapped = true; ttyAbort(); };
+  const go = () => {
+    if (tapped) return;
+    tapped = true;
+    ttyAbort();
+  };
   el.addEventListener('click', go);
   box.appendChild(el);
 
@@ -738,6 +749,7 @@ async function promptGhost(trace) {
       closePrompt();
       el.classList.add('locked', 'picked');
       await cmd('./ghost.sh', 40);
+      caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the branch prompt.');
       ok = true;
     } else if (raw === null) {
       break;
@@ -746,15 +758,18 @@ async function promptGhost(trace) {
       if (runs.includes(c)) {
         closePrompt();
         el.classList.add('locked', 'picked');
+        caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the terminal.');
         ok = true;
       } else if (c === 'ls') {
         line('erased.list   ghost.sh');
       } else if (c === 'cat ghost.sh' || c === 'cat ./ghost.sh') {
+        caseFile.inspectGhostScript();
         line('#!/bin/sh', 'dim');
         line('# ghost :: by the one who cannot say his name', 'dim');
         line('close_trace');
         line('disconnect_peer watcher');
         line('invalidate_guest_session');
+        line('[inspection] three cleanup actions; no key material requested.', 'ok');
       } else if (c) {
         line(`command not found: ${raw.trim()}`, 'warn');
         line('run ghost.sh', 'dim');
@@ -1074,6 +1089,7 @@ async function revealName(trace, trusted) {
   await say('the trace is quiet. the watcher is gone.', { speed: 55 });
   await wait(1300);
   await say('but look at the list.', { speed: 70 });
+  caseFile.discover('erased-list');
   await wait(1200);
   await say('4097. that is you.', { cls: 'warn', speed: 80 });
   await wait(1400);
@@ -1099,14 +1115,31 @@ async function revealName(trace, trusted) {
   await wait(900);
   await say('ghost.sh took you off it. for now.', { speed: 55 });
   await wait(1500);
-  await say(
-    trusted === 'unknown'
-      ? 'you trusted me. i will not waste that.'
-      : 'you did not trust me. you came anyway. that is enough.',
-    { speed: 55 }
-  );
+  await say(trusted === 'unknown'
+    ? 'you chose the voice that warned you about the abort command.'
+    : branchDialogueForWatcher(caseFile.snapshot()),
+  { speed: 55 });
   await wait(1500);
+  const branch = caseFile.snapshot();
+  const outcome = trusted === 'unknown'
+    ? branch.relayVerified && branch.ghostScriptInspected ? 'verified-handoff' : 'unverified-handoff'
+    : branch.watcherIsolated ? 'contained-exit' : 'open-relay-exit';
+  caseFile.setOutcome(outcome);
+  const assessment = {
+    'verified-handoff': 'you checked the relay. you read the script. then you ran it.',
+    'unverified-handoff': 'you trusted the relay. the trace is closed, but the script was never verified.',
+    'contained-exit': 'you read his session log. pts/1 was isolated before the cleanup.',
+    'open-relay-exit': 'the script closed the session. you left the watcher channel open until then.',
+  }[outcome];
+  await say(assessment, { cls: outcome.includes('verified') || outcome === 'contained-exit' ? 'ok' : 'warn', speed: 52 });
+  await wait(1100);
   await playIdentityReveal(trusted);
+}
+
+function branchDialogueForWatcher(investigation) {
+  return investigation.watcherIsolated
+    ? 'you read the log. you cut my connection before the cleanup.'
+    : 'you chose the watcher. his channel stayed open until the script closed it.';
 }
 
 async function boot() {
@@ -1430,6 +1463,7 @@ async function boot() {
 
   // výběr: klepnutí na možnost, nebo napsat příkaz přímo do terminálu
   trusted = await terminal.chooseTrust({ cmd, line });
+  caseFile.chooseTrust(trusted);
   line();
   await wait(700);
 
@@ -1494,6 +1528,7 @@ const playLevel01 = createLevel01({
   wait,
   staticBurst,
   audio,
+  caseFile,
   gameOver,
   closePrompt,
   abortCommand: ttyAbort,
@@ -1518,14 +1553,16 @@ async function runDeveloperRoute(route) {
   document.body.classList.remove('powering-down');
   shutdownSequence.hidden = true;
   powerPanel.hidden = true;
-  trusted = 'unknown';
+  trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
+  caseFile.start(trusted);
+  caseFile.chooseTrust(trusted);
   audio.setScene(route === 'boot' ? 'boot' : 'story');
 
   if (route === 'boot') {
     await boot();
-  } else if (route === 'puzzle') {
+  } else if (route === 'puzzle' || route === 'puzzle-watcher') {
     audio.setScene('puzzle');
-    line('LOCAL TEST ROUTE // LEVEL 01 PUZZLE', 'dim');
+    line(`LOCAL TEST ROUTE // LEVEL 01 // ${trusted.toUpperCase()}`, 'dim');
     const trace = createTrace(120);
     trace.dock();
     const opened = await playLevel01(trace, trusted);
@@ -1588,6 +1625,7 @@ initialize.addEventListener('click', async () => {
     console.error('Scene audio could not be started from the initialize action.', error);
   });
   initialize.disabled = true;
+  caseFile.start();
   launch.classList.add('initializing');
   const stages = ['NEGOTIATING DISPLAY MODE', 'VERIFYING LOCAL CONSOLE', 'OPENING GUEST SESSION'];
   for (const stage of stages) {

@@ -3,41 +3,180 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Personal site and project index for Filiposakkq.">
-  <meta name="theme-color" content="#0b0d12">
-  <title>Filiposakkq — Home</title>
+  <meta name="description" content="Filiposakkq: a gamer and builder making original stories and projects inspired by games and shows.">
+  <meta name="theme-color" content="#10090c">
+  <title>Filiposakkq</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="ambient-grid" aria-hidden="true"></div>
+  <main class="page" id="main">
     <header class="site-header">
-      <a class="wordmark" href="/" aria-label="Filiposakkq home">F<span>.</span></a>
-      <span class="site-label">PERSONAL SITE <span aria-hidden="true">/</span> PROJECTS</span>
+      <a class="wordmark" href="#main" aria-label="Filiposakkq home">F<span>.</span></a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#about">ABOUT</a>
+        <a href="#projects">PROJECTS <span>01</span></a>
+        <span class="connection-state"><i aria-hidden="true"></i> INDEX ONLINE</span>
+      </nav>
     </header>
 
     <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow">INDEPENDENT WORK // ONLINE</p>
-      <h1 id="page-title">Filiposakkq<span class="period">.</span></h1>
-      <p class="summary">A home for my projects and experiments.</p>
+      <div class="intro-copy">
+        <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true">+</span> INDEPENDENT WORK <span class="slash">//</span> DIGITAL SPACE</p>
+        <h1 id="page-title">Filiposakkq<span class="period">.</span></h1>
+        <p class="summary">Developer, gamer, and curious builder drawn to code, security, and science fiction.</p>
+        <p class="hero-current"><span>LATELY INTO</span><b id="currentInterest">building little worlds with code</b></p>
+        <a class="explore-link" href="#about">GET TO KNOW ME <span aria-hidden="true">↓</span></a>
+      </div>
+      <div class="signal-art" aria-hidden="true">
+        <div class="signal-art-grid"></div>
+        <div class="orbit orbit-outer"><span></span></div>
+        <div class="orbit orbit-inner"><span></span></div>
+        <div class="signal-core"><b>F</b><i></i></div>
+        <span class="signal-label signal-label-top">SIGNAL / 001</span>
+        <span class="signal-label signal-label-right">ONLINE</span>
+        <span class="signal-cross signal-cross-one">+</span>
+        <span class="signal-cross signal-cross-two">+</span>
+        <span class="signal-coordinate">NODE 01<br>ACTIVE CHANNEL</span>
+      </div>
+      <div class="intro-index" aria-hidden="true"><span>PERSONAL SITE</span><span>FIELD NOTE 001</span></div>
     </section>
 
-    <section class="projects" aria-labelledby="projects-title">
-      <div class="section-heading">
-        <h2 id="projects-title">PROJECTS</h2>
-        <span>01</span>
+    <section class="about" id="about" aria-labelledby="about-title">
+      <div class="about-heading">
+        <p class="section-kicker">A LITTLE CONTEXT</p>
+        <h2 id="about-title">Curious by nature.<br><span>Building by choice.</span></h2>
       </div>
-      <a class="project-card" href="https://fsociety00.filiposakkq.dev/">
-        <span class="project-index">01 <span aria-hidden="true">/</span> INTERACTIVE STORY</span>
-        <span class="project-name">fsociety00</span>
-        <span class="project-description">A terminal-driven story. Find the key before the trace finds you.</span>
-        <span class="project-link">OPEN PROJECT <span aria-hidden="true">↗</span></span>
+      <div class="about-content">
+        <p class="about-bio">I’m Filiposakkq. I enjoy gaming, programming, and exploring pentesting. I like making all kinds of things, especially projects with a sci-fi or technology edge. A lot of my ideas start with shows or games I enjoy, then take a different route through my own twist and original story. I’m comfortable building with the core web languages, and always learning something new.</p>
+        <div class="about-details">
+          <section class="detail-block" aria-labelledby="tools-title">
+            <h3 id="tools-title"><span>01</span> THE TOOLKIT</h3>
+            <div class="skill-group">
+              <span class="skill-label">BUILDING WITH</span>
+              <ul class="skill-list">
+                <li><button class="tool-chip" type="button" data-tool-info="HTML // the structure behind a page" aria-pressed="false" aria-controls="toolkitNote">HTML</button></li>
+                <li><button class="tool-chip" type="button" data-tool-info="CSS // layouts, colors, and visual details" aria-pressed="false" aria-controls="toolkitNote">CSS</button></li>
+                <li><button class="tool-chip" type="button" data-tool-info="JavaScript // interactions that bring a page to life" aria-pressed="false" aria-controls="toolkitNote">JavaScript</button></li>
+              </ul>
+            </div>
+            <div class="skill-group">
+              <span class="skill-label">EXPLORING</span>
+              <ul class="skill-list skill-list-muted">
+                <li><button class="tool-chip" type="button" data-tool-info="Python // one of the languages I'm exploring" aria-pressed="false" aria-controls="toolkitNote">Python</button></li>
+                <li><button class="tool-chip" type="button" data-tool-info="Lua / Luau // still experimenting and learning" aria-pressed="false" aria-controls="toolkitNote">Lua / Luau</button></li>
+              </ul>
+            </div>
+            <p class="toolkit-note" id="toolkitNote" aria-live="polite">Pick a tool to peek inside my toolkit</p>
+          </section>
+          <section class="detail-block" aria-labelledby="languages-title">
+            <h3 id="languages-title"><span>02</span> TWO LANGUAGES</h3>
+            <div class="language-switcher" role="group" aria-label="Choose a language to see a phrase">
+              <button class="language-card is-active" type="button" data-phrase="Keep making things that feel like you." aria-pressed="true">
+                <span class="language-code">EN</span><span class="language-name">English</span><span class="language-mark" aria-hidden="true">↗</span>
+              </button>
+              <button class="language-card" type="button" data-phrase="Tvoř dál po svém." aria-pressed="false">
+                <span class="language-code">CZ</span><span class="language-name">Czech</span><span class="language-mark" aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <p class="language-phrase" id="languagePhrase" aria-live="polite">Keep making things that feel like you.</p>
+          </section>
+        </div>
+        <section class="inspiration-card" aria-label="What inspires my projects">
+          <div class="inspiration-stat"><strong>80<span>%</span></strong><span>GAMES &amp; SHOWS</span></div>
+          <div class="inspiration-copy">
+            <span class="inspiration-label">WHERE MY IDEAS START</span>
+            <p>I’m 80% games, movies, and shows. They inspire the starting point; the twist, characters, and story are mine.</p>
+          </div>
+        </section>
+        <div class="next-project">
+          <span class="next-project-mark" aria-hidden="true">+</span>
+          <span class="next-project-label">ON THE HORIZON</span>
+          <p>A future project inspired by <em>Person of Interest</em> is in the planning stage—an original story with my own take.</p>
+          <span class="next-project-state"><i aria-hidden="true"></i> EARLY IDEA</span>
+        </div>
+        <section class="contact-links" aria-label="Find me online">
+          <div class="contact-heading">
+            <span class="contact-label">FIND ME ONLINE</span>
+            <p>Follow along or say hello.</p>
+          </div>
+          <div class="contact-cards">
+            <a class="contact-card" href="https://github.com/Filiposakkq" target="_blank" rel="noreferrer">
+              <span class="contact-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 .9a11.1 11.1 0 0 0-3.51 21.63c.56.1.76-.24.76-.54v-2.08c-3.1.67-3.76-1.32-3.76-1.32-.5-1.28-1.24-1.62-1.24-1.62-1.01-.69.08-.68.08-.68 1.12.08 1.71 1.15 1.71 1.15 1 .1.76 2.07 3.18 1.56.1-.72.39-1.21.7-1.49-2.48-.28-5.09-1.24-5.09-5.52 0-1.22.44-2.22 1.15-3-.12-.28-.5-1.42.11-2.96 0 0 .94-.3 3.05 1.15a10.6 10.6 0 0 1 5.55 0c2.12-1.45 3.05-1.15 3.05-1.15.61 1.54.23 2.68.11 2.96.72.78 1.15 1.78 1.15 3 0 4.29-2.61 5.23-5.1 5.51.4.35.75 1.03.75 2.08v3.08c0 .3.2.65.77.54A11.1 11.1 0 0 0 12 .9Z"/></svg>
+              </span>
+              <span class="contact-card-copy"><strong>GitHub</strong><span>@Filiposakkq</span></span>
+              <span class="contact-card-action" aria-hidden="true">VIEW <b>↗</b></span>
+              <span class="sr-only"> (opens in new tab)</span>
+            </a>
+            <button class="contact-card contact-card-copy-button" type="button" data-copy-value="@filiposakkq">
+              <span class="contact-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M19.73 5.02a19.3 19.3 0 0 0-4.76-1.48l-.58 1.19a17.8 17.8 0 0 0-4.78 0l-.59-1.19a19.3 19.3 0 0 0-4.76 1.48C1.25 9.47.43 13.82.84 18.1a19.5 19.5 0 0 0 5.84 2.96l1.26-2.05c-.69-.24-1.35-.54-1.98-.89l.49-.38a13.8 13.8 0 0 0 11.1 0l.49.38c-.63.35-1.29.65-1.98.89l1.26 2.05a19.5 19.5 0 0 0 5.84-2.96c.49-4.96-.84-9.27-3.43-13.08ZM8.69 15.45c-1.08 0-1.97-.99-1.97-2.2s.87-2.2 1.97-2.2c1.11 0 1.99 1 1.97 2.2 0 1.21-.87 2.2-1.97 2.2Zm6.62 0c-1.08 0-1.97-.99-1.97-2.2s.87-2.2 1.97-2.2c1.11 0 1.99 1 1.97 2.2 0 1.21-.86 2.2-1.97 2.2Z"/></svg>
+              </span>
+              <span class="contact-card-copy"><strong>Discord</strong><span>@filiposakkq</span></span>
+              <span class="contact-card-action" data-copy-label><span class="copy-text">COPY </span><b>↗</b></span>
+            </button>
+          </div>
+          <span class="contact-status" id="contactStatus" aria-live="polite"></span>
+        </section>
+      </div>
+    </section>
+
+    <section class="projects" id="projects" aria-labelledby="projects-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">CURRENT TRANSMISSIONS</p>
+          <h2 id="projects-title">Selected work</h2>
+        </div>
+        <span class="project-count">01 <i>/</i> 01</span>
+      </div>
+      <a class="project-card" href="https://fsociety.filiposakkq.dev/" aria-label="fsociety00 — An interactive terminal story prototype">
+        <div class="project-copy">
+          <span class="project-index"><i aria-hidden="true"></i> 01 <span aria-hidden="true">/</span> INTERACTIVE STORY</span>
+          <span class="project-name">fsociety00<span class="project-period">.</span></span>
+          <span class="project-description">A playable story prototype. I plan to grow it into a longer story with more chapters, choices, and endings.</span>
+          <span class="project-tags"><i>STORY</i><i>PUZZLE</i><i>WEB</i></span>
+          <span class="project-link">OPEN PROJECT <span aria-hidden="true">↗</span></span>
+        </div>
+        <div class="project-visual" aria-hidden="true">
+          <div class="visual-topline"><span>FSOCIETY00 // GUEST CONSOLE</span><span>● LIVE</span></div>
+          <div class="visual-terminal">
+            <p><span class="terminal-prompt">guest@fsociety00:~$</span> locate the signal</p>
+            <p class="terminal-dim">[trace] connection is closing</p>
+            <p class="terminal-success">&gt; there is still time<span class="terminal-cursor"></span></p>
+          </div>
+          <div class="visual-footer"><span>INCOMING TRANSMISSION</span><span>00:02:00</span></div>
+          <div class="visual-orbit visual-orbit-one"></div>
+          <div class="visual-orbit visual-orbit-two"></div>
+          <span class="visual-cross visual-cross-one">+</span>
+          <span class="visual-cross visual-cross-two">+</span>
+        </div>
+        <span class="card-corner card-corner-one" aria-hidden="true"></span>
+        <span class="card-corner card-corner-two" aria-hidden="true"></span>
       </a>
     </section>
 
+    <section class="site-note" aria-label="About this site">
+      <span class="note-mark" aria-hidden="true">↳</span>
+      <p>This space is a growing collection of projects. More original stories and experiments will show up here as they’re ready.</p>
+      <span class="note-status"><i aria-hidden="true"></i> OPEN CHANNEL</span>
+    </section>
+
     <footer class="site-footer">
-      <span>FILIPOSAKKQ.DEV</span>
-      <span>BUILT AS A COLLECTION OF SMALL THINGS.</span>
+      <span>FILIPOSAKKQ.DEV <i>///</i> PERSONAL INDEX</span>
+      <a href="#main">BACK TO TOP <span aria-hidden="true">↑</span></a>
+      <span>© 2026 FILIPOSAKKQ. ORIGINAL SITE CONTENT.</span>
     </footer>
   </main>
+  <dialog class="easter-egg" id="easterEgg" aria-labelledby="easterTitle" aria-describedby="easterMessage">
+    <button class="easter-close" type="button" aria-label="Close hidden message">×</button>
+    <p class="section-kicker">UNAUTHORIZED TRANSMISSION // 001</p>
+    <h2 id="easterTitle">You found the backdoor.</h2>
+    <p id="easterMessage">A little nod to <em>Mr. Robot</em>, fsociety, and stories that make you question the system. This one is yours to rewrite.</p>
+    <span class="easter-signoff">fsociety00 <i>///</i> YOUR MOVE</span>
+  </dialog>
+  <script src="script.js"></script>
 </body>
 </html>

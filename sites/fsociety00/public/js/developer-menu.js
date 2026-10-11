@@ -47,6 +47,7 @@ function openDeveloperMenu(onAction) {
     ['JUMP TO', [
       ['boot', 'BIOS / INTRO', 'Run the full startup sequence from the beginning.'],
       ['puzzle', 'LEVEL 01 // PUZZLE', 'Start directly at the two-minute terminal puzzle.'],
+      ['puzzle-watcher', 'LEVEL 01 // WATCHER ROUTE', 'Test the watcher branch and its isolation decision.'],
       ['ending', 'GHOST SEQUENCE', 'Jump to the unlock flow and run the ghost sequence.'],
       ['identity', 'MR. ROBOT REVEAL', 'Play the identity reveal and dialogue.'],
     ]],

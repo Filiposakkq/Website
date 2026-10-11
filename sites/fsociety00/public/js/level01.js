@@ -33,6 +33,7 @@ export function createLevel01({
   wait,
   staticBurst,
   audio,
+  caseFile,
   gameOver,
   closePrompt,
   abortCommand,
@@ -137,9 +138,16 @@ export function createLevel01({
       'inbox/001.msg': () => [
         'the partition is not empty.',
         'it is locked.',
-        'the key is not in this system.',
-        'it is hidden in the page itself.',
-        'look closer.',
+        'pts/1 keeps telling you to type abort.',
+        'that closes the guest shell, not the remote operator.',
+        'read the cleanup script before you trust either channel.',
+      ],
+      'watcher/session.log': () => [
+        'operator: watcher // session: pts/1',
+        'attached: before guest login',
+        'request: abort guest session',
+        'note: abort returns control to the remote operator.',
+        'countermeasure: isolate pts/1 before cleanup.',
       ],
     };
 
@@ -163,27 +171,49 @@ export function createLevel01({
           line('  unlock <key>   try a key on sdb9');
           line('  hint           ask for help (-30s)');
           line('  trace          show monitoring status');
+          line('  board          review the evidence and decision log');
           line('  source map     inspect source clues (mobile-friendly)');
-          if (trusted === 'watcher') line('  abort          close the guest session');
+          if (trusted === 'watcher') {
+            line('  abort          close the guest session');
+            line('  isolate watcher   quarantine pts/1 (read its log first)');
+          } else {
+            line('  verify relay   validate the backchannel (read its note first)');
+          }
           break;
 
         case 'ls':
           audio.play('list-hit');
-          line('inbox/   notes.txt   readme.txt   page/   sdb9.lock');
+          line(trusted === 'watcher'
+            ? 'inbox/   notes.txt   readme.txt   page/   sdb9.lock   watcher/'
+            : 'inbox/   notes.txt   readme.txt   page/   sdb9.lock');
           break;
 
         case 'cat': {
           audio.play('file-read');
           const file = (args[0] || '').replace(/^\.?\/?(~\/)?/, '');
           if (!args[0]) line('usage: cat <file>', 'dim');
-          else if (files[file]) files[file]().forEach((entry) => line(entry || ' '));
+          else if (file === 'watcher/session.log' && trusted !== 'watcher') {
+            line(`cat: ${args[0]}: No such file or directory`, 'warn');
+          } else if (file === 'inbox/001.msg' && trusted !== 'unknown') {
+            line(`cat: ${args[0]}: No such file or directory`, 'warn');
+          } else if (files[file]) {
+            files[file]().forEach((entry) => line(entry || ' '));
+            if (file === 'sdb9.lock') caseFile.discover('lock-header');
+            if (file === 'inbox/001.msg') caseFile.discover('route-note');
+            if (file === 'watcher/session.log') caseFile.discover('watcher-log');
+          }
           else if (sourceFiles[file]) {
             try {
               const response = await fetch(sourceFiles[file].url);
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const source = await response.text();
               const clues = source.split(/\r?\n/).filter((entry) => sourceFiles[file].clue.test(entry));
-              if (clues.length) clues.forEach((entry) => line(entry, 'dim'));
+              if (clues.length) {
+                clues.forEach((entry) => line(entry, 'dim'));
+                const evidenceId = file === 'page/index.html' ? 'page-markup'
+                  : file === 'page/styles.css' ? 'page-style' : 'page-script';
+                caseFile.discover(evidenceId);
+              }
               else line('source clue not found in this file.', 'warn');
             } catch (error) {
               line(`source: could not read ${file}: ${error.message}`, 'warn');
@@ -191,6 +221,36 @@ export function createLevel01({
           } else line(`cat: ${args[0]}: No such file or directory`, 'warn');
           break;
         }
+
+        case 'board':
+        case 'evidence':
+          audio.play('file-read');
+          caseFile.open();
+          break;
+
+        case 'verify':
+          if (args[0]?.toLowerCase() !== 'relay' || trusted !== 'unknown') {
+            line('usage: verify relay', 'dim');
+          } else if (!caseFile.snapshot().discoveries.includes('route-note')) {
+            line('relay: read inbox/001.msg before you validate its claim.', 'warn');
+          } else {
+            caseFile.verifyRelay();
+            line('[route] abort maps to pts/0; the backchannel recommends inspected cleanup.', 'ok');
+            line('[branch] `cat ghost.sh` is still the only way to inspect the payload.', 'dim');
+          }
+          break;
+
+        case 'isolate':
+          if (args[0]?.toLowerCase() !== 'watcher' || trusted !== 'watcher') {
+            line('usage: isolate watcher', 'dim');
+          } else if (!caseFile.snapshot().discoveries.includes('watcher-log')) {
+            line('isolate: inspect watcher/session.log before changing the route.', 'warn');
+          } else {
+            caseFile.isolateWatcher();
+            line('[route] pts/1 quarantined. guest shell remains under local control.', 'ok');
+            line('[branch] abort would still hand control to the remote operator.', 'dim');
+          }
+          break;
 
         case 'source':
         case 'view-source':
@@ -217,6 +277,7 @@ export function createLevel01({
 
         case 'hint':
           audio.play('hint');
+          caseFile.markHint();
           if (hints >= level01Hints.length) {
             line('no more hints.', 'dim');
             break;
@@ -224,7 +285,10 @@ export function createLevel01({
           trace.set(Math.max(5, trace.left() - 30));
           line('[trace -30s]', 'warn');
           await say(level01Hints[hints++], { speed: 35 });
-          if (hints === level01Hints.length) revealSourcePart();
+          if (hints === level01Hints.length) {
+            revealSourcePart();
+            caseFile.discover('page-script', 'The final fragment was revealed by the hint sequence.');
+          }
           break;
 
         case 'unlock': {
@@ -233,6 +297,7 @@ export function createLevel01({
           if (guess === 'elliot') {
             audio.play('elliot-echo');
             showElliotEcho();
+            caseFile.discover('elliot-echo');
             break;
           }
           if (guess === key.join('-')) {
@@ -241,6 +306,7 @@ export function createLevel01({
             break;
           }
           attempts--;
+          caseFile.markFailedUnlock();
           audio.play('failure');
           const parts = guess.split('-');
           if (parts.length === key.length) {
