@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An interactive terminal story. Find the key before the trace finds you.">
+  <meta name="theme-color" content="#000000">
+  <meta property="og:title" content="fsociety00">
+  <meta property="og:description" content="An interactive terminal story. Find the key before the trace finds you.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any">
+  <!-- sdb9 :: layer 1/3 :: ghost -->
+  <meta name="sdb9-part-one" content="ghost">
+  <title>fsociety00</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="rain"></canvas>
+  <div class="launch" id="launch" role="dialog" aria-modal="true" aria-labelledby="launchTitle">
+    <div class="launch-signal">INCOMING CONNECTION // FSOCIETY00</div>
+    <h1 id="launchTitle">BOOT SEQUENCE READY</h1>
+    <p>Fullscreen recommended. Audio starts when you initialize.</p>
+    <button id="initialize" type="button">
+      <span class="initialize-label">[ INITIALIZE SYSTEM ]</span>
+      <span class="initialize-progress" aria-hidden="true"></span>
+    </button>
+    <div class="launch-status" id="launchStatus" aria-live="polite"></div>
+  </div>
+  <div class="screen" id="screen">
+    <div class="output" id="output"></div>
+    <div class="line" id="promptLine" hidden>
+      <span class="prompt">guest@fsociety00:~$</span>
+      <span class="cursor"></span>
+    </div>
+    <button class="skip" id="skipHint" type="button" aria-label="Hold for 3 seconds to skip the boot sequence" hidden>
+      <span class="skip-label">HOLD 3S // SKIP BOOT</span>
+      <span class="skip-progress" aria-hidden="true"></span>
+    </button>
+  </div>
+  <div class="shutdown-sequence" id="shutdownSequence" role="status" aria-live="assertive" hidden>
+    <div class="shutdown-frame">
+      <div class="shutdown-mark">FSOCIETY00 <span>///</span> CONSOLE CONTROL</div>
+      <div class="shutdown-kicker" id="shutdownKicker">LOCAL DISPLAY // POWER DOWN</div>
+      <h2 class="shutdown-title" id="shutdownTitle">CLOSING<br>SESSION</h2>
+      <div class="shutdown-readout">
+        <span id="shutdownPhase">FLUSHING LOCAL STATE</span>
+        <span id="shutdownCounter">01 / 04</span>
+      </div>
+      <div class="shutdown-meter"><span id="shutdownMeter"></span></div>
+      <div class="shutdown-events" id="shutdownEvents"></div>
+    </div>
+    <div class="shutdown-crosshair" aria-hidden="true"><i></i><i></i></div>
+  </div>
+  <div class="power-panel" id="powerPanel" role="dialog" aria-modal="true" aria-labelledby="powerTitle" hidden>
+    <div class="power-label">FSOCIETY00 // EMERGENCY SHUTDOWN</div>
+    <div class="power-title" id="powerTitle">SESSION<br>TERMINATED</div>
+    <div class="power-status" id="powerStatus">REMOTE SESSION CLOSED <span>///</span> LOCAL DISPLAY OFFLINE</div>
+    <div class="power-core" aria-hidden="true"><span></span></div>
+    <div class="power-rule"></div>
+    <div class="power-boot-log" id="powerBootLog" aria-live="polite">AWAITING LOCAL INPUT</div>
+    <button class="reboot" id="restartControl" type="button">[ REBOOT SYSTEM ]</button>
+    <div class="power-foot">PRESS TO RE-ESTABLISH LINK</div>
+  </div>
+  <script src="fx.js"></script>
+  <script type="module" src="js/story.js"></script>
+</body>
+</html>
