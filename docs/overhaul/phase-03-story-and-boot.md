@@ -1,0 +1,185 @@
+# Phase 3 — Story engine, realistic boot, realistic commands
+
+Read [`README.md`](README.md) first.
+
+- **Branch:** `overhaul/phase-3-story`
+- **Depends on:** phase 1 merged (session/abort, `GameContext`, utilities)
+- **Blocks:** phase 4 (it adds commands through the registry built here)
+- **Review items covered:** 5 (monolith), 6 (use the context), plus plan section 5 partly (boot text, Linux commands) and plan section 1 "move `chooseTrust`" follow-ups
+- **Plan section:** 5 ("Realistic hacker experience": boot sequence + more realistic commands, minus the new gameplay commands that belong to phase 4)
+- **Touches:** `js/story.js` (shrinks a lot), `js/level01.js`, new `js/engine.js`, `js/commands.js`, `js/story-data/*.js`
+
+## Goal
+
+1. Turn the 1,658-line imperative `story.js` into a small **engine + data**: dialogue, timing and sound cues become data that can be edited without touching engine code.
+2. Rewrite the **boot sequence** to look like a real compromised machine booting.
+3. Make the terminal feel like a real Linux shell with believable commands.
+
+The player-visible story, the puzzle, the characters' voices and the three-layer key must remain intact. This is a re-platforming plus the boot/command content work.
+
+## Current state (baseline `8ea680b`)
+
+- `story.js` mixes DOM wiring, skip-hold logic, effects (`glitch`, `gfx`, `flash`, `blackout`, `staticBurst`, `corrupt`), output primitives (`line`, `type`, `say`, `typingFor`, `cmd`, `bar`, `klog`, `svc`, `memtest`), the logo renderer, `gameOver`, `watcherTakeover`, `resetGame`, the ghost route (`promptGhost`, `runGhost`), the identity reveal (`playIdentityReveal`, `moveHelloIntoChat`, `revealName`, `renameEverywhere`), `branchDialogueForWatcher`, a ~400-line `boot()` and `runDeveloperRoute()`.
+- `boot()` has numbered stages as comments: `1) BIOS / POST` through `8) něco je špatně`, then `9) příběh` and the continuation, the LEVEL 01 brief, the trace HUD, the watcher interruption and the trust choice. Skip logic is flag based (`skip`, `skippable`, `skipToChoice`, `skipToChoiceArmed`).
+- `level01.js` implements commands with a big `switch (name)`: `help ls cat board evidence verify isolate source view-source trace hint unlock abort` (see the README for the flow).
+- `casefile.js` is the model of good structure: a declarative `EVIDENCE` array and rendering separate from data.
+
+## Design
+
+### 3.1 Node-based narrative engine — `js/engine.js`
+
+A story is an array of **nodes**. A runner walks it with a pointer and the phase 1 session (so abort works for free). Suggested node types (extend as needed):
+
+```js
+{ type: 'line',  text: 'FSOC-BIOS v3.1.4', style: 'dim', silent: true }
+{ type: 'type',  text: 'hello, friend.', speed: 90 }
+{ type: 'say',   who: 'unknown', text: "i've been waiting for you.", speed: 80, typoAt: 4 }
+{ type: 'typing', who: 'unknown', ms: 1800 }          // the three-dots indicator
+{ type: 'cmd',   text: 'ls /dev/sdb9' }                // types a command after the prompt
+{ type: 'sfx',   cue: 'boot-prompt' }
+{ type: 'scene', name: 'story' }                       // audio.setScene
+{ type: 'gfx',   name: 'rgb' }                         // glitch effect
+{ type: 'wait',  ms: 1200 }
+{ type: 'bar',   label: 'fsck /dev/sda1', ms: 1300 }
+{ type: 'choice', id: 'trust', options: [...], next: { unknown: 'route-unknown', watcher: 'route-watcher' } }
+{ type: 'label', id: 'route-unknown' }  { type: 'goto', id: '...' }
+{ type: 'branch', when: (state) => state.trusted === 'watcher', then: [...], else: [...] }
+{ type: 'run',   fn: async (ctx) => {...} }            // escape hatch for complex bespoke beats
+```
+
+Requirements:
+
+- [ ] **Skip = advance the pointer.** A node list is split into *segments* with a `skippable` flag (BIOS: skippable by the 3-second hold; story intro: skippable to the trust choice; the trust choice and the puzzle are not). Skipping fast-forwards through nodes **applying only their final state** (DOM output still appears instantly, sounds and long waits are dropped, state changes still happen) and stops at the segment boundary. Preserve today's behavior: BIOS skippable until the intro begins; a second hold skips the intro to the trust choice.
+- [ ] Keep `quiet-motion` / `prefers-reduced-motion` behavior: waits collapse to zero.
+- [ ] All timing/waits and SFX cues live in the data, not in the engine.
+- [ ] String content is centralized in `js/story-data/*.js` (boot, intro, watcher interruption, unknown route, watcher route, ghost, reveal, level01 brief, endings). This also makes translation possible later; no i18n system is required now.
+- [ ] A small `state` object (`trusted`, `investigated`, `ghostRun`, …) replaces scattered module variables; it is exposed read-only to the phase 7 state inspector (`engine.getState()`).
+- [ ] `story.js` shrinks to: DOM references, creating the session and context, wiring audio/terminal/case file/trace, and starting the engine. Target: under ~400 lines. Effects (`glitch`, `gfx`, `flash`, `blackout`, `staticBurst`, `corrupt`, logo renderer) move to `js/fx-screen.js`/`js/logo.js` (or similar) as modules the context exposes.
+- [ ] The engine must be testable without a browser for non-visual logic (node list validation: every `goto`/`next` target exists, every `sfx` cue exists in the audio registry). Add `tools/validate-story.mjs`.
+
+**Migration strategy (important, this is the riskiest part of the whole overhaul):** convert in slices, not in one commit, and run `node tools/smoke.mjs` after each slice: (a) engine + boot data, (b) intro and transmission, (c) trust choice and branches, (d) ghost route, (e) identity reveal, (f) endings, (g) delete dead code. Complex bespoke beats (the logo build, `wipe`, `moveHelloIntoChat`, `renameEverywhere`) may stay as `run` nodes calling existing functions; do not rewrite visual effects here, that is phase 5.
+
+### 3.2 Command registry — `js/commands.js`
+
+- [ ] Replace the `switch` in `level01.js` with `registerCommand({ name, aliases, help, hidden, when(ctx) { ... }, async run(ctx, args) { ... } })`. `when` lets commands exist only on a route (e.g. `isolate` for Watcher, `verify` for Unknown, `abort` for Watcher) or in a phase.
+- [ ] `help` is generated from the registry (keep today's wording and the route-specific lines).
+- [ ] Unknown command output stays `command not found: <name>`; typos could suggest the nearest command (`did you mean 'hint'?`), optional.
+- [ ] Preserve every existing command and its output: `help ls cat board evidence verify isolate source view-source trace hint unlock abort`, including the `unlock elliot` easter egg, the 3 attempts, the `[ok] [--] [ok]` feedback and the case-file discovery calls (`caseFile.discover(...)`).
+- [ ] Commands share a small `parseArgs` helper (quotes, flags like `-a`, `--status`).
+- [ ] Phase 4 will register `scan`, `intercept`, `decrypt`, `dump`, `trace --status` through this registry; design the API so those need no engine changes.
+
+### 3.3 Realistic boot sequence (plan section 5)
+
+Rewrite the boot data to this shape (text from the plan; adjust only for typos or tone, keep the vibe). Stages and pacing: BIOS lines appear fast with small random jitter, hardware detection pauses at the "Detecting…" lines, kernel log lines have increasing timestamps, service lines flip from `[ .... ]` to `[  OK  ]`, **one line fails**, and the warnings appear last. Use the audio cues (phase 2): `boot-prompt` at the BIOS banner, `boot-memtest` while memory counts up, `drive-seek` for drives, `boot-checkpoint` per stage, `boot-fail` on the failed service, `boot-complete` at the login prompt.
+
+```text
+AMIBIOS (C) 2015 E Corp Systems
+FSOC-BIOS v3.1.4 Release 09/23/2015
+
+CPU: Intel(R) Core(TM) i7-4790 @ 3.60GHz
+Memory Test: 16384MB OK
+  Extended Memory: 16252MB
+  L1 Cache: 256KB  L2 Cache: 1024KB  L3 Cache: 8192KB
+
+Detecting Primary Master... WDC WD10EZEX-00W 931.5GB
+Detecting Primary Slave...  None
+Detecting Secondary Master... ATAPI DVD-ROM
+PCI Device Listing:
+  Bus 0, Dev 2:  Intel HD Graphics 4600
+  Bus 0, Dev 26: Intel 9 Series USB EHCI
+  Bus 0, Dev 31: Intel 9 Series LPC
+  Bus 1, Dev 0:  Realtek RTL8168 GbE
+
+Press DEL to enter Setup, F12 for Boot Menu...
+
+Loading GRUB...
+  GNU GRUB version 2.02
+
+Booting 'fsociety-os (kernel 4.4.0-custom)'...
+
+[    0.000000] Linux version 4.4.0-fsoc (root@fsociety)
+[    0.000000] Command line: BOOT_IMAGE=/vmlinuz root=/dev/sda1
+[    0.041523] ACPI: RSDP 0x00000000000F0490
+[    0.126842] Initializing cgroup subsys cpu
+[    0.284012] pid_max: default: 32768 minimum: 301
+[    0.310511] Security Framework initialized
+[    0.310515] SELinux: Disabled at boot.
+[    0.493211] NET: Registered protocol family 2
+[    1.012340] e1000: eth0 NIC Link is Up 1000 Mbps
+[    1.234102] EXT4-fs (sda1): mounted filesystem
+[    1.502831] systemd[1]: Detected architecture x86-64.
+
+[  OK  ] Started Journal Service.
+[  OK  ] Started Network Manager.
+[  OK  ] Reached target Network.
+[FAILED] Failed to start Firewall Service.        <- ominous, red
+[  OK  ] Started OpenSSH Server.
+[  OK  ] Reached target Multi-User System.
+
+WARNING: Unauthorized network adapter detected on eth0:1
+WARNING: Unknown process 'ghost.sh' running as PID 1337
+WARNING: Outbound connection to [REDACTED] on port 4444
+
+fsociety-os login: guest
+Password: ********
+Last login: Thu Sep 24 03:14:07 2015 from 192.168.1.???
+
+guest@fsociety00:~$
+```
+
+- [ ] The current boot also teases a hidden partition `/dev/sdb9` ("found unlisted partition", "size 0 bytes", "owner unknown") and a failed trace. **Keep that story hook**: weave the `sdb9` partition into the new boot (e.g. in the PCI/drive listing or as an extra warning) so the transmission that follows still makes sense; do not remove the references the later dialogue relies on. Check what the later text mentions before cutting anything.
+- [ ] The login lines type themselves (use the `cmd`-style typing; the password is masked). The prompt string everywhere is `guest@fsociety00:~$` (the `index.html` prompt already uses it).
+- [ ] Total BIOS length: keep it watchable. The old one was about 25 seconds un-skipped; aim for roughly 30–40 seconds, with the 3-second-hold skip still available and the **first 5 seconds visually interesting** (the player has just clicked INITIALIZE).
+- [ ] Use fictional/documentation-range IPs and made-up identifiers only (see the README invariant about real IP/location).
+
+### 3.4 Realistic Linux-style commands
+
+Add to the registry (output must be consistent with the story world: user `guest`, host `fsociety00`, rogue adapter `eth0:1`, suspicious `ghost.sh` as PID 1337, outbound port 4444 to a redacted host). Keep outputs short, formatted like the real tools.
+
+| Command | Output direction |
+|---|---|
+| `whoami` | `guest (uid=1000) — restricted shell` |
+| `uname -a` | `Linux fsociety-os 4.4.0-fsoc #1 SMP x86_64` (match the boot's kernel line) |
+| `ps aux` | A believable process list including `ghost.sh` (PID 1337), `sshd`, `NetworkManager`, a `[kworker]` line or two, and one suspicious process; the `ghost.sh` line is also an investigation clue (`caseFile.discover(...)` if an evidence id fits) |
+| `netstat -an` | Active connections with one outbound to a suspicious redacted address on port 4444 |
+| `ifconfig` | Interfaces `lo`, `eth0` and the rogue `eth0:1` |
+| `cat /var/log/auth.log` | Failed login attempts from external (documentation-range) IPs, a successful `guest` login at 03:14 |
+| `history` | A few earlier commands from a previous session giving story context (e.g. someone looked at `sdb9.lock`) |
+| `pwd`, `date`, `clear`, `echo` | Small niceties; `clear` must keep the engine consistent (it clears `#output` only when allowed) |
+| `help` | Updated to list the realistic commands under a "system" group |
+
+Constraints: realistic commands must **not** become a way to bypass the puzzle (no command may print the full key); they may add flavor and extra clues. Commands that have no meaning in the story respond like a restricted shell: `bash: <cmd>: permission denied` / `command not found`. Tab completion for commands and the virtual file names is welcome if it is cheap (the terminal input is a single `<input>`).
+
+`scan`, `intercept`, `dump`, `decrypt <id>` and `trace --status` are **phase 4**. Leave a stub registered with a TODO only if it prevents the help text from being inconsistent.
+
+## Tasks (checklist)
+
+- [ ] Engine + node types + validator tool
+- [ ] Skip logic as segment fast-forward, behavior-compatible
+- [ ] Boot data (new realistic sequence) incl. the `sdb9` hook and the failed service
+- [ ] Intro, trust choice, route, ghost, reveal, endings migrated to data (slice by slice; smoke after each)
+- [ ] Command registry; migrate every existing command; keep `help`
+- [ ] Realistic Linux commands
+- [ ] `story.js` under ~400 lines; no dead code; `createLevel01` consumes the registry
+- [ ] Dialogue polish pass (typos, rhythm). Keep each character's voice: Unknown is warm and cryptic, Watcher is cold and accusatory. Characters must not use a fixed real name for the first character before the identity reveal
+- [ ] Update `docs/overhaul/audio-cues.md` with the cues the story data uses
+
+## Out of scope
+
+Visual effects redesign (phase 5), new evidence mechanics and commands `scan/intercept/decrypt` (phase 4), the TRACED sequence (phase 6), dev panel (phase 7).
+
+## Verification
+
+- [ ] `node tools/validate-story.mjs` passes (all targets and cues exist).
+- [ ] `node tools/smoke.mjs` passes after every slice and at the end (both trust routes, victory, every failure reason, reboot, 390 px, reduced motion).
+- [ ] Skip behavior identical: hold 3 s skips the BIOS; a second hold skips the intro to the choice; neither is possible during the puzzle.
+- [ ] A full playthrough text diff against the baseline: every story line that was not intentionally changed is still present (record the intentional changes in the notes).
+- [ ] `source map` and the three-layer key still work.
+
+## Done when
+
+`story.js` is a thin entry point, narrative content lives in data, the boot looks like the plan, the realistic commands work and are listed in `help`, and phase 4 can add commands with no engine changes.
+
+## Implementation notes
+
+_(append here)_

@@ -51,3 +51,7 @@ The terminal game is a static HTML/CSS/JavaScript story and puzzle; it has no bu
 - On `localhost`, use the `DEV` tab to jump to scenes and preview animations. It is a local testing convenience, not authentication.
 - After GAME OVER, use the centered REBOOT SYSTEM control to restart without reloading the page.
 - The story currently ends after Level 01; a sequel is not implemented.
+
+## Overhaul documentation
+
+A phased improvement plan (bug fixes, accessibility, audio, story engine, evidence board, animations, TRACED game over, developer panel, main site, mobile extras) is documented in [`docs/overhaul/README.md`](docs/overhaul/README.md). Each phase has its own file so it can be handed to a developer or an AI assistant independently.
