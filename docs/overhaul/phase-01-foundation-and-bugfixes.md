@@ -147,20 +147,14 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 ## Implementation notes
 
-### Stopped at (2026-10-12, after step 1.5; refreshed at the start of the next session)
+### Stopped at (2026-10-12, resumed by a new session; replaces the stale "after step 1.5" block)
 
-**Last green commit: `7032663`** at the time of this block (10 of 10); see the line below for the newer one. The remote branch head equals `7032663` (checked with `git ls-remote`).
+State of the branch when this session resumed (checked against the code and `git log`, not against the old note): head `d764c30`, working tree clean, 19 commits ahead of `origin/main`.
 
-- **Finished and verified by the full smoke run:** 1.1 tooling, 1.2 shared utilities, 1.3 session/cancellation (a, b, c), 1.4 `GameContext` + `createLevel01(ctx)`, 1.5 `chooseTrust` moved out of `tty.js`. `story.js`, `tty.js`, `trace.js`, `level01.js` and `casefile.js` were rewritten for these steps; `tty.js` no longer knows the plot.
-- **Half done:**
-  - 1.6: the focus change is in `tty.js` (committed in `eda836d`) and the game still plays, but **no test checks the Tab order yet** (unverified).
-  - 1.9: `js/rain.js` exists but is **not imported anywhere** and has never been run (unverified). `fx.js`, its `<script>` tag and the 12 `window.setRain` calls in `story.js` are still in place.
-  - 1.10: `trace.js` start/stop, Elliot-echo timers, ambient-interval cleanup, the `getLevel01Key` fallback and the expiry-at-prompt hang are done and covered by smoke scenarios. **Not done:** the `audio.js` `envelope()` clamp and the `OfflineAudioContext` cue check.
-- **Not started:** 1.7 (accessibility, native dialogs) and 1.8 (CSS fixes).
-- **Failing tests:** none. No wip commit is outstanding; the working tree was clean.
-- **Next command:** add a Tab-order scenario to `tools/smoke.mjs` (1.6), then wire `rain.js` (1.9): `grep -n "setRain\|syncRainMotion\|fx.js" sites/fsociety00/public/js/*.js sites/fsociety00/public/index.html`.
-
-**Last green commit (updated after step 1.7): `f0c8826`**, full `node tools/smoke.mjs` 16 of 16 (the run used a copy of the tree identical to this commit except for doc text).
+- **Done (see the Checkpoint log for hashes):** 1.1, 1.2, 1.3a-c, 1.4, 1.5, 1.6, 1.7, 1.9, 1.10. Last full smoke run recorded by the previous session: 16 of 16 at `f0c8826` (the commits after it only touch docs). Smoke at `d764c30` itself has **not yet been re-run** in this session (unverified until the line below is updated).
+- **Not started:** 1.8 (CSS fixes). In `styles.css` there are still three `@media (prefers-reduced-motion: reduce)` blocks (lines ~1073, ~1098, ~1747), three `.glyph i.on`-related rules (~1853 `.logo.done .glyph i.on`, ~1883 and ~1936 `.glyph i.on`), and sub-11px font sizes.
+- **Half-edited files:** none. **Failing tests:** none known.
+- **Next command:** `node tools/smoke.mjs > /tmp/smoke.txt 2>&1; tail -n 25 /tmp/smoke.txt`, then do 1.8 in chunks (cascade and dead rules, fonts, contrast, logo padding), one `wip(phase-1.8): ...` commit and push per chunk.
 
 ### Findings beyond the docs (verified at baseline)
 
