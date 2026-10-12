@@ -126,6 +126,25 @@ New sounds (phase 2), data-driven story (phase 3), case board layout/fonts (phas
 
 Everything above is checked, the PR description lists each review item with the fix or the reason it was skipped, and the README tracker is updated. Then phases 2, 3, 5 and 8 can start.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 1.1 Test and lint tooling (smoke, fonts, contrast) | done | `a51b589` | smoke 6/6 on the unmodified baseline; smoke later gains abort, expiry, 3rd-hint and missing-key scenarios |
+| 1.2 Shared utilities (util.js, choices.js) | in progress | `820ee4a` | modules written and committed, not wired in yet (`story.js`, `trace.js`, `level01.js`, `casefile.js` still use their copies) |
+| 1.3a session.js module | in progress | `820ee4a` | `session.js` written, committed, unused; needs the abort smoke scenario once wired |
+| 1.3b Convert story helpers to the session | todo | | |
+| 1.3c Reset / dev route / terminal abort + abort smoke test | todo | | |
+| 1.4 GameContext + createLevel01(ctx) | in progress | `820ee4a` | `context.js` written (validates required members), not used yet |
+| 1.5 Move chooseTrust out of tty.js | in progress | `820ee4a` | `story-choices.js` written, `tty.js` still has the old copy |
+| 1.6 Terminal focus fix | todo | | |
+| 1.7 HTML accessibility (role=log, canvas, native dialogs) | todo | | |
+| 1.8 CSS fixes (cascade, fonts, shutdown-scan, reduced-motion, dead rule, contrast check) | todo | | |
+| 1.9 Rain to ES module | in progress | `820ee4a` | `rain.js` written, `fx.js` still in use |
+| 1.10 Timer and leak fixes (trace, Elliot echo, victory path, audio envelope, key crash) | todo | | |
+
 ## Implementation notes
 
 ### Stopped at (2026-10-12, usage limit)
@@ -147,20 +166,3 @@ Everything above is checked, the PR description lists each review item with the 
 - **Dialog conversion caveats (1.7):** `.launch, .power-panel { display:flex }` would override the UA `dialog:not([open])` hiding, so scope the display rules to `[open]`. `.developer-trigger` (z-index 140) sits above both panels today; once they are modal `<dialog>`s the DEV button is inert while they are open. Flag to the owner (phase 7 can add a shortcut).
 - **Session design notes (1.3):** non-session awaits (`fetch` in `cat page/...`, `animation.finished`, `audio.unlock()`) must call `session.throwIfAborted()` afterwards; fire-and-forget calls (`staticBurst(500)` in `renameEverywhere`, `void boot()`) need `.catch(swallowAbort)`. `readCommand` takes `{ signal }` and rejects with the abort error so callers unwind.
 
-### Checkpoint log
-
-| Step | Status | Commit |
-|---|---|---|
-| 1.1 Tooling (`smoke.mjs`, `check-fonts.sh`, `contrast.mjs`, `tools/README.md`) | done, smoke 6/6 on baseline | `a51b589` |
-| New modules for 1.2–1.5, 1.9 (not wired in) | committed, unused | `820ee4a` |
-| 1.2 Shared utilities wired in | todo | |
-| 1.3 Session / cancellation | todo | |
-| 1.4 Context object | todo | |
-| 1.5 Move `chooseTrust` | todo | |
-| 1.6 Terminal focus | todo | |
-| 1.7 HTML accessibility | todo | |
-| 1.8 CSS fixes | todo | |
-| 1.9 Rain module | todo | |
-| 1.10 Timer / leak fixes | todo | |
-
-_(append further notes below: what was done, what was skipped and why, follow-ups for later phases)_

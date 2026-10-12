@@ -73,6 +73,20 @@ Redesign, copy rewrites, new pages, anything under `sites/fsociety00`.
 
 All table rows are verified-and-closed or fixed, hex values live only in `:root`, contrast passes, the external links are indicated, and there is no visual regression.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 8.1 Verify and close items 16, 19, 23 | todo | | |
+| 8.2 Colors to semantic tokens | todo | | |
+| 8.3 Contrast fixes | todo | | |
+| 8.4 A11y pass + external-link indicators | todo | | |
+| 8.5 Performance + reveal transforms | todo | | |
+| 8.6 Redundant CSS cleanup | todo | | |
+| 8.7 Project card link (owner decision) | todo | | |
+
 ## Implementation notes
 
-_(append here)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_
