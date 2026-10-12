@@ -16,11 +16,27 @@ Copy this prompt, change the phase number and slug:
 Read docs/overhaul/README.md completely, then docs/overhaul/phase-0N-<slug>.md.
 Implement that phase only, on a new branch named overhaul/phase-N-<slug> created
 from the latest main (or from the branch of the phase it depends on, see its
-"Depends on"). Follow the Working rules and the Definition of done in the README.
+"Depends on"). Push the branch immediately after creating it. Then COMMIT AND PUSH
+after every numbered sub-step (see "Checkpoints" in the README) and keep the phase
+file's Checkpoint log current, because your session can end at any moment.
+Follow the Working rules and the Definition of done in the README.
 Re-verify every "current state" claim against the code before changing anything:
 the code may have moved since the docs were written. When finished, update the
 tracker table in docs/overhaul/README.md and open a pull request. Do not merge it.
 Do not push to main.
+```
+
+### Resuming a phase another Claude started (it ran out of usage)
+
+```text
+Read docs/overhaul/README.md completely (especially "Checkpoints" and "Resuming a
+phase"), then docs/overhaul/phase-0N-<slug>.md. Another Claude started this phase and
+stopped (usage limit). Resume it: fetch the remote, check out the existing branch
+overhaul/phase-N-<slug> from origin, read the phase file's Checkpoint log and the
+"Stopped at" block in its Implementation notes, run git log, git status and the smoke
+test to see the real state, then continue at the first unfinished step. Do not redo
+finished steps (verify them quickly instead). Commit and push after every sub-step.
+Do not push to main and do not merge.
 ```
 
 Phase files:
@@ -227,6 +243,27 @@ Plan sections 2–8 map 1:1 to phases 2–8. Section 5 ("Realistic hacker experi
 5. After each logical slice run the **smoke test** (below). Do not leave `main` of your branch broken between commits.
 6. Keep an **"Implementation notes"** section at the bottom of your phase file (append, do not rewrite): what you did, what you skipped and why, follow-ups. The next Claude relies on it.
 7. Update the tracker table in this README (status, branch, PR) in the same PR.
+8. **Commit and push often** (next section). Work that is not pushed can be lost and cannot be continued by another Claude.
+
+## Checkpoints: commit and push often, resume safely
+
+Sessions end without warning: a usage limit, a closed tab, or a cloud container that is reclaimed. **Anything not pushed to GitHub can be lost**, and a different Claude can only continue from what is on the remote.
+
+1. **Push the branch immediately** after creating it (before doing any work), so it exists on the remote. Set the phase's row in the tracker to `in progress` in your first commit.
+2. **Commit and push after every numbered sub-step** (1.1, 1.2, …) once it is done and passed its quick check (run the smoke test when the step touches gameplay). In phases without numbering, use the rows of the phase file's Checkpoint log. If one step is big (for example phase 1's session/cancellation work), commit and push after each coherent piece instead of at the end of the step. Never wait until the whole phase is finished.
+3. **Commit message format:** `phase N.x: short imperative summary` (for example `phase 1.1: add smoke test tooling`). Include the attribution lines your environment requires.
+4. **After each push, update the phase file's Checkpoint log row** (status, short commit hash, one line of notes) and include that edit in the same or the next commit and push.
+5. **When you might be about to run out** (a long session, tool errors, a usage warning, or you simply must stop): do not start a new step. Make the tree consistent, then commit **everything**, including unfinished work, as `wip(phase N.x): …`, and push. WIP commits may be incomplete or failing, but the commit message and the notes must say so. Then add a **"Stopped at"** block at the top of the phase file's Implementation notes: exact state, what is done and what is not, which files are half edited, which test is failing and why, and the next command to run.
+6. **Never** push to `main`, force-push, or rewrite already pushed history (no rebase or squash of pushed commits). The next Claude relies on the commit list.
+7. Do not leave work only in the working tree. If you cannot push (no access), say so clearly in your last message and list the changed files.
+
+### Resuming a phase
+
+1. `git fetch --all`. If `origin/overhaul/phase-N-<slug>` exists, check it out: `git checkout -B overhaul/phase-N-<slug> origin/overhaul/phase-N-<slug>`. If it does not exist, nothing was pushed: start the phase fresh from the latest `main`. If more than one branch exists for the same phase, stop and ask the owner which to use.
+2. Read the phase file: the **Checkpoint log**, then the **Implementation notes** (especially a "Stopped at" block). Run `git log --oneline origin/main..HEAD` and `git status` (it must be clean; if not, someone left uncommitted work, inspect it before touching anything).
+3. Run the smoke test and any tool the phase added to see the **real** state. The log can be stale, so trust the code and the tests over the notes.
+4. Continue at the first row that is not `done`. Verify the last `done` row quickly instead of redoing it.
+5. If the previous branch is badly broken, say so and either fix forward on the same branch or ask the owner; do not delete it.
 
 ## Running and testing
 
@@ -260,6 +297,7 @@ For CSS/animation work also take screenshots at 390×844 and 1280×800 and look 
 - [ ] Smoke test passes (desktop, mobile viewport, reduced motion).
 - [ ] No new console warnings/errors; no new `window.*` globals; no font size < 11px (`tools/check-fonts.sh`).
 - [ ] The three-layer key puzzle still works (the three parts are still discoverable and `unlock` still accepts the key).
+- [ ] Every Checkpoint log row in the phase file is `done` (or marked skipped with a reason), and everything is pushed.
 - [ ] Tracker table and the phase file's implementation notes updated.
 - [ ] Pull request opened with: what changed, how it was tested, screenshots if visual, anything the owner must check by hand (audio, feel).
 

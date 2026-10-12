@@ -62,6 +62,20 @@ Extra 1 Konami code, extra 2 session persistence (`localStorage`), extra 3 sound
 
 Mobile play is comfortable, the source viewer is in and the puzzle is intact, all tools pass on all viewports, documentation is current, and every phase in the tracker is `merged`.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 9.1 Quick-action bar (extra 4) | todo | | |
+| 9.2 Virtual keyboard handling, touch targets, command history | todo | | |
+| 9.3 Source viewer (extra 5) | todo | | |
+| 9.4 Hidden clues | todo | | |
+| 9.5 Full regression + cross-browser | todo | | |
+| 9.6 Accessibility audit + edge cases | todo | | |
+| 9.7 README/docs update + cleanup + deploy check | todo | | |
+
 ## Implementation notes
 
-_(append here)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_

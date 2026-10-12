@@ -126,6 +126,25 @@ New sounds (phase 2), data-driven story (phase 3), case board layout/fonts (phas
 
 Everything above is checked, the PR description lists each review item with the fix or the reason it was skipped, and the README tracker is updated. Then phases 2, 3, 5 and 8 can start.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 1.1 Test and lint tooling (smoke, fonts, contrast) | todo | | |
+| 1.2 Shared utilities (util.js, choices.js) | todo | | |
+| 1.3a session.js module | todo | | |
+| 1.3b Convert story helpers to the session | todo | | |
+| 1.3c Reset / dev route / terminal abort + abort smoke test | todo | | |
+| 1.4 GameContext + createLevel01(ctx) | todo | | |
+| 1.5 Move chooseTrust out of tty.js | todo | | |
+| 1.6 Terminal focus fix | todo | | |
+| 1.7 HTML accessibility (role=log, canvas, native dialogs) | todo | | |
+| 1.8 CSS fixes (cascade, fonts, shutdown-scan, reduced-motion, dead rule, contrast check) | todo | | |
+| 1.9 Rain to ES module | todo | | |
+| 1.10 Timer and leak fixes (trace, Elliot echo, victory path, audio envelope, key crash) | todo | | |
+
 ## Implementation notes
 
-_(append here: what was done, what was skipped and why, follow-ups for later phases)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here: what was done, what was skipped and why, follow-ups for later phases)_

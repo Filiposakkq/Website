@@ -123,6 +123,20 @@ Reveal/transition animation polish and trace-reactive vignette (phase 5), the TR
 
 The board is a live dashboard integrated with the terminal, the extra-8 topology works in board and terminal, fonts and dialog fixes are in, and the puzzle remains winnable in the original way.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 4.1 EVIDENCE schema migration + validator | todo | | |
+| 4.2 State machine + casefile methods | todo | | |
+| 4.3 Commands scan / intercept / dump / decrypt / connect | todo | | |
+| 4.4 Topology module (extra 8) + trace --status | todo | | |
+| 4.5 Board layout + native dialog + mobile + a11y + fonts | todo | | |
+| 4.6 Ghost trail + COMPROMISED handling | todo | | |
+| 4.7 Tuning and playtests | todo | | |
+
 ## Implementation notes
 
-_(append here)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_
