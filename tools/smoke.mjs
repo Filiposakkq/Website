@@ -353,6 +353,62 @@ scenarios.push({
   },
 });
 
+// Keyboard focus (review item 11): the terminal must not steal focus from controls.
+scenarios.push({
+  name: 'reduced: keyboard focus is not hijacked by the terminal',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    const active = () => page.evaluate(() => {
+      const el = document.activeElement;
+      return el?.id || el?.className || el?.tagName;
+    });
+    await sendCommand(page, 'cat sdb9.lock'); // the first discovery reveals the CASE FILE trigger
+    await waitOutput(page, 'status:   LOCKED');
+    const caseVisible = await page.evaluate(() => !document.getElementById('caseTrigger').hidden);
+    if (!caseVisible) throw new Error('test setup: the CASE FILE trigger should be visible in the shell');
+
+    // Tab reaches the CASE FILE and DEV triggers.
+    await page.evaluate(() => document.activeElement?.blur());
+    const reached = new Set();
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press('Tab');
+      reached.add(await active());
+    }
+    for (const needed of ['caseTrigger', 'developer-trigger']) {
+      if (![...reached].some((name) => name.includes(needed))) {
+        throw new Error(`Tab never reached ${needed}; reached ${JSON.stringify([...reached])}`);
+      }
+    }
+
+    // Keys that are not typing must leave a focused control alone.
+    await page.locator('#caseTrigger').focus();
+    for (const key of ['Shift', 'ArrowRight', 'ArrowDown', 'Escape']) await page.keyboard.press(key);
+    if ((await active()) !== 'caseTrigger') throw new Error(`focus was stolen from the CASE FILE button: ${await active()}`);
+    // Even a printable key pressed on a control stays on that control (Space/Enter activate it).
+    await page.keyboard.press('x');
+    if ((await active()) !== 'caseTrigger') throw new Error(`typing on a control moved focus to ${await active()}`);
+
+    // Typing with nothing focused still goes to the terminal.
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.type('help');
+    await page.keyboard.press('Enter');
+    await waitOutput(page, 'commands:');
+
+    // No modal is open here, so while one is, the terminal must stay out of the way.
+    await page.evaluate(() => {
+      const dialog = document.createElement('dialog');
+      dialog.id = 'probeDialog';
+      dialog.innerHTML = '<button id="probeButton" type="button">ok</button>';
+      document.body.appendChild(dialog);
+      dialog.showModal();
+    });
+    await page.keyboard.press('q');
+    if ((await active()) === 'tty-input') throw new Error('the terminal stole focus while a modal dialog was open');
+    await page.evaluate(() => document.getElementById('probeDialog').remove());
+  },
+});
+
 // --- aborting the story at four different moments ---------------------------------------------
 
 async function currentSessionHandle(page) {

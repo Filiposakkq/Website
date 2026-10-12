@@ -139,7 +139,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 1.3c Reset / dev route / terminal abort + abort smoke test | done | `eda836d` | `resetGame` / `runDeveloperRoute` call `beginSession()` (abort, fresh session, one microtask); `readCommand({signal})` rejects on abort; smoke scenario aborts at BIOS, intro, trust choice and mid-puzzle and asserts `pending() === 0`, one `#output`, no duplicates. Dev `boot` route also resets the skip hint |
 | 1.4 GameContext + createLevel01(ctx) | done | `eda836d` | `createGameContext` (throws on a missing member) + `createLevel01(ctx)`; built once per session. Fixes the missing `revealSourcePart` (third hint crash); smoke scenario added |
 | 1.5 Move chooseTrust out of tty.js | done | `055c0ea` | `chooseTrust` now in `story-choices.js` (all aliases kept), removed from `tty.js`; reduced-motion smoke passes |
-| 1.6 Terminal focus fix | in progress | `eda836d` | focus is only redirected for typing keys inside `#screen`, never from controls or while a modal is open. Tab-order smoke scenario still to add (with 1.7) |
+| 1.6 Terminal focus fix | done | `HASH` | focus is only redirected for typing keys inside `#screen`, never from controls or while a modal is open. Smoke scenario `keyboard focus is not hijacked` passes on the fix and fails on the baseline (Tab never reached DEV). Full suite green at `7032663` (before this scenario existed) |
 | 1.7 HTML accessibility (role=log, canvas, native dialogs) | todo | | |
 | 1.8 CSS fixes (cascade, fonts, shutdown-scan, reduced-motion, dead rule, contrast check) | todo | | |
 | 1.9 Rain to ES module | in progress | `820ee4a` | `rain.js` written, `fx.js` still in use |
