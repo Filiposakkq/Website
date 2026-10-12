@@ -128,4 +128,39 @@ Everything above is checked, the PR description lists each review item with the 
 
 ## Implementation notes
 
-_(append here: what was done, what was skipped and why, follow-ups for later phases)_
+### Stopped at (2026-10-12, usage limit)
+
+- **State:** step 1.1 (tooling) is done and committed. The new modules for 1.2–1.5 and 1.9 exist and are committed (`js/util.js`, `choices.js`, `session.js`, `context.js`, `rain.js`, `story-choices.js`) but **nothing imports them yet**, so game behavior is still identical to baseline.
+- **Half-edited files:** none. No existing game file (`story.js`, `tty.js`, `trace.js`, `level01.js`, `casefile.js`, `audio.js`, `index.html`, `styles.css`, `fx.js`) has been modified.
+- **Failing tests:** none. `node tools/smoke.mjs` passes 6/6 against the baseline game. Two scenarios are deliberately *not* in the suite yet because they fail on the baseline (real bugs, see below); add them together with their fixes.
+- **Next command:** wire the helpers in (1.2): in `story.js` replace the local `rand` and the three `'#%&@$*+=?01<>/\\|'` copies with `util.js` (`scrambleText`, `randomChar`), replace `formatClock` copies in `trace.js` / `level01.js` / `casefile.js`, add a `pad2()` helper to `util.js` for the remaining `padStart(2,…)` counters (casefile, shutdown counter) so `grep -rn "padStart(2" js/` only hits `util.js`, use `renderChoices` in `promptGhost`, and import `chooseTrust` from `story-choices.js` (then delete it from `tty.js`, 1.5). Then run `node tools/smoke.mjs`.
+
+### Findings beyond the docs (verified at baseline)
+
+- **Third `hint` crashes the shell.** `createLevel01` destructures `revealSourcePart` but `story.js` never passes it (12 of 13 params). `revealSourcePart()` throws `TypeError`, the shell loop dies. Fix with the context object (`createGameContext` throws at startup if a member is missing); pass `revealLevel01SourcePart`. Add a smoke scenario for the third hint and assert the console shows `[sdb9] key :: layer 3/3`.
+- **Trace expiry at the prompt hangs the game.** In `level01.js` the loop checks `if (raw === null) { return false; }` *before* `if (state.over) break;`, so when `trace.onEnd` calls `abortCommand()` the shell returns silently and `gameOver` never runs (HUD shows `TRACE COMPLETE 00:00`, prompt stays open). Check `state.over` first. Add a "trace expiry -> game over" smoke scenario (2 `hint`s, then wait; drafted in the smoke history, removed from the baseline commit).
+- **Smoke harness facts:** the skip control must be held with real keyboard/mouse input (a synthetic `pointerdown` makes `setPointerCapture` throw). The terminal drops commands sent while no `readCommand()` is pending (during `gfx`, typed hints), so `sendCommand` retries until the echo line appears. With reduced motion the whole BIOS runs instantly and `blackout()` wipes it, so do not assert BIOS text in that variant.
+- **Item 1 (logo padding):** the `@media (max-width:520px)` `.output .logo` padding is overridden as claimed, but its companion `.output .logo::before` rule is dead (no base `::before` exists; the label is now the `.logo-header` element). The 28px top padding was meant for that old label, so check the screenshot before applying it as-is.
+- **Item 25:** `.glyph i.on` is declared twice (lines ~1854 and ~1907); the later one wins, so remove the earlier one.
+- **Item 12:** confirmed `--dim` is 5.03:1. Real low pairs found by `contrast.mjs --audit`: `.power-foot` `#555` (2.82:1) and `#436e4e` (3.58:1, locate its use). `.skip` is `--dim` at `opacity: .42`, effectively far below 4.5:1.
+- **Item 17:** besides px sizes, em sizes can compute below 11px (root is `clamp(18px, 4.8vw, 22px)`): `.skip` and `.power-foot` (0.58em), `#hud .lbl` (0.32em of a 34–64px HUD). Plan: `max(11px, Nem)`. `tools/check-fonts.sh` already understands that form. Non-`.case-`/`.developer-` px offenders: `.logo-relay`, `.logo-caption` (8px) and the dead `.output .logo::before` rule.
+- **Dialog conversion caveats (1.7):** `.launch, .power-panel { display:flex }` would override the UA `dialog:not([open])` hiding, so scope the display rules to `[open]`. `.developer-trigger` (z-index 140) sits above both panels today; once they are modal `<dialog>`s the DEV button is inert while they are open. Flag to the owner (phase 7 can add a shortcut).
+- **Session design notes (1.3):** non-session awaits (`fetch` in `cat page/...`, `animation.finished`, `audio.unlock()`) must call `session.throwIfAborted()` afterwards; fire-and-forget calls (`staticBurst(500)` in `renameEverywhere`, `void boot()`) need `.catch(swallowAbort)`. `readCommand` takes `{ signal }` and rejects with the abort error so callers unwind.
+
+### Checkpoint log
+
+| Step | Status | Commit |
+|---|---|---|
+| 1.1 Tooling (`smoke.mjs`, `check-fonts.sh`, `contrast.mjs`, `tools/README.md`) | done, smoke 6/6 on baseline | `a51b589` |
+| New modules for 1.2–1.5, 1.9 (not wired in) | committed, unused | `820ee4a` |
+| 1.2 Shared utilities wired in | todo | |
+| 1.3 Session / cancellation | todo | |
+| 1.4 Context object | todo | |
+| 1.5 Move `chooseTrust` | todo | |
+| 1.6 Terminal focus | todo | |
+| 1.7 HTML accessibility | todo | |
+| 1.8 CSS fixes | todo | |
+| 1.9 Rain module | todo | |
+| 1.10 Timer / leak fixes | todo | |
+
+_(append further notes below: what was done, what was skipped and why, follow-ups for later phases)_
