@@ -113,6 +113,20 @@ Mute/volume UI (extra 3 declined), new gameplay or story, wiring cues that only 
 
 All cues ported and new ones added, the lint passes, the owner's listening feedback is captured in the implementation notes, and `docs/overhaul/audio-cues.md` is complete.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 2.1 Audit cues + audio-cues.md | todo | | |
+| 2.2 Patch table + renderer; port all existing cues | todo | | |
+| 2.3 Ambient beds + stopBed on the audio clock | todo | | |
+| 2.4 New cues (boot, terminal, story, trace, evidence, hacking, game over) | todo | | |
+| 2.5 Typing sounds (extra 6) + reactive trace ticks | todo | | |
+| 2.6 Session cleanup + tools/audio-lint.mjs | todo | | |
+| 2.7 Listening checklist in the PR | todo | | |
+
 ## Implementation notes
 
-_(append here)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_

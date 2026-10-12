@@ -180,6 +180,23 @@ Visual effects redesign (phase 5), new evidence mechanics and commands `scan/int
 
 `story.js` is a thin entry point, narrative content lives in data, the boot looks like the plan, the realistic commands work and are listed in `help`, and phase 4 can add commands with no engine changes.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 3.1 Engine + node types + tools/validate-story.mjs | todo | | |
+| 3.2 Skip logic as segment fast-forward | todo | | |
+| 3.3 Realistic boot data (incl. the sdb9 hook) | todo | | |
+| 3.4 Intro + transmission migrated | todo | | |
+| 3.5 Trust choice + branches migrated | todo | | |
+| 3.6 Ghost route migrated | todo | | |
+| 3.7 Identity reveal + endings migrated | todo | | |
+| 3.8 Command registry (migrate all existing commands) | todo | | |
+| 3.9 Realistic Linux commands | todo | | |
+| 3.10 story.js cleanup (< ~400 lines) + dialogue polish + audio-cues.md | todo | | |
+
 ## Implementation notes
 
-_(append here)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_

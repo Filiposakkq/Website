@@ -75,6 +75,19 @@ Changing gameplay, adding new cues/animations (they belong to their phases; the 
 
 The panel is a real modal dialog, scene jumps use the cancel-and-restart flow reliably, animation and sound previews work from the registries, the state inspector is live, and nothing ships to production.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 7.1 Native dialog + focus + fonts | todo | | |
+| 7.2 Scene jumps via cancel-and-restart | todo | | |
+| 7.3 Animation preview stage | todo | | |
+| 7.4 Sound preview | todo | | |
+| 7.5 State inspector | todo | | |
+| 7.6 Production safety test | todo | | |
+
 ## Implementation notes
 
-_(append here)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_

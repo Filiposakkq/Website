@@ -84,6 +84,20 @@ The TRACED sequence content (phase 6), audio (phase 2), dev panel animation prev
 
 All table rows are implemented with compositor-only properties, performance numbers are better than the baseline and recorded, `perf-lite` works, and reduced-motion is honored everywhere.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 5.1 Baseline perf numbers + tools/perf.mjs | todo | | |
+| 5.2 Rework gfx / flash / glitch / blackout / staticBurst / corrupt | todo | | |
+| 5.3 Boot CRT warm-up, screen tear, ghost interference, shutdown RGB split | todo | | |
+| 5.4 Trace HUD reactivity (data-trace, vignette, rain intensity) | todo | | |
+| 5.5 Trust-choice cards, board reveal, cascade() | todo | | |
+| 5.6 Performance budget + perf-lite mode | todo | | |
+| 5.7 Reduced-motion + flash-rate review + cleanup | todo | | |
+
 ## Implementation notes
 
-_(append here: baseline vs after frame times, what was removed, what the owner must eyeball)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here: baseline vs after frame times, what was removed, what the owner must eyeball)_

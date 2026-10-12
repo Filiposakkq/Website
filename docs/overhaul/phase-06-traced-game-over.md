@@ -105,6 +105,19 @@ Redesigning other endings, a sequel, the dev panel (phase 7 will add a jump to t
 
 Letting the trace run out plays the full TRACED sequence from the plan with redacted/fictional data only, the aftermath panel and reboot work, and the other failure reasons share the same panel.
 
+## Checkpoint log
+
+Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
+
+| Step | Status | Commit | Notes |
+|---|---|---|---|
+| 6.1 Sequence as story-engine data | todo | | |
+| 6.2 Input lock + remote typing beats | todo | | |
+| 6.3 Cascade, hard cut, aftermath panel | todo | | |
+| 6.4 Shared panel for all failure reasons + stats | todo | | |
+| 6.5 Skip after first view + reduced-motion version | todo | | |
+| 6.6 Safety test + audio-cues.md | todo | | |
+
 ## Implementation notes
 
-_(append here)_
+_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_
