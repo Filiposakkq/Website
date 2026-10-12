@@ -67,7 +67,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 
 | # | Phase | Status | Depends on | Branch | PR / commit | Notes |
 |---|---|---|---|---|---|---|
-| 1 | Foundation & bug fixes | in progress | — | `overhaul/phase-1-foundation` | | |
+| 1 | Foundation & bug fixes | in review | — | `overhaul/phase-1-foundation` | PR to `main` (see GitHub) | all 12 rows done, smoke green, see the phase file's handoff report |
 | 2 | Audio | todo | 1 | `overhaul/phase-2-audio` | | |
 | 3 | Story & boot | todo | 1 | `overhaul/phase-3-story` | | |
 | 4 | Evidence board | todo | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | | |

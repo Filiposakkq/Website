@@ -544,6 +544,8 @@ scenarios.push({
     if (focused !== 'initialize') throw new Error(`initial focus should be the initialize button, got ${focused}`);
     await playToShell(page, { who: 'watcher', how: 'type', reduced: true });
     await loseByLockout(page);
+    // The shutdown sequence can lag on a loaded machine: wait until the panel is open before pressing Escape.
+    await page.waitForFunction(() => document.getElementById('powerPanel').open, null, { timeout: 30000 });
     for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await sleep(150); }
     await page.waitForFunction(() => document.getElementById('powerPanel').open, null, { timeout: 3000 })
       .catch(() => { throw new Error('Escape closed the power panel and it did not reopen'); });
