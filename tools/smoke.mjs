@@ -179,6 +179,10 @@ async function winGame(page) {
   await ghost.waitFor({ timeout: 90000 });
   await ghost.click();
   await waitOutput(page, 'this is where the signal ends.', 240000);
+  // Victory is an exit path too: the logo's ambient jitter and every other timer must be gone.
+  await sleep(500);
+  const pending = await page.evaluate(async () => (await import('/js/session.js')).currentSession().pending());
+  if (pending !== 0) throw new Error(`${pending} timer handle(s) still live after victory`);
 }
 
 async function loseByLockout(page) {
@@ -450,6 +454,62 @@ scenarios.push({
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.waitForFunction(() => document.getElementById('rainProbe').style.opacity === '0', null, { timeout: 5000 });
     await page.evaluate(() => window.__rainProbe.destroy());
+  },
+});
+
+// Audio lint: play every synthesized cue (and every ambient bed) in an OfflineAudioContext, then render.
+// Catches throwing cues, unknown cue names and NaN samples. (Voice clip excluded: it is a file, not a synth.)
+scenarios.push({
+  name: 'reduced: every audio cue renders offline without errors',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    const result = await page.evaluate(async () => {
+      const source = await (await fetch('/js/audio.js')).text();
+      const cues = [...new Set([...source.matchAll(/case '([a-z0-9-]+)':/g)].map((m) => m[1]))]
+        .filter((name) => name !== 'hello-friend');
+      const { createAudioController } = await import('/js/audio.js');
+      const failures = [];
+      const rate = 22050;
+      const offline = new OfflineAudioContext(1, rate * 6, rate);
+      const audio = createAudioController({ context: offline });
+      audio.prepare();
+      for (const cue of cues) {
+        try { audio.play(cue); } catch (error) { failures.push(`${cue}: ${error.message}`); }
+      }
+      for (const scene of ['boot', 'story', 'puzzle', 'ghost', 'reveal', 'shutdown', 'idle']) {
+        try { audio.setScene(scene); } catch (error) { failures.push(`scene ${scene}: ${error.message}`); }
+      }
+      const buffer = await offline.startRendering();
+      const samples = buffer.getChannelData(0);
+      let bad = 0;
+      let peak = 0;
+      for (const value of samples) {
+        if (!Number.isFinite(value)) bad++;
+        else peak = Math.max(peak, Math.abs(value));
+      }
+      return { count: cues.length, failures, bad, peak };
+    });
+    if (result.count < 50) throw new Error(`expected 50+ cues, found ${result.count} (did the regex stop matching?)`);
+    if (result.failures.length) throw new Error(`cues failed: ${result.failures.join('; ')}`);
+    if (result.bad) throw new Error(`${result.bad} non-finite samples in the rendered audio`);
+    if (result.peak === 0) throw new Error('rendered audio is silent');
+  },
+});
+
+// The Elliot echo has nested timers; aborting must remove the element and cancel both of them.
+scenarios.push({
+  name: 'reduced: aborting removes the Elliot echo and its timers',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sendCommand(page, 'unlock elliot');
+    await page.waitForSelector('.elliot-echo', { timeout: 5000 });
+    await devRoute(page, 'logo');
+    const left = await page.evaluate(() => ({
+      echo: document.querySelectorAll('.elliot-echo').length,
+      present: document.getElementById('screen').classList.contains('elliot-present'),
+    }));
+    if (left.echo || left.present) throw new Error(`echo left behind after abort: ${JSON.stringify(left)}`);
   },
 });
 

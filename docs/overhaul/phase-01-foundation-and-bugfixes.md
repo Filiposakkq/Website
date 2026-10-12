@@ -143,7 +143,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 1.7 HTML accessibility (role=log, canvas, native dialogs) | todo | | |
 | 1.8 CSS fixes (cascade, fonts, shutdown-scan, reduced-motion, dead rule, contrast check) | todo | | |
 | 1.9 Rain to ES module | done | `ecfa5d4` | `rain.js` (rAF with 55 ms step accumulator, pauses when hidden, ResizeObserver, reacts live to reduced-motion and `quiet-motion`) replaces `fx.js`; `window.setRain`/`syncRainMotion` and the script tag are gone. Smoke: no rain globals, rain starts after reduced motion is switched off, and the real game's canvas is at 0.22 and painting at the intro. Visual look unchanged is **unverified** (owner: check on the preview) |
-| 1.10 Timer and leak fixes (trace, Elliot echo, victory path, audio envelope, key crash) | in progress | `eda836d` | done: `trace.js` start/stop (stops at expiry, `set()` restarts, session-registered), Elliot echo timers, ambient intervals stop on victory/game over, `getLevel01Key` fallback + terminal notice, expiry-at-prompt hang fixed (smoke scenarios). Still to do: audio `envelope()` clamp + OfflineAudioContext check |
+| 1.10 Timer and leak fixes (trace, Elliot echo, victory path, audio envelope, key crash) | done | `HASH` | `trace.js` stops at expiry and `set()` restarts it; Elliot echo timers are session-owned; ambient intervals and all other timers are gone after victory (smoke asserts `pending() === 0`); `getLevel01Key` fallback + terminal notice; `envelope()` attack/hold clamped; every cue renders in an `OfflineAudioContext` without errors or NaN (smoke). Each has a smoke scenario; the envelope clamp itself is only exercised indirectly (no audible check, owner listens in phase 2) |
 
 ## Implementation notes
 
@@ -160,7 +160,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 - **Failing tests:** none. No wip commit is outstanding; the working tree was clean.
 - **Next command:** add a Tab-order scenario to `tools/smoke.mjs` (1.6), then wire `rain.js` (1.9): `grep -n "setRain\|syncRainMotion\|fx.js" sites/fsociety00/public/js/*.js sites/fsociety00/public/index.html`.
 
-**Last green commit (updated after step 1.9): `ecfa5d4`**, full `node tools/smoke.mjs` 12 of 12 (the run used a copy of the tree identical to this commit except for README text).
+**Last green commit (updated after step 1.10): `HASH`**, full `node tools/smoke.mjs` 14 of 14 (the run used a copy of the tree identical to this commit except for doc text).
 
 ### Findings beyond the docs (verified at baseline)
 

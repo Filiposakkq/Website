@@ -1,6 +1,10 @@
 const HELLO_CLIP_URL = './audio/hello-friend-mr-robot.mp3';
 
-export function createAudioController() {
+/**
+ * @param {{ context?: BaseAudioContext }} [options]  `context` is for tests: pass an OfflineAudioContext
+ *        to render every cue without a speaker (see tools/smoke.mjs). The game never passes it.
+ */
+export function createAudioController({ context: providedContext = null } = {}) {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   let context = null;
   let master = null;
@@ -14,10 +18,10 @@ export function createAudioController() {
   let currentScene = 'idle';
 
   function ensureContext() {
-    if (!AudioContextClass) throw new Error('Web Audio is not supported by this browser.');
     if (context) return true;
+    if (!providedContext && !AudioContextClass) throw new Error('Web Audio is not supported by this browser.');
 
-    context = new AudioContextClass();
+    context = providedContext ?? new AudioContextClass();
     master = context.createGain();
     compressor = context.createDynamicsCompressor();
     compressor.threshold.value = -24;
@@ -37,10 +41,15 @@ export function createAudioController() {
     return true;
   }
 
+  // Attack/hold/decay. Short sounds used to ramp up for a fixed 35 ms even when they lasted less than
+  // that, so the decay ramp ended before the attack ramp did. The attack is now a fraction of the
+  // duration and the hold point is clamped between the end of the attack and the end of the sound.
   function envelope(gain, start, peak, duration, hold = 0) {
+    const level = Math.max(0.0001, peak);
+    const attack = Math.min(0.035, duration * 0.4);
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), start + 0.035);
-    if (hold > 0) gain.gain.setValueAtTime(peak, start + hold);
+    gain.gain.exponentialRampToValueAtTime(level, start + attack);
+    if (hold > 0) gain.gain.setValueAtTime(level, start + Math.max(attack, Math.min(hold, duration)));
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
   }
 
@@ -540,5 +549,11 @@ export function createAudioController() {
     });
   }
 
-  return { unlock, setScene, play };
+  /** Creates the audio graph without unlocking audio or loading the voice clip. For tests. */
+  function prepare() {
+    ensureContext();
+    return context;
+  }
+
+  return { unlock, setScene, play, prepare };
 }
