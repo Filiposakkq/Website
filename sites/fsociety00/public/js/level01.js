@@ -1,5 +1,6 @@
 import { sourcePartThree, whisperSourcePart } from './source.js';
 import { formatClock } from './util.js';
+import { isAbortError } from './session.js';
 
 export const level01Hints = [
   'three parts. inspect the page layers: markup, styles, and script.',
@@ -25,22 +26,28 @@ export function revealLevel01SourcePart() {
   whisperSourcePart();
 }
 
-export function createLevel01({
-  line,
-  readCommand,
-  say,
-  gfx,
-  revealSourcePart,
-  wait,
-  staticBurst,
-  audio,
-  caseFile,
-  gameOver,
-  closePrompt,
-  abortCommand,
-  takeover,
-}) {
-  const key = getLevel01Key();
+/**
+ * Builds the Level 01 shell. Everything it needs comes from the GameContext.
+ *
+ * @param {import('./context.js').GameContext} ctx
+ */
+export function createLevel01(ctx) {
+  const {
+    line, say, gfx, wait, audio, caseFile, gameOver, takeover, revealSourcePart, session, screen,
+  } = ctx;
+  const { readCommand, abort: abortCommand, close: closePrompt } = ctx.terminal;
+
+  // The key is read from the live page. If someone removed the meta tag or the CSS variable the game
+  // must not crash: fall back to the sealed built-in parts and say so in the terminal when the level starts.
+  let key;
+  let integrityFailed = false;
+  try {
+    key = getLevel01Key();
+  } catch (error) {
+    console.warn(`${error.message} Falling back to the sealed key.`);
+    key = ['ghost', 'shell', sourcePartThree];
+    integrityFailed = true;
+  }
   const sourceFiles = {
     'page/index.html': {
       url: new URL('../index.html', import.meta.url),
@@ -55,12 +62,22 @@ export function createLevel01({
       clue: /sourcePartThree/,
     },
   };
-  let elliotEchoTimer;
+  let echoElement = null;
+  let echoFadeTimer = 0;
+  let echoRemoveTimer = 0;
+
+  function removeElliotEcho() {
+    session.clearTimeout(echoFadeTimer);
+    session.clearTimeout(echoRemoveTimer);
+    echoElement?.remove();
+    echoElement = null;
+    screen.classList.remove('elliot-present');
+  }
+  // A reboot / developer jump must not leave the echo (or its timers) behind.
+  session.onAbort(removeElliotEcho);
 
   function showElliotEcho() {
-    document.querySelector('.elliot-echo')?.remove();
-    document.querySelector('.screen')?.classList.remove('elliot-present');
-    clearTimeout(elliotEchoTimer);
+    removeElliotEcho();
     audio.play('elliot-echo');
     const echo = document.createElement('div');
     echo.className = 'elliot-echo';
@@ -70,27 +87,25 @@ export function createLevel01({
     image.src = new URL('../elliot-echo.svg', import.meta.url);
     image.alt = '';
     image.setAttribute('aria-hidden', 'true');
-    const screen = document.querySelector('.screen');
     image.addEventListener('error', () => {
-      echo.remove();
-      screen?.classList.remove('elliot-present');
+      if (echoElement !== echo) return;
+      removeElliotEcho();
       line('elliot echo: image could not be loaded.', 'warn');
     }, { once: true });
     echo.appendChild(image);
-    screen?.classList.add('elliot-present');
-    (screen || document.body).prepend(echo);
-    requestAnimationFrame(() => echo.classList.add('visible'));
-    elliotEchoTimer = setTimeout(() => {
+    echoElement = echo;
+    screen.classList.add('elliot-present');
+    screen.prepend(echo);
+    session.requestAnimationFrame(() => echo.classList.add('visible'));
+    echoFadeTimer = session.setTimeout(() => {
       echo.classList.remove('visible');
-      setTimeout(() => {
-        echo.remove();
-        screen?.classList.remove('elliot-present');
-      }, 700);
+      echoRemoveTimer = session.setTimeout(removeElliotEcho, 700);
     }, 5200);
   }
 
   return async function playLevel01(trace, trusted) {
     const state = { over: null };
+    if (integrityFailed) line('sdb9: integrity check failed, using sealed key', 'warn');
     let attempts = 3;
     let hints = 0;
     let solved = false;
@@ -150,11 +165,12 @@ export function createLevel01({
 
     while (!solved && !state.over) {
       const raw = await readCommand();
+      // Check expiry first: trace.onEnd wakes the prompt with null, and that must end in game over.
+      if (state.over) break;
       if (raw === null) {
         trace.onEnd = null;
         return false;
       }
-      if (state.over) break;
       const [name, ...args] = raw.trim().split(/\s+/);
       if (!name) continue;
 
@@ -204,6 +220,7 @@ export function createLevel01({
               const response = await fetch(sourceFiles[file].url);
               if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const source = await response.text();
+              session.throwIfAborted();
               const clues = source.split(/\r?\n/).filter((entry) => sourceFiles[file].clue.test(entry));
               if (clues.length) {
                 clues.forEach((entry) => line(entry, 'dim'));
@@ -213,6 +230,7 @@ export function createLevel01({
               }
               else line('source clue not found in this file.', 'warn');
             } catch (error) {
+              if (isAbortError(error)) throw error;
               line(`source: could not read ${file}: ${error.message}`, 'warn');
             }
           } else line(`cat: ${args[0]}: No such file or directory`, 'warn');

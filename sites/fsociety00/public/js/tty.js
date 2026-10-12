@@ -1,3 +1,18 @@
+const INTERACTIVE = 'button, a, input, textarea, select, summary, [contenteditable], [tabindex]';
+
+// True for the page itself or anything inside #screen that is not a control.
+function inTerminalArea(target) {
+  if (!(target instanceof Element)) return false;
+  if (target === document.body || target === document.documentElement) return true;
+  return !!target.closest('#screen') && !target.closest(INTERACTIVE);
+}
+
+const modalOpen = () => !!document.querySelector('dialog[open], [aria-modal="true"]:not([hidden])');
+
+// Printable characters, Backspace and Enter. Never Tab, Shift, arrows or Escape, and not shortcuts.
+const isTypingKey = (event) => !event.ctrlKey && !event.metaKey && !event.altKey
+  && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter');
+
 export function createTerminal({ out, promptLine, scroll, onKeyPress = () => {} }) {
   const tty = { resolve: null };
   let input = null;
@@ -36,16 +51,46 @@ export function createTerminal({ out, promptLine, scroll, onKeyPress = () => {} 
       event.preventDefault();
       submit();
     });
-    addEventListener('pointerdown', () => { if (tty.resolve) input.focus(); });
-    addEventListener('keydown', () => {
-      if (tty.resolve && document.activeElement !== input) input.focus();
+    // Send typing to the terminal only when that is clearly what the player means. Stealing focus on
+    // every key (as this used to) made Tab, arrows and dialogs unusable for keyboard users.
+    addEventListener('pointerdown', (event) => {
+      if (!tty.resolve || document.activeElement === input) return;
+      if (inTerminalArea(event.target) && !modalOpen()) input.focus();
+    });
+    addEventListener('keydown', (event) => {
+      if (!tty.resolve || document.activeElement === input) return;
+      if (!isTypingKey(event) || !inTerminalArea(event.target) || modalOpen()) return;
+      input.focus();
     });
   }
 
-  function readCommand() {
+  /**
+   * Waits for the next typed line. Resolves with the line, or null after abort().
+   * With a `signal` it rejects with the signal's reason when the session aborts, so the awaiting
+   * code unwinds instead of leaking a promise that never settles.
+   */
+  function readCommand({ signal } = {}) {
     init();
-    return new Promise((resolve) => {
-      tty.resolve = resolve;
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      let onSignal = null;
+      const settle = (value) => {
+        signal?.removeEventListener('abort', onSignal);
+        resolve(value);
+      };
+      onSignal = () => {
+        if (tty.resolve === settle) {
+          tty.resolve = null;
+          input.value = '';
+          typed.textContent = '';
+        }
+        reject(signal.reason);
+      };
+      signal?.addEventListener('abort', onSignal, { once: true });
+      tty.resolve = settle;
       promptLine.hidden = false;
       scroll();
       if (matchMedia('(pointer: fine)').matches) input.focus();

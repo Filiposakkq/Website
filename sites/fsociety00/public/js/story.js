@@ -1,5 +1,7 @@
 import { startTrace } from './trace.js';
-import { createLevel01 } from './level01.js';
+import { createLevel01, revealLevel01SourcePart } from './level01.js';
+import { createSession, isAbortError, swallowAbort } from './session.js';
+import { createGameContext } from './context.js';
 import { createTerminal } from './tty.js';
 import { installDeveloperMenu } from './developer-menu.js';
 import { createAudioController } from './audio.js';
@@ -43,7 +45,7 @@ const caseFile = createCaseFile({
 const createTrace = (seconds) => {
   activeTrace?.halt(true);
   audio.play('trace-appear');
-  activeTrace = startTrace(seconds);
+  activeTrace = startTrace(seconds, { session });
   return activeTrace;
 };
 document.body.classList.toggle('quiet-motion', motionPreference.matches);
@@ -52,14 +54,17 @@ motionPreference.addEventListener('change', () => {
   if (window.syncRainMotion) window.syncRainMotion();
 });
 
-// koho hráč nakonec zvolil: 'unknown' | 'watcher' | null
-let trusted = null;
-
-// Hold the on-screen control to skip boot or advance to the trust choice.
-let skip = false;
-let skippable = true;
-let skipToChoice = false;
-let skipToChoiceArmed = true;
+// One session per run of the story (see session.js). Aborting it stops every timer, sleep and
+// listener the run started, so a reboot or developer jump cannot leak into the next run.
+let session = createSession();
+const newRunState = () => ({
+  skip: false,
+  skippable: true,
+  skipToChoice: false,
+  skipToChoiceArmed: true,
+});
+// Hold the on-screen control to skip boot or advance to the trust choice. Reset for every session.
+let run = newRunState();
 let holdStartedAt = 0;
 let holdTarget = null;
 let holdFrame = 0;
@@ -91,18 +96,18 @@ function advanceSkipHold(now) {
 
   const target = holdTarget;
   cancelSkipHold();
-  if (target === 'boot' && skippable) {
-    skip = true;
+  if (target === 'boot' && run.skippable) {
+    run.skip = true;
     skipHint.classList.add('done');
-  } else if (target === 'intro' && !skippable && skipToChoiceArmed) {
-    skipToChoice = true;
+  } else if (target === 'intro' && !run.skippable && run.skipToChoiceArmed) {
+    run.skipToChoice = true;
     skipHint.hidden = true;
   }
 }
 
 function beginSkipHold() {
   if (holdStartedAt || skipHint.hidden || skipHint.disabled) return;
-  holdTarget = skippable ? 'boot' : skipToChoiceArmed ? 'intro' : null;
+  holdTarget = run.skippable ? 'boot' : run.skipToChoiceArmed ? 'intro' : null;
   if (!holdTarget) return;
   holdStartedAt = performance.now();
   skipHint.classList.add('holding');
@@ -138,10 +143,11 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) cancelSkipHold();
 });
 
-const isSkipping = () => skip || skipToChoice;
+const isSkipping = () => run.skip || run.skipToChoice;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const wait = (ms) => (isSkipping() || motionReduced() || ms <= 0 ? Promise.resolve() : sleep(ms));
+// Everything sleeps through the *current* session, so aborting it wakes every awaiting chain at once.
+const sleep = (ms) => session.sleep(ms);
+const wait = (ms) => (isSkipping() || motionReduced() || ms <= 0 ? session.wait(0) : session.sleep(ms));
 const ip = () => `203.0.113.${rand(1, 254)}`;
 const scroll = () => window.scrollTo(0, document.body.scrollHeight);
 const terminal = createTerminal({
@@ -150,7 +156,48 @@ const terminal = createTerminal({
   scroll,
   onKeyPress: (key) => audio.play(key === 'Enter' ? 'command-submit' : 'key-tap'),
 });
-const { readCommand, abort: ttyAbort, close: closePrompt } = terminal;
+const { abort: ttyAbort, close: closePrompt } = terminal;
+// Rejects with the abort error when the session aborts mid-prompt (no leaked promise).
+const readCommand = () => terminal.readCommand({ signal: session.signal });
+const sessionTerminal = { readCommand, abort: ttyAbort, close: closePrompt };
+
+function stopAmbient() {
+  ambientIntervals.forEach((id) => session.clearInterval(id));
+  ambientIntervals.clear();
+}
+
+// Removes the transient overlays and effect classes a run may leave behind when it is cut short.
+function sweepStage() {
+  document.querySelectorAll('.elliot-echo, .ghost-sequence, .breach-sequence, .identity-surge, .hello-flight-layer')
+    .forEach((element) => element.remove());
+  screen.classList.remove('glitch', 'flash', 'g-rgb', 'g-slice', 'g-roll', 'g-invert', 'g-zoom', 'intrusion',
+    'identity-lock', 'ghosted-hit', 'elliot-present', 'boot-entry', 'shutdown');
+  noiseEl.classList.remove('on');
+  shutdownSequence.hidden = true;
+  screen.style.opacity = '1';
+}
+
+// What has to stop when a session aborts.
+function armSession(target) {
+  target.onAbort(() => {
+    cancelSkipHold();
+    closePrompt();
+    activeTrace?.halt(true);
+    activeTrace = null;
+    stopAmbient();
+    caseFile.close();
+    audio.setScene('idle');
+    sweepStage();
+  });
+}
+
+function beginSession(reason) {
+  session.abort(reason);
+  session = createSession();
+  run = newRunState();
+  armSession(session);
+}
+armSession(session);
 
 function line(text = '', cls = '') {
   const d = document.createElement('div');
@@ -426,7 +473,7 @@ async function logo(words) {
   }
 
   // 1) šum: všechny buňky náhodně blikají, jako když se signál dešifruje
-  const noise = motionReduced() ? null : setInterval(() => {
+  const noise = motionReduced() ? null : session.setInterval(() => {
     glyphs.forEach((o) => {
       if (!o.locked) o.cells.forEach((c) => c.classList.toggle('on', Math.random() < 0.45));
     });
@@ -440,7 +487,7 @@ async function logo(words) {
     o.g.classList.add('lock');
     await wait(190);
   }
-  if (noise !== null) clearInterval(noise);
+  if (noise !== null) session.clearInterval(noise);
 
   // 3) sken přejede přes hotové logo
   box.classList.add('done');
@@ -448,11 +495,11 @@ async function logo(words) {
 
   // 4) logo zůstane "živé": občas se jedno písmeno na chvíli zkroutí
   if (!motionReduced()) {
-    const interval = setInterval(() => {
+    const interval = session.setInterval(() => {
       const o = glyphs[rand(0, glyphs.length - 1)];
       o.g.style.setProperty('--j', `${rand(-3, 3)}px`);
       o.g.classList.add('jit');
-      setTimeout(() => o.g.classList.remove('jit'), 140);
+      session.setTimeout(() => o.g.classList.remove('jit'), 140);
     }, 2600);
     ambientIntervals.add(interval);
   }
@@ -526,8 +573,7 @@ async function wipe(els) {
 async function gameOver(trace, reason) {
   caseFile.setFailureOutcome(reason);
   closePrompt();
-  ambientIntervals.forEach(clearInterval);
-  ambientIntervals.clear();
+  stopAmbient();
   const traceExpired = reason === 'TRACE COMPLETE';
   audio.setScene('shutdown');
   audio.play(traceExpired ? 'trace-expired' : 'shutdown');
@@ -625,6 +671,9 @@ async function watcherTakeover(trace) {
 }
 
 async function resetGame() {
+  restartControl.disabled = true;
+  beginSession('reboot'); // abort the previous run for good, then start a fresh session
+  await Promise.resolve(); // let the aborted chains unwind before touching the DOM
   audio.setScene('idle');
   audio.play('reboot');
   restartControl.disabled = true;
@@ -659,17 +708,12 @@ async function resetGame() {
   if (window.setRain) setRain(0, true);
   window.scrollTo(0, 0);
   document.getElementById('hud')?.remove();
-  skip = false;
-  skippable = true;
-  skipToChoice = false;
-  skipToChoiceArmed = true;
   cancelSkipHold();
-  trusted = null;
   caseFile.start();
   setSkipHint('BOOT');
   line('LOCAL CONSOLE RESTORED', 'dim');
   audio.setScene('boot');
-  void boot();
+  void startStory();
   await wait(1900);
   screen.classList.remove('recovering');
 }
@@ -704,7 +748,7 @@ async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
       mid = chars.slice(0, locked).join('') + scrambleText(chars.slice(locked).join(''), { intensity: 1, eligible: everyChar });
     }
     targets.forEach((t) => { t.n.nodeValue = t.base.split(from).join(mid); });
-    if (f === 3) staticBurst(500);
+    if (f === 3) staticBurst(500).catch(swallowAbort); // fire-and-forget: an abort is expected here
     await sleep(80);
   }
   screen.classList.remove('g-rgb');
@@ -1002,7 +1046,10 @@ async function moveHelloIntoChat(hello) {
       transformOrigin: 'top left',
       fill: 'forwards',
     });
+    const owner = session;
+    owner.onAbort(() => flight.cancel()); // cancelling rejects `finished` with an AbortError
     await flight.finished;
+    owner.throwIfAborted();
     flight.cancel();
   }
   targetSlot.replaceWith(hello);
@@ -1133,7 +1180,8 @@ function branchDialogueForWatcher(investigation) {
     : 'you chose the watcher. his channel stayed open until the script closed it.';
 }
 
-async function boot() {
+async function runStory() {
+  let trusted = null; // who the player chose: 'unknown' | 'watcher'
   await wait(600);
 
   // 1) BIOS / POST
@@ -1255,10 +1303,10 @@ async function boot() {
   await wait(700);
 
   // The BIOS can no longer be skipped once the story intro begins.
-  skip = false;
-  skippable = false;
+  run.skip = false;
+  run.skippable = false;
   cancelSkipHold();
-  setSkipHint('INTRO', !skipToChoice);
+  setSkipHint('INTRO', !run.skipToChoice);
 
   await flash();
   await staticBurst(500);
@@ -1448,12 +1496,12 @@ async function boot() {
   line();
 
   // Stop offering skip before the trust choice.
-  skipToChoice = false;
-  skipToChoiceArmed = false;
+  run.skipToChoice = false;
+  run.skipToChoiceArmed = false;
   setSkipHint('INTRO', false);
 
   // výběr: klepnutí na možnost, nebo napsat příkaz přímo do terminálu
-  trusted = await chooseTrust({ out, line, cmd, terminal });
+  trusted = await chooseTrust({ out, line, cmd, terminal: sessionTerminal });
   caseFile.chooseTrust(trusted);
   line();
   await wait(700);
@@ -1506,32 +1554,64 @@ async function boot() {
   await wait(600);
   line();
 
-  const opened = await playLevel01(trace, trusted);
+  const opened = await level01()(trace, trusted);
   if (!opened) return;
   await revealName(trace, trusted);
 }
 
-const playLevel01 = createLevel01({
-  line,
-  readCommand,
-  say,
-  gfx,
-  wait,
-  staticBurst,
-  audio,
-  caseFile,
-  gameOver,
-  closePrompt,
-  abortCommand: ttyAbort,
-  takeover: watcherTakeover,
-});
+function buildContext() {
+  return createGameContext({
+    out,
+    screen,
+    line,
+    type,
+    say,
+    cmd,
+    wait,
+    session,
+    gfx,
+    flash,
+    staticBurst,
+    corrupt,
+    audio,
+    caseFile,
+    trace: { create: createTrace, current: () => activeTrace },
+    terminal: sessionTerminal,
+    gameOver,
+    takeover: watcherTakeover,
+    revealSourcePart: revealLevel01SourcePart,
+    motionReduced,
+    isSkipping,
+  });
+}
+
+// The level is built once per session, from that session's context.
+let levelSession = null;
+let levelShell = null;
+function level01() {
+  if (levelSession !== session) {
+    levelSession = session;
+    levelShell = createLevel01(buildContext());
+  }
+  return levelShell;
+}
+
+// Runs the story in the current session. An abort (reboot, developer jump) is the only error
+// swallowed here; anything else is a real bug and must surface.
+async function startStory() {
+  const owner = session;
+  try {
+    await runStory();
+  } catch (error) {
+    swallowAbort(error);
+  } finally {
+    if (!owner.isAborted()) stopAmbient(); // victory / game-over exits leave no jittering logo behind
+  }
+}
 
 async function runDeveloperRoute(route) {
-  activeTrace?.halt(true);
-  activeTrace = null;
-  ambientIntervals.forEach(clearInterval);
-  ambientIntervals.clear();
-  ttyAbort();
+  beginSession('developer route'); // stops the previous run completely, with a fresh session and skip state
+  await Promise.resolve();
   closePrompt();
   launch.hidden = true;
   out.replaceChildren();
@@ -1544,19 +1624,20 @@ async function runDeveloperRoute(route) {
   document.body.classList.remove('powering-down');
   shutdownSequence.hidden = true;
   powerPanel.hidden = true;
-  trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
+  setSkipHint('BOOT', route === 'boot'); // only the full boot has anything to skip; also resets a stale label
+  const trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
   caseFile.start(trusted);
   caseFile.chooseTrust(trusted);
   audio.setScene(route === 'boot' ? 'boot' : 'story');
 
   if (route === 'boot') {
-    await boot();
+    await runStory();
   } else if (route === 'puzzle' || route === 'puzzle-watcher') {
     audio.setScene('puzzle');
     line(`LOCAL TEST ROUTE // LEVEL 01 // ${trusted.toUpperCase()}`, 'dim');
     const trace = createTrace(120);
     trace.dock();
-    const opened = await playLevel01(trace, trusted);
+    const opened = await level01()(trace, trusted);
     if (opened) await revealName(trace, trusted);
   } else if (route === 'ending') {
     audio.setScene('ghost');
@@ -1607,7 +1688,7 @@ async function runDeveloperRoute(route) {
   }
 }
 
-initialize.addEventListener('click', async () => {
+async function launchStory() {
   if (initialize.disabled) return;
   audio.setScene('boot');
   void audio.unlock().then(() => {
@@ -1634,16 +1715,18 @@ initialize.addEventListener('click', async () => {
   launchStatus.textContent = '';
   screen.classList.add('boot-entry');
   setSkipHint('BOOT');
-  void boot();
+  void startStory();
   await wait(1050);
   screen.classList.remove('boot-entry');
-});
+}
+initialize.addEventListener('click', () => { launchStory().catch(swallowAbort); });
 
-restartControl.addEventListener('click', resetGame);
+restartControl.addEventListener('click', () => { resetGame().catch(swallowAbort); });
 installDeveloperMenu((action) => {
   void audio.unlock()
     .then(() => runDeveloperRoute(action))
     .catch((error) => {
+      if (isAbortError(error)) return; // a newer route / reboot replaced this one
       console.error(`Could not start audio for developer route "${action}".`, error);
     });
 });

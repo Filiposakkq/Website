@@ -691,6 +691,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
     setOutcome,
     setFailureOutcome,
     open: openBoard,
+    close: closeBoard,
     snapshot: () => ({
       route: state.route,
       discoveries: [...state.discoveries],

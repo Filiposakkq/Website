@@ -72,12 +72,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Headless Chromium builds may lack the codec for the voice clip: not a game bug.
 const ALLOWED_CONSOLE = [/hello friend voice clip/i];
 
-function watch(page, problems) {
+function watch(page, problems, allow = []) {
   page.on('console', (msg) => {
     const type = msg.type();
     if (type !== 'error' && type !== 'warning') return;
     const text = msg.text();
-    if (ALLOWED_CONSOLE.some((rx) => rx.test(text))) return;
+    if ([...ALLOWED_CONSOLE, ...allow].some((rx) => rx.test(text))) return;
     problems.push(`console.${type}: ${text}`);
   });
   page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
@@ -296,6 +296,129 @@ for (const [label, contextOptions, reduced] of variants) {
     },
   });
 }
+// Trace expiry while the prompt is waiting must end in game over (it used to hang the shell).
+scenarios.push({
+  name: 'desktop: trace expiry -> game over',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'type', reduced: false });
+    await loseByTraceExpiry(page);
+    const hud = await page.evaluate(() => ({
+      text: document.querySelector('#hud .num')?.textContent,
+      label: document.querySelector('#hud .lbl')?.textContent,
+    }));
+    if (hud.text !== '00:00' || hud.label !== 'TRACE COMPLETE') {
+      throw new Error(`expired HUD should read 00:00 / TRACE COMPLETE, got ${JSON.stringify(hud)}`);
+    }
+  },
+});
+
+// The third hint reveals the console part. It used to throw (revealSourcePart was never passed in).
+scenarios.push({
+  name: 'reduced: third hint whispers the console part',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    const logs = [];
+    page.on('console', (message) => { if (message.type() === 'log') logs.push(message.text()); });
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    for (let i = 0; i < 3; i++) await sendCommand(page, 'hint');
+    await waitOutput(page, 'each hold one part.');
+    if (!logs.some((text) => text.includes('layer 3/3') && text.includes('1337'))) {
+      throw new Error(`console did not show the third key part: ${JSON.stringify(logs)}`);
+    }
+    await sendCommand(page, 'help'); // the shell must still be alive
+    await waitOutput(page, 'commands:');
+    await winGame(page);
+  },
+});
+
+// Removing the page-source key material must not crash the game.
+scenarios.push({
+  name: 'reduced: missing key material -> sealed key fallback',
+  contextOptions: REDUCED,
+  allowConsole: [/Level 01 key material/],
+  async beforeLoad({ page }) {
+    await page.route(/\/(index\.html)?$/, async (route) => {
+      const response = await route.fetch();
+      const body = (await response.text()).replace(/<meta name="sdb9-part-one"[^>]*>/, '');
+      await route.fulfill({ response, body });
+    });
+  },
+  async run({ page }) {
+    const present = await page.evaluate(() => !!document.querySelector('meta[name="sdb9-part-one"]'));
+    if (present) throw new Error('test setup: the meta tag should have been removed');
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await waitOutput(page, 'sdb9: integrity check failed, using sealed key');
+    await winGame(page);
+  },
+});
+
+// --- aborting the story at four different moments ---------------------------------------------
+
+async function currentSessionHandle(page) {
+  return page.evaluateHandle(async () => (await import('/js/session.js')).currentSession());
+}
+
+// Starts a developer route (which aborts the running story) and checks the old session is gone.
+async function devRoute(page, action) {
+  const old = await currentSessionHandle(page);
+  await page.click('.developer-trigger');
+  await page.click(`.developer-action[data-action="${action}"]`);
+  await page.waitForFunction((session) => session.isAborted(), old, { timeout: 15000 });
+  await sleep(250);
+  const pending = await old.evaluate((session) => session.pending());
+  if (pending !== 0) throw new Error(`aborted session still has ${pending} live handle(s)`);
+  const replaced = await page.evaluate(async (previous) => (await import('/js/session.js')).currentSession() !== previous, old);
+  if (!replaced) throw new Error('no fresh session after the developer route');
+}
+
+async function expectSingleStream(page, label) {
+  await sleep(1200);
+  const state = await snapshotRun(page);
+  expectClean(state, [
+    [state.streams === 1, `${label}: more than one #output`],
+    [state.bios <= 1, `${label}: BIOS header duplicated`],
+    [state.cpu <= 1, `${label}: boot lines duplicated (two story streams?)`],
+    [state.overlays === 0, `${label}: overlay leftovers`],
+    [state.huds <= 1, `${label}: more than one HUD`],
+  ]);
+}
+
+scenarios.push({
+  name: 'desktop: abort at BIOS, intro, trust choice and mid-puzzle',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await initialize(page);
+
+    await sleep(2500); // 1) during the BIOS
+    await devRoute(page, 'boot');
+    await expectSingleStream(page, 'after aborting the BIOS');
+
+    await holdSkip(page, 'BOOT'); // 2) during the intro
+    await waitOutput(page, '*** INCOMING TRANSMISSION ***', 60000);
+    await sleep(1500);
+    await devRoute(page, 'boot');
+    await expectSingleStream(page, 'after aborting the intro');
+
+    await reachTrustChoice(page, { reduced: false }); // 3) at the trust choice
+    await devRoute(page, 'boot');
+    await expectSingleStream(page, 'after aborting the trust choice');
+
+    await devRoute(page, 'puzzle'); // 4) mid-puzzle
+    await waitOutput(page, 'LOCAL TEST ROUTE');
+    await waitShown(page, '#promptLine');
+    await sendCommand(page, 'help');
+    await devRoute(page, 'boot');
+    await expectSingleStream(page, 'after aborting the puzzle');
+
+    // The final run must still play through normally.
+    await reachTrustChoice(page, { reduced: false });
+    await chooseTrust(page, 'watcher', 'type');
+    await reachPuzzle(page);
+    await loseByLockout(page);
+  },
+});
+
 // --------------------------------------------------------------------- runner
 
 async function runScenario(browser, server, scenario) {
@@ -304,7 +427,7 @@ async function runScenario(browser, server, scenario) {
   const context = await browser.newContext(scenario.contextOptions);
   const page = await context.newPage();
   page.setDefaultTimeout(45000);
-  watch(page, problems);
+  watch(page, problems, scenario.allowConsole);
   try {
     if (scenario.beforeLoad) await scenario.beforeLoad({ page, context });
     await page.goto(server.url);
