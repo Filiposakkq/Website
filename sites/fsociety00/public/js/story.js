@@ -8,6 +8,7 @@ import { createAudioController } from './audio.js';
 import { createCaseFile } from './casefile.js';
 import { rand, pad2, scrambleText } from './util.js';
 import { renderChoices } from './choices.js';
+import { createRain } from './rain.js';
 import { chooseTrust } from './story-choices.js';
 
 const out = document.getElementById('output');
@@ -32,6 +33,9 @@ const shutdownMeter = document.getElementById('shutdownMeter');
 const shutdownEvents = document.getElementById('shutdownEvents');
 const skipLabel = skipHint.querySelector('.skip-label');
 const audio = createAudioController();
+// The rain reacts to prefers-reduced-motion / body.quiet-motion changes by itself (see rain.js).
+const rain = createRain(document.getElementById('rain'));
+const setRain = (opacity, immediate = false) => rain.setOpacity(opacity, immediate);
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const ambientIntervals = new Set();
 const SKIP_HOLD_MS = 3000;
@@ -51,7 +55,6 @@ const createTrace = (seconds) => {
 document.body.classList.toggle('quiet-motion', motionPreference.matches);
 motionPreference.addEventListener('change', () => {
   document.body.classList.toggle('quiet-motion', motionPreference.matches);
-  if (window.syncRainMotion) window.syncRainMotion();
 });
 
 // One session per run of the story (see session.js). Aborting it stops every timer, sleep and
@@ -557,7 +560,7 @@ async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', 
 
 // vzdálené smazání: text zčervená, rozpadne se na šum a "zhltne se" řádek po řádku
 async function wipe(els) {
-  if (window.setRain && !motionReduced()) setRain(0.7);
+  if (!motionReduced()) setRain(0.7);
   els.forEach((element, index) => {
     element.classList.add('purging');
     element.style.setProperty('--purge-delay', `${Math.min(index, 6) * 20}ms`);
@@ -566,7 +569,7 @@ async function wipe(els) {
     await sleep(520);
   }
   els.forEach((element) => element.remove());
-  if (window.setRain) setRain(0.22);
+  setRain(0.22);
 }
 
 // The remote session ends; the local terminal then powers down.
@@ -579,7 +582,7 @@ async function gameOver(trace, reason) {
   audio.play(traceExpired ? 'trace-expired' : 'shutdown');
   trace.halt(!traceExpired);
   document.body.classList.add('powering-down');
-  if (window.setRain) setRain(0, true);
+  setRain(0, true);
   line();
   line(`*** ${reason} ***`, 'warn');
   line(traceExpired ? 'TRACE WINDOW EXPIRED // 00:00' : 'REMOTE SESSION CLOSED', 'warn');
@@ -658,13 +661,13 @@ async function watcherTakeover(trace) {
     feed.appendChild(entry);
     audio.play(index === stages.length - 1 ? 'disconnect' : 'signal');
     progress.style.transform = `scaleX(${(stages.length - index - 1) / stages.length})`;
-    if (window.setRain) setRain(0.75);
+    setRain(0.75);
     await wait(1050);
   }
   overlay.remove();
   screen.classList.remove('intrusion');
   audio.setScene('puzzle');
-  if (window.setRain) setRain(0.22);
+  setRain(0.22);
   line('[WATCHER] your shell has been closed.', 'warn');
   line('[WATCHER] you should have stayed out.', 'warn');
   await wait(300);
@@ -705,7 +708,7 @@ async function resetGame() {
   restartControl.textContent = '[ REBOOT SYSTEM ]';
   restartControl.disabled = false;
   document.body.classList.remove('powering-down');
-  if (window.setRain) setRain(0, true);
+  setRain(0, true);
   window.scrollTo(0, 0);
   document.getElementById('hud')?.remove();
   cancelSkipHold();
@@ -736,7 +739,7 @@ async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
   const everyChar = () => true;
   const decayFrames = 6;
   const lockFrames = 10;
-  if (window.setRain) setRain(0.8);
+  setRain(0.8);
   screen.classList.add('g-rgb');
   for (let f = 0; f <= decayFrames + lockFrames; f++) {
     let mid;
@@ -755,7 +758,7 @@ async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
   targets.forEach((t) => { t.n.nodeValue = t.base.split(from).join(to); });
   await gfx('slice');
   await gfx('invert');
-  if (window.setRain) setRain(restoreRain);
+  setRain(restoreRain);
 }
 
 // po odemčení sdb9 hráč spustí ghost.sh (napsat, nebo klepnout). Čas běží dál.
@@ -972,11 +975,11 @@ async function playIdentityReveal(trusted) {
   audio.setScene('reveal');
   await say('you came here looking for a name.', { speed: 55 });
   await wait(700);
-  if (window.setRain) setRain(0.26, true);
+  setRain(0.26, true);
   await say('names are how they keep track of us.', { speed: 52 });
   await wait(850);
   await say('but you already know the one they gave me-', { speed: 70 });
-  if (window.setRain) setRain(0, true);
+  setRain(0, true);
 
   await renameEverywhere('unknown', 'Mr. Robot', { restoreRain: 0 });
   await wait(1250);
@@ -996,7 +999,7 @@ async function playIdentityReveal(trusted) {
   await wait(800);
   surge.remove();
   screen.classList.remove('identity-lock');
-  if (window.setRain) setRain(0.12);
+  setRain(0.12);
   audio.setScene('story');
   await say('bonsoir.', { ...R, cls: 'mr-reference', speed: 65 });
   await wait(1300);
@@ -1312,7 +1315,7 @@ async function runStory() {
   await staticBurst(500);
   await gfx('roll');
   await blackout(1500);
-  if (window.setRain) setRain(0.22);
+  setRain(0.22);
   audio.setScene('story');
 
   // 9) příběh

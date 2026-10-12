@@ -142,14 +142,14 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 1.6 Terminal focus fix | done | `3690844` | focus is only redirected for typing keys inside `#screen`, never from controls or while a modal is open. Smoke scenario `keyboard focus is not hijacked` passes on the fix and fails on the baseline (Tab never reached DEV). Full suite green at `7032663` (before this scenario existed) |
 | 1.7 HTML accessibility (role=log, canvas, native dialogs) | todo | | |
 | 1.8 CSS fixes (cascade, fonts, shutdown-scan, reduced-motion, dead rule, contrast check) | todo | | |
-| 1.9 Rain to ES module | in progress | `820ee4a` | `rain.js` written, `fx.js` still in use |
+| 1.9 Rain to ES module | done | `HASH` | `rain.js` (rAF with 55 ms step accumulator, pauses when hidden, ResizeObserver, reacts live to reduced-motion and `quiet-motion`) replaces `fx.js`; `window.setRain`/`syncRainMotion` and the script tag are gone. Smoke: no rain globals, rain starts after reduced motion is switched off, and the real game's canvas is at 0.22 and painting at the intro. Visual look unchanged is **unverified** (owner: check on the preview) |
 | 1.10 Timer and leak fixes (trace, Elliot echo, victory path, audio envelope, key crash) | in progress | `eda836d` | done: `trace.js` start/stop (stops at expiry, `set()` restarts, session-registered), Elliot echo timers, ambient intervals stop on victory/game over, `getLevel01Key` fallback + terminal notice, expiry-at-prompt hang fixed (smoke scenarios). Still to do: audio `envelope()` clamp + OfflineAudioContext check |
 
 ## Implementation notes
 
 ### Stopped at (2026-10-12, after step 1.5; refreshed at the start of the next session)
 
-**Last green commit: `7032663`** (full `node tools/smoke.mjs`: 10 of 10 scenarios passed on a clean checkout of that commit). The remote branch head equals `7032663` (checked with `git ls-remote`).
+**Last green commit: `7032663`** at the time of this block (10 of 10); see the line below for the newer one. The remote branch head equals `7032663` (checked with `git ls-remote`).
 
 - **Finished and verified by the full smoke run:** 1.1 tooling, 1.2 shared utilities, 1.3 session/cancellation (a, b, c), 1.4 `GameContext` + `createLevel01(ctx)`, 1.5 `chooseTrust` moved out of `tty.js`. `story.js`, `tty.js`, `trace.js`, `level01.js` and `casefile.js` were rewritten for these steps; `tty.js` no longer knows the plot.
 - **Half done:**
@@ -159,6 +159,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 - **Not started:** 1.7 (accessibility, native dialogs) and 1.8 (CSS fixes).
 - **Failing tests:** none. No wip commit is outstanding; the working tree was clean.
 - **Next command:** add a Tab-order scenario to `tools/smoke.mjs` (1.6), then wire `rain.js` (1.9): `grep -n "setRain\|syncRainMotion\|fx.js" sites/fsociety00/public/js/*.js sites/fsociety00/public/index.html`.
+
+**Last green commit (updated after step 1.9): `HASH`**, full `node tools/smoke.mjs` 12 of 12 (the run used a copy of the tree identical to this commit except for README text).
 
 ### Findings beyond the docs (verified at baseline)
 

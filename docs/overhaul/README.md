@@ -120,7 +120,6 @@ sites/
     public/
       index.html (70)             # launch screen, #screen/#output/#promptLine, case trigger, shutdown + power panels
       styles.css (2109)           # ALL game CSS, one file
-      fx.js (47)                  # classic script: digital rain canvas, exposes window.setRain / window.syncRainMotion
       favicon.svg  elliot-echo.svg
       audio/hello-friend-mr-robot.mp3
       js/
@@ -132,6 +131,7 @@ sites/
         casefile.js (705)         # evidence board; declarative EVIDENCE array at the top
         developer-menu.js (127)   # localhost-only DEV panel
         source.js (8)             # third part of the puzzle key (see invariants)
+        rain.js, session.js, context.js, util.js, choices.js, story-choices.js   # added in phase 1 (rain canvas, abortable story session, GameContext, shared helpers)
 ```
 
 Line counts are approximate and will drift. **Reference code by function name, not line number.**

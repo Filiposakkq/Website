@@ -409,6 +409,50 @@ scenarios.push({
   },
 });
 
+// Rain (review items 8 and 20): a page loaded with reduced motion must start the rain when the user
+// later turns reduced motion off. The old fx.js decided once, at load, and never started.
+scenarios.push({
+  name: 'reduced: rain starts after reduced motion is switched off',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    const globals = await page.evaluate(() => ['setRain', 'syncRainMotion'].filter((name) => name in window));
+    if (globals.length) throw new Error(`rain globals still on window: ${globals}`);
+    const probe = () => page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.id = 'rainProbe';
+      canvas.style.cssText = 'position:fixed;inset:0;width:200px;height:200px;opacity:0';
+      document.body.appendChild(canvas);
+      canvas.getContext('2d', { willReadFrequently: true }); // the test reads pixels repeatedly
+      const { createRain } = await import('/js/rain.js');
+      const rain = createRain(canvas);
+      window.__rainProbe = rain; // test-only handle, lives in the test page
+      rain.setOpacity(0.5);
+      return canvas.style.opacity;
+    });
+    const whileReduced = await probe();
+    if (whileReduced !== '0') throw new Error(`rain must be hidden while reduced motion is on, opacity=${whileReduced}`);
+    const painted = () => page.evaluate(() => {
+      const canvas = document.getElementById('rainProbe');
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return true;
+      return false;
+    });
+    await sleep(400);
+    if (await painted()) throw new Error('rain drew frames while reduced motion was on');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.waitForFunction(() => document.getElementById('rainProbe').style.opacity === '0.5', null, { timeout: 5000 });
+    await page.waitForFunction(() => {
+      const canvas = document.getElementById('rainProbe');
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return true;
+      return false;
+    }, null, { timeout: 5000 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.waitForFunction(() => document.getElementById('rainProbe').style.opacity === '0', null, { timeout: 5000 });
+    await page.evaluate(() => window.__rainProbe.destroy());
+  },
+});
+
 // --- aborting the story at four different moments ---------------------------------------------
 
 async function currentSessionHandle(page) {
@@ -453,6 +497,14 @@ scenarios.push({
     await holdSkip(page, 'BOOT'); // 2) during the intro
     await waitOutput(page, '*** INCOMING TRANSMISSION ***', 60000);
     await sleep(1500);
+    // The story's rain is on (setRain(0.22) just ran) and the live canvas is painting.
+    await page.waitForFunction(() => document.getElementById('rain').style.opacity === '0.22', null, { timeout: 5000 });
+    await page.waitForFunction(() => {
+      const canvas = document.getElementById('rain');
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return true;
+      return false;
+    }, null, { timeout: 5000 });
     await devRoute(page, 'boot');
     await expectSingleStream(page, 'after aborting the intro');
 
