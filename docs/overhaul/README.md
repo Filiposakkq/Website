@@ -13,6 +13,9 @@
 Copy this prompt, change the phase number and slug:
 
 ```text
+The project is the GitHub repository Filiposakkq/fsociety00-dat. Attach it through
+your GitHub connection and clone it first (see "Working in a cloud chat session" in
+the README; if you cannot access the repo, stop and tell me, do not recreate files).
 Read docs/overhaul/README.md completely, then docs/overhaul/phase-0N-<slug>.md.
 Implement that phase only, on a new branch named overhaul/phase-N-<slug> created
 from the latest main (or from the branch of the phase it depends on, see its
@@ -29,6 +32,9 @@ Do not push to main.
 ### Resuming a phase another Claude started (it ran out of usage)
 
 ```text
+The project is the GitHub repository Filiposakkq/fsociety00-dat. Attach it through
+your GitHub connection and clone it first (see "Working in a cloud chat session" in
+the README; if you cannot access the repo, stop and tell me).
 Read docs/overhaul/README.md completely (especially "Checkpoints" and "Resuming a
 phase"), then docs/overhaul/phase-0N-<slug>.md. Another Claude started this phase and
 stopped (usage limit). Resume it: fetch the remote, check out the existing branch
@@ -130,7 +136,7 @@ sites/
 
 Line counts are approximate and will drift. **Reference code by function name, not line number.**
 
-### Tools you can rely on in the cloud container
+### Tools you can rely on in the cloud container (details: "Working in a cloud chat session")
 
 Chromium is preinstalled and Playwright is configured (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, never run `playwright install`). The container cannot reach arbitrary websites, so no external CDNs in tests. In the owner's VS Code environment the repository README describes running with `py -m http.server`.
 
@@ -259,11 +265,47 @@ Sessions end without warning: a usage limit, a closed tab, or a cloud container 
 
 ### Resuming a phase
 
-1. `git fetch --all`. If `origin/overhaul/phase-N-<slug>` exists, check it out: `git checkout -B overhaul/phase-N-<slug> origin/overhaul/phase-N-<slug>`. If it does not exist, nothing was pushed: start the phase fresh from the latest `main`. If more than one branch exists for the same phase, stop and ask the owner which to use.
+1. Fetch **all** remote branches with an explicit refspec (a plain `git fetch` in a shallow cloud clone often only knows `main`): `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`. If `origin/overhaul/phase-N-<slug>` exists, check it out: `git checkout -B overhaul/phase-N-<slug> origin/overhaul/phase-N-<slug>`. If it does not exist, nothing was pushed: start the phase fresh from the latest `main`. If more than one branch exists for the same phase, stop and ask the owner which to use.
 2. Read the phase file: the **Checkpoint log**, then the **Implementation notes** (especially a "Stopped at" block). Run `git log --oneline origin/main..HEAD` and `git status` (it must be clean; if not, someone left uncommitted work, inspect it before touching anything).
 3. Run the smoke test and any tool the phase added to see the **real** state. The log can be stale, so trust the code and the tests over the notes.
 4. Continue at the first row that is not `done`. Verify the last `done` row quickly instead of redoing it.
 5. If the previous branch is badly broken, say so and either fix forward on the same branch or ask the owner; do not delete it.
+
+## Working in a cloud chat session
+
+The owner works in claude.ai chat sessions, not in a local editor. Every session starts in a **fresh, ephemeral Linux container**: only what is pushed to GitHub survives. Read this before touching git.
+
+1. **Get the repo.** Attach `Filiposakkq/fsociety00-dat` through the GitHub connection your session offers (an "add repo" style tool) and clone it **once**: `git clone --depth 1 https://github.com/Filiposakkq/fsociety00-dat /home/claude/fsociety00-dat` (the git proxy allows about 2 concurrent git operations; on an HTTP 429 wait 10 s and retry once, never in a loop). Give the clone a generous timeout. If you cannot access the repository, **stop and tell the owner** (the Claude GitHub app must be installed on the repo and the GitHub connection linked); never recreate the project from memory or from the docs.
+2. **The clone is shallow and single-branch.** `git fetch --all` or `git checkout origin/<branch>` may not see other branches. Use `git fetch origin '+refs/heads/*:refs/remotes/origin/*'` (add `--depth=50` when you need history). To start work: `git checkout -b overhaul/phase-N-<slug>` then `git push -u origin overhaul/phase-N-<slug>`.
+3. **After pushing a new branch the remote-tracking ref may be missing**, which makes git (and any stop hook checking for "unpushed commits") report that the branch has no remote even though the push worked. Check the truth with `git ls-remote --heads origin <branch>` (the hash must equal `git rev-parse HEAD`), then repair locally: `git fetch origin +refs/heads/<branch>:refs/remotes/origin/<branch>` and `git config branch.<branch>.remote origin && git config branch.<branch>.merge refs/heads/<branch>`.
+4. **Commit identity:** if git has no `user.name`/`user.email`, use `git -c user.name="Claude" -c user.email="noreply@anthropic.com" commit …`, and add any attribution lines your environment asks for.
+5. **Tools:** Chromium is preinstalled for Playwright (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; never run `playwright install`; launch with `executablePath: '/opt/pw-browsers/chromium'` if needed). npm and pip reach their registries; almost every other website is blocked from the shell, so tests must not depend on CDNs or external fonts (the game's CSS imports a Google Font; tests must tolerate that request failing). If the `playwright` npm package is missing, install it outside the deployed folders (`npm install --no-save playwright` in `tools/` or a scratch dir) and never commit `node_modules`.
+6. **The owner tests on a phone through Cloudflare preview deploys** of your pushed branch/PR, not locally. You cannot hear audio or judge animation feel; say what the owner should check (the phase files list it).
+7. **Usage limits.** The owner is on the free plan, so a session can end mid-phase. That is why the Checkpoints rules exist. Prefer finishing and pushing one numbered step over starting two.
+
+## Merging, conflicts, questions, size
+
+- **Catch up with `main` by merging, not rebasing:** `git fetch origin main && git merge origin/main` into your phase branch (a merge commit is fine), resolve conflicts, rerun the smoke test, push. Rebasing would rewrite pushed history, which the Checkpoints rules forbid.
+- **Merge order matters.** Phases 2, 3 and 5 can run in parallel but they may touch the same files (`story.js`, `styles.css`). The owner merges one pull request at a time; the next phase merges `main` into its branch before its final push.
+- **Do not stall on questions.** If the owner is not there to answer, pick the documented default (or the most conservative option), write the decision in the "Decisions and open questions log" below, mention it in the PR description, and keep going. Stop and ask only for things that cannot be undone or would change the story's meaning.
+- **Rollback.** A merged phase that breaks the live site is reverted with the GitHub "Revert" button on its pull request (this creates a new revert PR), or by rolling back to the previous deployment in the Cloudflare dashboard. Phases are small PRs on purpose so a revert is cheap.
+- **Spoiler note.** These docs spell out the puzzle key (`ghost` / `shell` / `1337`). That is fine while the repository is private. If the repo is ever made public, remove the key from the docs (the key in the page source is the puzzle itself and is already visible to players).
+
+### Phase size and suggested session splits
+
+Sizes are rough. One session (before the limit) usually fits **2 to 4 Checkpoint-log rows**; split larger phases along these lines and push after each.
+
+| Phase | Size | Suggested sessions |
+|---|---|---|
+| 1 Foundation | Large (12 rows) | 1.1–1.2 · 1.3a–1.3c · 1.4–1.6 · 1.7–1.10 |
+| 2 Audio | Medium | 2.1–2.3 · 2.4–2.7 |
+| 3 Story & boot | Large | 3.1–3.3 · 3.4–3.7 · 3.8–3.10 |
+| 4 Evidence board | Large | 4.1–4.3 · 4.4–4.5 · 4.6–4.7 |
+| 5 Animations | Medium | 5.1–5.3 · 5.4–5.7 |
+| 6 TRACED | Medium | 6.1–6.3 · 6.4–6.6 |
+| 7 Dev panel | Small–medium | 7.1–7.3 · 7.4–7.6 |
+| 8 Main site | Small | one session |
+| 9 Extras & polish | Medium–large | 9.1–9.2 · 9.3–9.4 · 9.5–9.7 |
 
 ## Running and testing
 
@@ -306,6 +348,7 @@ For CSS/animation work also take screenshots at 390×844 and 1280×800 and look 
 | Date | Decision / question | Status |
 |---|---|---|
 | 2026-10-11 | Extras 1, 2, 3, 7 are out of scope; extras 4, 5, 6, 8 are in | Decided by owner |
+| 2026-10-12 | The owner uses claude.ai chat sessions (no local editor); tests happen on Cloudflare preview deploys; see "Working in a cloud chat session" | Decided by owner |
 | 2026-10-11 | Delivery: one branch + PR per phase (owner had not yet answered "PR vs straight to main"; PR is the safe default) | Default; confirm with owner |
 | 2026-10-11 | Review item 12 (`--dim` contrast on fsociety00) is wrong: measured 5.03:1 | Verified |
 | 2026-10-11 | Review items 16 and 19 (main site) appear already fixed in `8ea680b` | Verify in phase 8 |
