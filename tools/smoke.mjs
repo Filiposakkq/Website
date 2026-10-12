@@ -513,6 +513,45 @@ scenarios.push({
   },
 });
 
+// Accessibility basics (review items 13, 14, 15): log role, hidden canvas, native modal dialogs
+// that Escape cannot dismiss.
+scenarios.push({
+  name: 'reduced: log role, hidden canvas and non-dismissable native dialogs',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    const markup = await page.evaluate(() => ({
+      canvasHidden: document.getElementById('rain').getAttribute('aria-hidden'),
+      logRole: document.getElementById('output').getAttribute('role'),
+      logLive: document.getElementById('output').getAttribute('aria-live'),
+      launchIsDialog: document.getElementById('launch').tagName,
+      powerIsDialog: document.getElementById('powerPanel').tagName,
+      launchOpen: document.getElementById('launch').open,
+      powerOpen: document.getElementById('powerPanel').open,
+      hasRoleDialogDivs: document.querySelectorAll('div[role="dialog"]').length,
+    }));
+    const expected = { canvasHidden: 'true', logRole: 'log', logLive: 'off', launchIsDialog: 'DIALOG',
+      powerIsDialog: 'DIALOG', launchOpen: true, powerOpen: false, hasRoleDialogDivs: 0 };
+    for (const [key, value] of Object.entries(expected)) {
+      if (markup[key] !== value) throw new Error(`markup ${key}: expected ${value}, got ${markup[key]} (${JSON.stringify(markup)})`);
+    }
+    // The launch screen is modal: the page behind it is inert, and Escape (even twice) does not close it.
+    for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await sleep(150); }
+    if (!(await page.evaluate(() => document.getElementById('launch').open))) throw new Error('Escape closed the launch dialog');
+    const focused = await page.evaluate(() => document.activeElement?.id);
+    if (focused !== 'initialize') throw new Error(`initial focus should be the initialize button, got ${focused}`);
+    await playToShell(page, { who: 'watcher', how: 'type', reduced: true });
+    await loseByLockout(page);
+    for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await sleep(150); }
+    const power = await page.evaluate(() => ({
+      open: document.getElementById('powerPanel').open,
+      focus: document.activeElement?.id,
+    }));
+    if (!power.open) throw new Error('Escape closed the power panel');
+    if (power.focus !== 'restartControl') throw new Error(`power panel focus should be the reboot button, got ${power.focus}`);
+    await rebootAndVerify(page, { reduced: true });
+  },
+});
+
 // --- aborting the story at four different moments ---------------------------------------------
 
 async function currentSessionHandle(page) {

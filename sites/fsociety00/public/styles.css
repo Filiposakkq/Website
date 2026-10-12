@@ -157,6 +157,35 @@ body::after {
   .skip { opacity: 0.55; }
 }
 
+/* Native <dialog>s: reset the UA box, and only use display:flex while open (a display set here would
+   otherwise defeat the UA rule that hides a closed dialog). */
+dialog.launch, dialog.power-panel {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  overflow: hidden;
+}
+dialog.launch:not([open]), dialog.power-panel:not([open]) { display: none; }
+dialog.launch::backdrop, dialog.power-panel::backdrop { background: #000; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .launch, .power-panel {
   position: fixed;
   inset: 0;
@@ -251,8 +280,8 @@ body::after {
   box-shadow: 0 0 70px rgba(255, 0, 0, 0.08), inset 0 0 70px rgba(255, 0, 0, 0.07);
   animation: core-rotate 24s linear infinite;
 }
-.power-panel:not([hidden]) { animation: panel-boot 900ms cubic-bezier(.2,.8,.2,1) both; }
-.power-panel.rebooting:not([hidden]) { animation: panel-restore 3.75s cubic-bezier(.16,1,.3,1) both; }
+.power-panel[open] { animation: panel-boot 900ms cubic-bezier(.2,.8,.2,1) both; }
+.power-panel.rebooting[open] { animation: panel-restore 3.75s cubic-bezier(.16,1,.3,1) both; }
 .power-label { color: var(--warn); }
 .power-title {
   color: #e8e8e8;
@@ -1045,7 +1074,7 @@ body::after {
   .launch button, .reboot, .power-title { animation: none; }
   .power-panel::before, .power-panel::after, .power-core { animation: none; }
   .screen.intrusion { animation: none; }
-  .power-panel:not([hidden]) { animation: none; }
+  .power-panel[open] { animation: none; }
   .power-panel.rebooting { animation: none; }
   .power-panel.rebooting .power-core,
   .power-panel.rebooting .power-title,

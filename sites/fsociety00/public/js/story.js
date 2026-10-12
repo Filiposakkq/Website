@@ -164,6 +164,31 @@ const { abort: ttyAbort, close: closePrompt } = terminal;
 const readCommand = () => terminal.readCommand({ signal: session.signal });
 const sessionTerminal = { readCommand, abort: ttyAbort, close: closePrompt };
 
+// The launch screen and the power panel are native modal <dialog>s (focus trap, inert page behind them).
+// Neither may be dismissed with Escape: the launch screen needs the initialize gesture, and the power
+// panel only closes through REBOOT. Chrome closes a dialog on a second Escape even when `cancel` was
+// prevented, so an unexpected close reopens it.
+function lockModal(dialog) {
+  dialog.addEventListener('cancel', (event) => event.preventDefault());
+  dialog.addEventListener('close', () => {
+    if (dialog.dataset.closing) {
+      delete dialog.dataset.closing;
+      return;
+    }
+    dialog.showModal();
+  });
+}
+function openModal(dialog) {
+  if (!dialog.open) dialog.showModal();
+}
+function closeModal(dialog) {
+  if (!dialog.open) return;
+  dialog.dataset.closing = '1';
+  dialog.close();
+}
+lockModal(launch);
+lockModal(powerPanel);
+
 function stopAmbient() {
   ambientIntervals.forEach((id) => session.clearInterval(id));
   ambientIntervals.clear();
@@ -628,7 +653,7 @@ async function gameOver(trace, reason) {
   shutdownLine.classList.add('powering-down-line-active');
   screen.classList.add('shutdown');
   await wait(1350);
-  powerPanel.hidden = false;
+  openModal(powerPanel);
   restartControl.focus();
 }
 
@@ -700,7 +725,7 @@ async function resetGame() {
   }
   await wait(800);
   powerPanel.classList.remove('rebooting');
-  powerPanel.hidden = true;
+  closeModal(powerPanel);
   screen.classList.add('recovering');
   powerTitle.innerHTML = 'SESSION<br>TERMINATED';
   powerStatus.innerHTML = 'REMOTE SESSION CLOSED <span>///</span> LOCAL DISPLAY OFFLINE';
@@ -1616,7 +1641,7 @@ async function runDeveloperRoute(route) {
   beginSession('developer route'); // stops the previous run completely, with a fresh session and skip state
   await Promise.resolve();
   closePrompt();
-  launch.hidden = true;
+  closeModal(launch);
   out.replaceChildren();
   document.getElementById('hud')?.remove();
   document.querySelectorAll('.elliot-echo, .ghost-sequence, .breach-sequence, .identity-surge, .hello-flight-layer')
@@ -1626,7 +1651,7 @@ async function runDeveloperRoute(route) {
   screen.style.opacity = '1';
   document.body.classList.remove('powering-down');
   shutdownSequence.hidden = true;
-  powerPanel.hidden = true;
+  closeModal(powerPanel);
   setSkipHint('BOOT', route === 'boot'); // only the full boot has anything to skip; also resets a stale label
   const trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
   caseFile.start(trusted);
@@ -1691,6 +1716,8 @@ async function runDeveloperRoute(route) {
   }
 }
 
+openModal(launch);
+
 async function launchStory() {
   if (initialize.disabled) return;
   audio.setScene('boot');
@@ -1710,7 +1737,7 @@ async function launchStory() {
   await wait(250);
   launch.classList.add('departing');
   await wait(520);
-  launch.hidden = true;
+  closeModal(launch);
   launch.classList.remove('initializing');
   launch.classList.remove('departing');
   initialize.disabled = false;

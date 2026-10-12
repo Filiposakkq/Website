@@ -15,8 +15,8 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <canvas id="rain"></canvas>
-  <div class="launch" id="launch" role="dialog" aria-modal="true" aria-labelledby="launchTitle">
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <dialog class="launch" id="launch" aria-labelledby="launchTitle">
     <div class="launch-signal">INCOMING CONNECTION // FSOCIETY00</div>
     <h1 id="launchTitle">BOOT SEQUENCE READY</h1>
     <p>Fullscreen recommended. Audio starts when you initialize.</p>
@@ -25,9 +25,10 @@
       <span class="initialize-progress" aria-hidden="true"></span>
     </button>
     <div class="launch-status" id="launchStatus" aria-live="polite"></div>
-  </div>
+  </dialog>
   <div class="screen" id="screen">
-    <div class="output" id="output"></div>
+    <div class="output" id="output" role="log" aria-live="off" aria-label="Terminal output"></div>
+    <div class="sr-only" id="srAnnouncer" aria-live="polite" aria-relevant="additions"></div>
     <div class="line" id="promptLine" hidden>
       <span class="prompt">guest@fsociety00:~$</span>
       <span class="cursor"></span>
@@ -54,7 +55,7 @@
     </div>
     <div class="shutdown-crosshair" aria-hidden="true"><i></i><i></i></div>
   </div>
-  <div class="power-panel" id="powerPanel" role="dialog" aria-modal="true" aria-labelledby="powerTitle" hidden>
+  <dialog class="power-panel" id="powerPanel" aria-labelledby="powerTitle">
     <div class="power-label">FSOCIETY00 // EMERGENCY SHUTDOWN</div>
     <div class="power-title" id="powerTitle">SESSION<br>TERMINATED</div>
     <div class="power-status" id="powerStatus">REMOTE SESSION CLOSED <span>///</span> LOCAL DISPLAY OFFLINE</div>
@@ -63,7 +64,7 @@
     <div class="power-boot-log" id="powerBootLog" aria-live="polite">AWAITING LOCAL INPUT</div>
     <button class="reboot" id="restartControl" type="button">[ REBOOT SYSTEM ]</button>
     <div class="power-foot">PRESS TO RE-ESTABLISH LINK</div>
-  </div>
+  </dialog>
   <script type="module" src="js/story.js"></script>
 </body>
 </html>
