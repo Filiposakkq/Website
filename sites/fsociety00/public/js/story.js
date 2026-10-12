@@ -32,6 +32,7 @@ const shutdownCounter = document.getElementById('shutdownCounter');
 const shutdownMeter = document.getElementById('shutdownMeter');
 const shutdownEvents = document.getElementById('shutdownEvents');
 const skipLabel = skipHint.querySelector('.skip-label');
+const srAnnouncer = document.getElementById('srAnnouncer');
 const audio = createAudioController();
 // The rain reacts to prefers-reduced-motion / body.quiet-motion changes by itself (see rain.js).
 const rain = createRain(document.getElementById('rain'));
@@ -65,6 +66,7 @@ const newRunState = () => ({
   skippable: true,
   skipToChoice: false,
   skipToChoiceArmed: true,
+  announce: true, // false while the fake BIOS / kernel text scrolls past
 });
 // Hold the on-screen control to skip boot or advance to the trust choice. Reset for every session.
 let run = newRunState();
@@ -201,6 +203,7 @@ function sweepStage() {
   screen.classList.remove('glitch', 'flash', 'g-rgb', 'g-slice', 'g-roll', 'g-invert', 'g-zoom', 'intrusion',
     'identity-lock', 'ghosted-hit', 'elliot-present', 'boot-entry', 'shutdown');
   noiseEl.classList.remove('on');
+  srAnnouncer.replaceChildren();
   shutdownSequence.hidden = true;
   screen.style.opacity = '1';
 }
@@ -227,16 +230,29 @@ function beginSession(reason) {
 }
 armSession(session);
 
-function line(text = '', cls = '') {
+// Screen readers: #output is role=log with aria-live=off, because it is mutated one character at a time
+// and would be read keystroke by keystroke. Instead, each COMPLETED line is appended here. Decorative
+// output (BIOS/kernel spam, progress bars, glitch text) is silent.
+function announce(text) {
+  const message = String(text ?? '').trim();
+  if (!message || !run.announce) return;
+  const entry = document.createElement('div');
+  entry.textContent = message;
+  srAnnouncer.appendChild(entry);
+  while (srAnnouncer.children.length > 12) srAnnouncer.firstElementChild.remove();
+}
+
+function line(text = '', cls = '', { silent = false } = {}) {
   const d = document.createElement('div');
   if (cls) d.className = cls;
   d.textContent = text || '\u00a0';
   out.appendChild(d);
   scroll();
+  if (!silent) announce(text);
   return d;
 }
 
-async function type(text, cls = '', speed = 35) {
+async function type(text, cls = '', speed = 35, { silent = false } = {}) {
   audio.play('typewriter-start');
   const d = line('', cls);
   d.textContent = '';
@@ -245,6 +261,7 @@ async function type(text, cls = '', speed = 35) {
     d.textContent += ch;
     await wait(motionReduced() ? 0 : speed * 0.78);
   }
+  if (!silent) announce(text);
   return d;
 }
 
@@ -272,7 +289,7 @@ let kernelLogCount = 0;
 async function klog(text, cls = 'dim') {
   if (kernelLogCount++ % 3 === 0) audio.play('kernel-tick');
   kt += Math.random() * 0.35;
-  line(`[${kt.toFixed(3).padStart(7)}] ${text}`, cls);
+  line(`[${kt.toFixed(3).padStart(7)}] ${text}`, cls, { silent: true });
   await wait(rand(24, 88));
 }
 
@@ -580,6 +597,7 @@ async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', 
       i++;
     }
   }
+  announce(`${name} says: ${parts.map((part) => part.t).join('')}`);
   return t;
 }
 
@@ -1210,6 +1228,7 @@ function branchDialogueForWatcher(investigation) {
 
 async function runStory() {
   let trusted = null; // who the player chose: 'unknown' | 'watcher'
+  run.announce = false; // the BIOS / kernel text is decoration; announcing resumes with the story intro
   await wait(600);
 
   // 1) BIOS / POST
@@ -1333,6 +1352,7 @@ async function runStory() {
   // The BIOS can no longer be skipped once the story intro begins.
   run.skip = false;
   run.skippable = false;
+  run.announce = true;
   cancelSkipHold();
   setSkipHint('INTRO', !run.skipToChoice);
 

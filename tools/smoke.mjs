@@ -536,12 +536,17 @@ scenarios.push({
     }
     // The launch screen is modal: the page behind it is inert, and Escape (even twice) does not close it.
     for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await sleep(150); }
-    if (!(await page.evaluate(() => document.getElementById('launch').open))) throw new Error('Escape closed the launch dialog');
+    // Chrome may close the dialog on a repeated Escape; the page must reopen it right away (poll, do not
+    // sample once: the reopen is a queued task and can lag on a loaded machine).
+    await page.waitForFunction(() => document.getElementById('launch').open, null, { timeout: 3000 })
+      .catch(() => { throw new Error('Escape closed the launch dialog and it did not reopen'); });
     const focused = await page.evaluate(() => document.activeElement?.id);
     if (focused !== 'initialize') throw new Error(`initial focus should be the initialize button, got ${focused}`);
     await playToShell(page, { who: 'watcher', how: 'type', reduced: true });
     await loseByLockout(page);
     for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await sleep(150); }
+    await page.waitForFunction(() => document.getElementById('powerPanel').open, null, { timeout: 3000 })
+      .catch(() => { throw new Error('Escape closed the power panel and it did not reopen'); });
     const power = await page.evaluate(() => ({
       open: document.getElementById('powerPanel').open,
       focus: document.activeElement?.id,
@@ -549,6 +554,40 @@ scenarios.push({
     if (!power.open) throw new Error('Escape closed the power panel');
     if (power.focus !== 'restartControl') throw new Error(`power panel focus should be the reboot button, got ${power.focus}`);
     await rebootAndVerify(page, { reduced: true });
+  },
+});
+
+// Screen-reader announcements: completed story lines are announced, boot spam and half-typed text are not.
+scenarios.push({
+  name: 'reduced: screen-reader announcer gets finished lines only',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    const entries = () => page.evaluate(() => [...document.getElementById('srAnnouncer').children].map((el) => el.textContent));
+    await initialize(page);
+    // Nothing from the BIOS may be announced.
+    await sleep(300);
+    const early = await entries();
+    if (early.some((text) => /FSOC-BIOS|Linux version|BIOS-e820|\[\s+\d+\.\d+\]/.test(text))) {
+      throw new Error(`boot spam was announced: ${JSON.stringify(early.slice(0, 5))}`);
+    }
+    await reachTrustChoice(page, { reduced: true });
+    await chooseTrust(page, 'unknown', 'click');
+    await reachPuzzle(page);
+    const live = await page.evaluate(() => {
+      const region = document.getElementById('srAnnouncer');
+      return { live: region.getAttribute('aria-live'), srOnly: region.classList.contains('sr-only') };
+    });
+    if (live.live !== 'polite' || !live.srOnly) throw new Error(`announcer must be a polite sr-only region: ${JSON.stringify(live)}`);
+    const afterStory = await entries();
+    if (!afterStory.includes('unknown says: type help.')) throw new Error(`dialogue line not announced: ${JSON.stringify(afterStory)}`);
+    if (afterStory.length > 12) throw new Error(`announcer is not capped: ${afterStory.length} entries`);
+    if (afterStory.some((text) => text.length < 3)) throw new Error(`fragments announced: ${JSON.stringify(afterStory)}`);
+    await sendCommand(page, 'nonsense');
+    await waitOutput(page, 'command not found: nonsense');
+    if (!(await entries()).includes('command not found: nonsense')) throw new Error('command result not announced');
+    // A new run starts with a clean region.
+    await devRoute(page, 'logo');
+    if ((await entries()).includes('unknown says: type help.')) throw new Error('announcer kept messages from the aborted run');
   },
 });
 
@@ -590,6 +629,9 @@ scenarios.push({
     await initialize(page);
 
     await sleep(2500); // 1) during the BIOS
+    // The BIOS is printing right now: none of it may reach the screen-reader region.
+    const biosAnnounced = await page.evaluate(() => document.getElementById('srAnnouncer').children.length);
+    if (biosAnnounced !== 0) throw new Error(`${biosAnnounced} BIOS line(s) were announced to screen readers`);
     await devRoute(page, 'boot');
     await expectSingleStream(page, 'after aborting the BIOS');
 
