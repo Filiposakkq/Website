@@ -321,7 +321,7 @@ ES modules need HTTP; `file://` does not work. `localhost` also turns on the `DE
 
 ### Standard smoke test (every phase must pass before opening a PR)
 
-Phase 1 creates `tools/smoke.mjs`, a Playwright script that does the following headlessly. Until it exists, do the same by hand:
+`tools/smoke.mjs` (added in phase 1, see `tools/README.md`) is a Playwright script that does the following headlessly. If it cannot run, do the same by hand:
 
 1. Load the page. **No console errors, no failed network requests**, no uncaught exceptions.
 2. Click `[ INITIALIZE SYSTEM ]`. The boot starts.

@@ -132,7 +132,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 1.1 Test and lint tooling (smoke, fonts, contrast) | done | `a51b589` | smoke 6/6 on the unmodified baseline; smoke later gains abort, expiry, 3rd-hint and missing-key scenarios |
+| 1.1 Test and lint tooling (smoke, fonts, contrast) | done | `a51b589` | smoke 6/6 on the unmodified baseline; abort, expiry, 3rd-hint and missing-key scenarios added later (10 in total, all green at `7032663`) |
 | 1.2 Shared utilities (util.js, choices.js) | done | `055c0ea` | `util.js` (`rand`, `pad2`, `formatClock`, `scrambleText`) replaces the copies in story/trace/level01/casefile; `renderChoices` used by `promptGhost`; `grep padStart(2` and the junk charset only hit `util.js`. Desktop real-time victory smoke passes |
 | 1.3a session.js module | done | `eda836d` | `session.js`: abortable `sleep`/`wait`, tracked timers/intervals/frames, `onAbort`, `pending()`, `swallowAbort` |
 | 1.3b Convert story helpers to the session | done | `eda836d` | story helpers sleep through the module-level `session`; `boot()` is `runStory()`, wrapped by `startStory()` which only swallows aborts; logo/ambient timers, trace, Elliot echo, hello flight register with the session; skip state is a per-session `run` object |
@@ -147,12 +147,18 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 ## Implementation notes
 
-### Stopped at (2026-10-12, usage limit)
+### Stopped at (2026-10-12, after step 1.5; refreshed at the start of the next session)
 
-- **State:** step 1.1 (tooling) is done and committed. The new modules for 1.2–1.5 and 1.9 exist and are committed (`js/util.js`, `choices.js`, `session.js`, `context.js`, `rain.js`, `story-choices.js`) but **nothing imports them yet**, so game behavior is still identical to baseline.
-- **Half-edited files:** none. No existing game file (`story.js`, `tty.js`, `trace.js`, `level01.js`, `casefile.js`, `audio.js`, `index.html`, `styles.css`, `fx.js`) has been modified.
-- **Failing tests:** none. `node tools/smoke.mjs` passes 6/6 against the baseline game. Two scenarios are deliberately *not* in the suite yet because they fail on the baseline (real bugs, see below); add them together with their fixes.
-- **Next command:** wire the helpers in (1.2): in `story.js` replace the local `rand` and the three `'#%&@$*+=?01<>/\\|'` copies with `util.js` (`scrambleText`, `randomChar`), replace `formatClock` copies in `trace.js` / `level01.js` / `casefile.js`, add a `pad2()` helper to `util.js` for the remaining `padStart(2,…)` counters (casefile, shutdown counter) so `grep -rn "padStart(2" js/` only hits `util.js`, use `renderChoices` in `promptGhost`, and import `chooseTrust` from `story-choices.js` (then delete it from `tty.js`, 1.5). Then run `node tools/smoke.mjs`.
+**Last green commit: `7032663`** (full `node tools/smoke.mjs`: 10 of 10 scenarios passed on a clean checkout of that commit). The remote branch head equals `7032663` (checked with `git ls-remote`).
+
+- **Finished and verified by the full smoke run:** 1.1 tooling, 1.2 shared utilities, 1.3 session/cancellation (a, b, c), 1.4 `GameContext` + `createLevel01(ctx)`, 1.5 `chooseTrust` moved out of `tty.js`. `story.js`, `tty.js`, `trace.js`, `level01.js` and `casefile.js` were rewritten for these steps; `tty.js` no longer knows the plot.
+- **Half done:**
+  - 1.6: the focus change is in `tty.js` (committed in `eda836d`) and the game still plays, but **no test checks the Tab order yet** (unverified).
+  - 1.9: `js/rain.js` exists but is **not imported anywhere** and has never been run (unverified). `fx.js`, its `<script>` tag and the 12 `window.setRain` calls in `story.js` are still in place.
+  - 1.10: `trace.js` start/stop, Elliot-echo timers, ambient-interval cleanup, the `getLevel01Key` fallback and the expiry-at-prompt hang are done and covered by smoke scenarios. **Not done:** the `audio.js` `envelope()` clamp and the `OfflineAudioContext` cue check.
+- **Not started:** 1.7 (accessibility, native dialogs) and 1.8 (CSS fixes).
+- **Failing tests:** none. No wip commit is outstanding; the working tree was clean.
+- **Next command:** add a Tab-order scenario to `tools/smoke.mjs` (1.6), then wire `rain.js` (1.9): `grep -n "setRain\|syncRainMotion\|fx.js" sites/fsociety00/public/js/*.js sites/fsociety00/public/index.html`.
 
 ### Findings beyond the docs (verified at baseline)
 
