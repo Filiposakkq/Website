@@ -11,7 +11,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const siteDir = path.join(root, 'sites/fsociety00/public');
+// SMOKE_SITE_DIR lets a run use a snapshot copy, so editing the sources during a long run is safe.
+const siteDir = path.resolve(process.env.SMOKE_SITE_DIR ?? path.join(root, 'sites/fsociety00/public'));
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
 const option = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];

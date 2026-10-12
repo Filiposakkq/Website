@@ -1,3 +1,5 @@
+import { formatClock } from './util.js';
+
 export function startTrace(secs = 480) {
   const el = document.createElement('div');
   el.id = 'hud';
@@ -8,12 +10,8 @@ export function startTrace(secs = 480) {
   let step = 1;
   let ended = false;
   let lastTick = performance.now();
-  const fmt = (s) => {
-    const totalSeconds = Number.isFinite(s) ? Math.max(0, Math.floor(s)) : 0;
-    return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
-  };
   const tick = () => {
-    num.textContent = fmt(secs);
+    num.textContent = formatClock(secs);
     el.classList.toggle('hot', secs < 60);
   };
   tick();

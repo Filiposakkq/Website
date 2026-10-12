@@ -1,4 +1,5 @@
 import { sourcePartThree, whisperSourcePart } from './source.js';
+import { formatClock } from './util.js';
 
 export const level01Hints = [
   'three parts. inspect the page layers: markup, styles, and script.',
@@ -40,10 +41,6 @@ export function createLevel01({
   takeover,
 }) {
   const key = getLevel01Key();
-  const mmss = (seconds) => {
-    const totalSeconds = Math.max(0, Math.floor(seconds));
-    return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
-  };
   const sourceFiles = {
     'page/index.html': {
       url: new URL('../index.html', import.meta.url),
@@ -271,7 +268,7 @@ export function createLevel01({
         case 'trace':
           audio.play('trace-status');
           line(`trace:  ${trace.left() < 120 ? 'CLOSING' : 'ACTIVE'}`, trace.left() < 120 ? 'warn' : '');
-          line(`eta:    ${mmss(trace.left())}`, 'dim');
+          line(`eta:    ${formatClock(trace.left())}`, 'dim');
           line('relays: 7 / 9', 'dim');
           break;
 

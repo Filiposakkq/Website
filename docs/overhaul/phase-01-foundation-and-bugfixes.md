@@ -133,12 +133,12 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | Step | Status | Commit | Notes |
 |---|---|---|---|
 | 1.1 Test and lint tooling (smoke, fonts, contrast) | done | `a51b589` | smoke 6/6 on the unmodified baseline; smoke later gains abort, expiry, 3rd-hint and missing-key scenarios |
-| 1.2 Shared utilities (util.js, choices.js) | in progress | `820ee4a` | modules written and committed, not wired in yet (`story.js`, `trace.js`, `level01.js`, `casefile.js` still use their copies) |
+| 1.2 Shared utilities (util.js, choices.js) | done | HASH | `util.js` (`rand`, `pad2`, `formatClock`, `scrambleText`) replaces the copies in story/trace/level01/casefile; `renderChoices` used by `promptGhost`; `grep padStart(2` and the junk charset only hit `util.js`. Desktop real-time victory smoke passes |
 | 1.3a session.js module | in progress | `820ee4a` | `session.js` written, committed, unused; needs the abort smoke scenario once wired |
 | 1.3b Convert story helpers to the session | todo | | |
 | 1.3c Reset / dev route / terminal abort + abort smoke test | todo | | |
 | 1.4 GameContext + createLevel01(ctx) | in progress | `820ee4a` | `context.js` written (validates required members), not used yet |
-| 1.5 Move chooseTrust out of tty.js | in progress | `820ee4a` | `story-choices.js` written, `tty.js` still has the old copy |
+| 1.5 Move chooseTrust out of tty.js | done | HASH | `chooseTrust` now in `story-choices.js` (all aliases kept), removed from `tty.js`; reduced-motion smoke passes |
 | 1.6 Terminal focus fix | todo | | |
 | 1.7 HTML accessibility (role=log, canvas, native dialogs) | todo | | |
 | 1.8 CSS fixes (cascade, fonts, shutdown-scan, reduced-motion, dead rule, contrast check) | todo | | |

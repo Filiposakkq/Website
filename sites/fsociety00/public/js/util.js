@@ -9,13 +9,16 @@ export const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
 /** A random character from `charset`. */
 export const randomChar = (charset = SCRAMBLE_CHARSET) => charset[rand(0, charset.length - 1)];
 
+/** 0-9 -> "00".."09" (counters, clocks). */
+export const pad2 = (n) => String(n).padStart(2, '0');
+
 /**
  * Seconds -> "MM:SS". Negative, fractional and non-finite input is clamped/floored,
  * so a broken timer shows 00:00 instead of NaN:NaN.
  */
 export function formatClock(totalSeconds) {
   const total = Number.isFinite(totalSeconds) ? Math.max(0, Math.floor(totalSeconds)) : 0;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  return `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
 }
 
 /**

@@ -4,6 +4,9 @@ import { createTerminal } from './tty.js';
 import { installDeveloperMenu } from './developer-menu.js';
 import { createAudioController } from './audio.js';
 import { createCaseFile } from './casefile.js';
+import { rand, pad2, scrambleText } from './util.js';
+import { renderChoices } from './choices.js';
+import { chooseTrust } from './story-choices.js';
 
 const out = document.getElementById('output');
 const screen = document.getElementById('screen');
@@ -139,7 +142,6 @@ const isSkipping = () => skip || skipToChoice;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const wait = (ms) => (isSkipping() || motionReduced() || ms <= 0 ? Promise.resolve() : sleep(ms));
-const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
 const ip = () => `203.0.113.${rand(1, 254)}`;
 const scroll = () => window.scrollTo(0, document.body.scrollHeight);
 const terminal = createTerminal({
@@ -304,7 +306,6 @@ async function staticBurst(ms = 350) {
 async function corrupt(rounds = 6) {
   if (isSkipping() || motionReduced()) return;
   audio.play('corrupt');
-  const junk = '#%&@$*+=?01<>/\\|';
   const walker = document.createTreeWalker(out, NodeFilter.SHOW_TEXT);
   const nodes = [];
   const orig = [];
@@ -314,9 +315,7 @@ async function corrupt(rounds = 6) {
   }
   for (let r = 0; r < rounds; r++) {
     nodes.forEach((n, i) => {
-      n.nodeValue = [...orig[i]]
-        .map((ch) => (!/\s/.test(ch) && Math.random() < 0.18 ? junk[rand(0, junk.length - 1)] : ch))
-        .join('');
+      n.nodeValue = scrambleText(orig[i], { intensity: 0.18 });
     });
     await wait(70);
   }
@@ -327,10 +326,7 @@ async function corrupt(rounds = 6) {
 async function glitchHello(el) {
   if (motionReduced()) return;
   const orig = el.textContent;
-  const junk = '#%&@$*+=?01<>/\\|';
-  const scr = () => [...orig]
-    .map((ch) => (/[a-z]/i.test(ch) && Math.random() < 0.42 ? junk[rand(0, junk.length - 1)] : ch))
-    .join('');
+  const scr = () => scrambleText(orig, { intensity: 0.42, eligible: (ch) => /[a-z]/i.test(ch) });
   for (let i = 0; i < 4; i++) {
     el.textContent = scr();
     await wait(55);
@@ -568,7 +564,7 @@ async function gameOver(trace, reason) {
     const [phase, event] = phases[index];
     shutdownSequence.dataset.phase = String(index + 1);
     shutdownPhase.textContent = phase;
-    shutdownCounter.textContent = `${String(index + 1).padStart(2, '0')} / ${String(phases.length).padStart(2, '0')}`;
+    shutdownCounter.textContent = `${pad2(index + 1)} / ${pad2(phases.length)}`;
     shutdownMeter.style.setProperty('--shutdown-progress', String((index + 1) / phases.length));
     const entry = document.createElement('div');
     entry.className = 'shutdown-event';
@@ -681,7 +677,6 @@ async function resetGame() {
 // přepíše všechny výskyty jména na obrazovce: nejdřív se rozpadne na šum,
 // pak se šum po písmenech zamkne do nového jména
 async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
-  const junk = '#%&@$*+=?01<>/\\|';
   const targets = [];
   const walker = document.createTreeWalker(out, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
@@ -694,7 +689,7 @@ async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
     });
     return;
   }
-  const j = () => junk[rand(0, junk.length - 1)];
+  const everyChar = () => true;
   const decayFrames = 6;
   const lockFrames = 10;
   if (window.setRain) setRain(0.8);
@@ -702,10 +697,11 @@ async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
   for (let f = 0; f <= decayFrames + lockFrames; f++) {
     let mid;
     if (f < decayFrames) {
-      mid = [...from].map((ch) => (Math.random() < (f + 1) / decayFrames ? j() : ch)).join('');
+      mid = scrambleText(from, { intensity: (f + 1) / decayFrames, eligible: everyChar });
     } else {
       const locked = Math.floor(((f - decayFrames) / lockFrames) * to.length);
-      mid = [...to].map((ch, i) => (i < locked ? ch : j())).join('');
+      const chars = [...to];
+      mid = chars.slice(0, locked).join('') + scrambleText(chars.slice(locked).join(''), { intensity: 1, eligible: everyChar });
     }
     targets.forEach((t) => { t.n.nodeValue = t.base.split(from).join(mid); });
     if (f === 3) staticBurst(500);
@@ -723,21 +719,16 @@ async function promptGhost(trace) {
   const state = { over: null };
   trace.onEnd = () => { state.over = 'TRACE COMPLETE'; ttyAbort(); };
 
-  const box = document.createElement('div');
-  box.className = 'choices';
-  out.appendChild(box);
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'choice';
-  el.textContent = '[1] ./ghost.sh';
   let tapped = false;
-  const go = () => {
-    if (tapped) return;
-    tapped = true;
-    ttyAbort();
-  };
-  el.addEventListener('click', go);
-  box.appendChild(el);
+  const choices = renderChoices({
+    container: out,
+    options: [{ key: '1', label: './ghost.sh' }],
+    onPick: () => {
+      if (tapped) return;
+      tapped = true;
+      ttyAbort();
+    },
+  });
 
   const runs = ['1', './ghost.sh', 'ghost.sh', 'sh ghost.sh', 'sh ./ghost.sh', 'bash ghost.sh',
     'bash ./ghost.sh', 'run ghost.sh', 'ghost'];
@@ -747,7 +738,7 @@ async function promptGhost(trace) {
     if (tapped) {
       // klepnutí: příkaz se "napíše" do terminálu sám
       closePrompt();
-      el.classList.add('locked', 'picked');
+      choices.lock();
       await cmd('./ghost.sh', 40);
       caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the branch prompt.');
       ok = true;
@@ -757,7 +748,7 @@ async function promptGhost(trace) {
       const c = raw.trim().toLowerCase();
       if (runs.includes(c)) {
         closePrompt();
-        el.classList.add('locked', 'picked');
+        choices.lock();
         caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the terminal.');
         ok = true;
       } else if (c === 'ls') {
@@ -1462,7 +1453,7 @@ async function boot() {
   setSkipHint('INTRO', false);
 
   // výběr: klepnutí na možnost, nebo napsat příkaz přímo do terminálu
-  trusted = await terminal.chooseTrust({ cmd, line });
+  trusted = await chooseTrust({ out, line, cmd, terminal });
   caseFile.chooseTrust(trusted);
   line();
   await wait(700);

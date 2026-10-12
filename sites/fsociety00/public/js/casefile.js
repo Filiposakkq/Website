@@ -1,3 +1,5 @@
+import { formatClock, pad2 } from './util.js';
+
 const EVIDENCE = [
   {
     id: 'lock-header',
@@ -149,8 +151,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
   const elapsed = () => state.startedAt ? Math.floor((performance.now() - state.startedAt) / 1000) : 0;
   const timeLabel = (seconds) => {
     if (seconds === null || !Number.isFinite(seconds)) return 'NOT TRACKED';
-    const total = Math.max(0, Math.floor(seconds));
-    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+    return formatClock(seconds);
   };
   const visibleEvidence = () => EVIDENCE.filter((item) => !item.route || item.route === state.route);
   const discoveredEvidence = () => visibleEvidence().filter((item) => state.discoveries.has(item.id));
@@ -163,7 +164,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
 
   function updateTrigger() {
     trigger.hidden = !state.boardUnlocked;
-    trigger.querySelector('.case-count').textContent = String(state.discoveries.size).padStart(2, '0');
+    trigger.querySelector('.case-count').textContent = pad2(state.discoveries.size);
     trigger.setAttribute('aria-label', `Open evidence board, ${state.discoveries.size} evidence items`);
   }
 
@@ -354,7 +355,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
       ? state.outcome === 'trace-complete' ? 'COMPLETE' : 'CLOSED'
       : timeLabel(traceLeft());
     grid.append(
-      statCard('ARTIFACTS', `${String(evidenceCount).padStart(2, '0')} / ${String(visibleEvidence().length).padStart(2, '0')}`, 'verified observations'),
+      statCard('ARTIFACTS', `${pad2(evidenceCount)} / ${pad2(visibleEvidence().length)}`, 'verified observations'),
       statCard('TRUST ROUTE', state.route ? state.route.toUpperCase() : 'UNDECIDED', 'operator selection', state.route === 'watcher' ? 'danger' : ''),
       statCard(state.outcome ? 'TRACE STATUS' : 'TRACE REMAINING', traceLabel, state.outcome ? 'session investigation status' : 'timer continues while board is open', 'danger'),
       statCard('COSTS', `${state.hintsUsed} HINTS / ${state.failedUnlocks} REJECTS`, 'time penalty / key failures')
@@ -371,8 +372,8 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
     nav.setAttribute('aria-label', 'Evidence board views');
     const tabs = [
       ['network', 'INTELLIGENCE MAP', 'MAP'],
-      ['evidence', `ARTIFACTS ${String(discoveredEvidence().length).padStart(2, '0')}`, `FILES ${String(discoveredEvidence().length).padStart(2, '0')}`],
-      ['decisions', `CASE TIMELINE ${String(state.events.length).padStart(2, '0')}`, `LOG ${String(state.events.length).padStart(2, '0')}`],
+      ['evidence', `ARTIFACTS ${pad2(discoveredEvidence().length)}`, `FILES ${pad2(discoveredEvidence().length)}`],
+      ['decisions', `CASE TIMELINE ${pad2(state.events.length)}`, `LOG ${pad2(state.events.length)}`],
     ];
     tabs.forEach(([id, label, compactLabel]) => {
       const button = create('button', `case-tab${state.activeTab === id ? ' active' : ''}`);

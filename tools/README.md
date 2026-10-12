@@ -29,6 +29,7 @@ Notes:
 - Chromium comes from `$PLAYWRIGHT_BROWSERS_PATH`. Never run `playwright install` in the cloud container.
 - The skip control is held with a **real** mouse press (or keyboard), not a synthetic `pointerdown`:
   the game calls `setPointerCapture`, which throws for pointer ids that do not exist.
+- Set `SMOKE_SITE_DIR=<copy of sites/fsociety00/public>` to test a snapshot while you keep editing; set `SMOKE_SHOTS=<dir>` to get a screenshot when a scenario fails.
 - Audio cannot be heard in headless runs. The script only checks that nothing throws.
 - A full run takes a few minutes because the story runs in real time (scenarios run in parallel).
 
