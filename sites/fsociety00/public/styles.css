@@ -1749,8 +1749,6 @@ body.quiet-motion .elliot-echo img { animation: none; opacity: 0.48; }
   .case-trigger--revealed { animation-duration: 1ms; }
 }
 @media (max-width: 520px) {
-  .output .logo { padding: 28px 10px 12px; }
-  .output .logo::before { left: 9px; font-size: 8px; }
   .developer-actions { grid-template-columns: 1fr; }
   .developer-panel { max-height: 84vh; }
 }
@@ -1818,6 +1816,10 @@ body.powering-down #rain {
   isolation: isolate;
   animation: logo-frame-in 700ms cubic-bezier(.16,1,.3,1) both;
 }
+@media (max-width: 520px) {
+  /* must stay after the base rule above: equal specificity, the later one wins */
+  .output .logo { padding: 14px 10px 12px; }
+}
 .logo-header {
   display: flex;
   width: 100%;
@@ -1880,10 +1882,6 @@ body.powering-down #rain {
 }
 
 .glyph i { display: block; }
-.glyph i.on {
-  background: var(--fg);
-  box-shadow: 0 0 7px rgba(51, 255, 102, 0.72);
-}
 
 /* zamknutí písmene: krátký bílý záblesk a zvětšení */
 .glyph.lock { animation: glyph-lock 0.4s ease-out 1; }
