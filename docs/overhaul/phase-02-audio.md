@@ -113,6 +113,12 @@ Mute/volume UI (extra 3 declined), new gameplay or story, wiring cues that only 
 
 All cues ported and new ones added, the lint passes, the owner's listening feedback is captured in the implementation notes, and `docs/overhaul/audio-cues.md` is complete.
 
+## Carried over from the phase 1 review
+
+- [ ] Add a smoke assertion that no `AudioContext` exists before the launch click (phase 1 verified it only by reading `audio.js`).
+- [ ] Add a smoke scenario for `body.quiet-motion` without the `prefers-reduced-motion` media query (it currently only uses `emulateMedia`).
+
+
 ## Checkpoint log
 
 Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.

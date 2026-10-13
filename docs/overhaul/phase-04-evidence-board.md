@@ -123,6 +123,11 @@ Reveal/transition animation polish and trace-reactive vignette (phase 5), the TR
 
 The board is a live dashboard integrated with the terminal, the extra-8 topology works in board and terminal, fonts and dialog fixes are in, and the puzzle remains winnable in the original way.
 
+## Carried over from the phase 1 review
+
+- [ ] Fix the sub-11px font sizes in `.case-*` (`.case-trigger`, `.case-count`, ... listed by `bash tools/check-fonts.sh --all`); they are visible to players on phones. Then remove the `.case-*` exclusion from `tools/check-fonts.sh`.
+
+
 ## Checkpoint log
 
 Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.

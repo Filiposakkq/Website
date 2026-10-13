@@ -75,6 +75,11 @@ Changing gameplay, adding new cues/animations (they belong to their phases; the 
 
 The panel is a real modal dialog, scene jumps use the cancel-and-restart flow reliably, animation and sound previews work from the registries, the state inspector is live, and nothing ships to production.
 
+## Carried over from the phase 1 review
+
+- [ ] The DEV `boot` route calls `runStory()` directly, so the ambient-interval cleanup in `startStory`'s `finally` does not run when it ends normally. Route it through `startStory` / the new scene table.
+
+
 ## Checkpoint log
 
 Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.

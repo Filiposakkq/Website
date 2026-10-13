@@ -8,6 +8,9 @@ Two static sites (`sites/main`, `sites/fsociety00`), deployed to Cloudflare Work
 2. Work only on a branch `overhaul/phase-N-<slug>`. **Never push to `main`, never force-push, never rewrite pushed history, never merge your own pull request.** Pushes to `main` deploy to production.
 3. **Commit and push after every numbered sub-step** and keep the phase file's Checkpoint log current. Your session can end at any moment (usage limits) and unpushed work is lost. If you must stop, make a `wip(...)` commit, push it and write a "Stopped at" note.
 4. Read "Working in a cloud chat session" in the README for the git quirks of the cloud container (shallow clone, missing remote-tracking refs, how to verify a push).
+5. Source of truth is the Checkpoint log, `git log` and a fresh `node tools/smoke.mjs`, not a "Stopped at" note (it goes stale). When resuming, re-derive the state first, then fix the note.
+6. Use `wip(phase-N.M): ...` commits for unfinished chunks (the game must still run, or write "broken until X"). Run `node --check` before a wip push and the full smoke test when a sub-step is done; record `last green commit`.
+7. Update every affected document in the same commit as the code. Mark anything you did not verify as "unverified". A task is done only when code, tests and docs agree.
 
 ## Do not break
 

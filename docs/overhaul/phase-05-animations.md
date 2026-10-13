@@ -84,6 +84,11 @@ The TRACED sequence content (phase 6), audio (phase 2), dev panel animation prev
 
 All table rows are implemented with compositor-only properties, performance numbers are better than the baseline and recorded, `perf-lite` works, and reduced-motion is honored everywhere.
 
+## Carried over from the phase 1 review
+
+- [ ] Phase 1 left **41 of 73 `@keyframes`** animating `filter`, `box-shadow`, `text-shadow`, `clip-path`, `letter-spacing`, colors, `background-position` or `top`, and one transition animating `top`/`left`/`font-size` (only `shutdown-scan` was converted). Convert them to `transform`/`opacity` (or replace with layered pseudo-elements) as part of this phase; count the offenders with a script before and after.
+
+
 ## Checkpoint log
 
 Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
