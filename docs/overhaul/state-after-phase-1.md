@@ -40,7 +40,7 @@ Written 2026-10-13 for the Claudes that start phases 2-9. **Read this before the
 5. **Helpers:** use `util.js` for random, padding, clock formatting and scrambling. `grep padStart(2` and the scramble charset must only hit `util.js`.
 6. **Rain:** `createRain` is created once from `story.js` (`const setRain = ...` is a local wrapper; there is no `window.setRain`, no `window.syncRainMotion` and no `fx.js`).
 7. **Dialogs** are native `<dialog>` with `showModal()`; scope `display:flex` rules to `[open]`, otherwise the UA hiding is overridden.
-8. **Do not break** (see `CLAUDE.md`): the three-layer Level 01 key and `unlock`, audio only after the launch click, reduced motion and `quiet-motion`, localhost-only dev panel, no real IP/location, 11px minimum, only transform/opacity animations, Worker names in `wrangler.jsonc`.
+8. **Do not break** (see `CLAUDE.md`): the three-layer Level 01 key and `unlock`, audio only after the launch click, reduced motion and `quiet-motion`, dev panel only on localhost and preview (today: localhost only; preview comes with phase 7.6), no real IP/location, 11px minimum, only transform/opacity animations, Worker names in `wrangler.jsonc`.
 
 ## Testing
 

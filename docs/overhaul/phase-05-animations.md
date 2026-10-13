@@ -67,6 +67,11 @@ The game currently stacks, at once: full-screen canvas rain, repeating-gradient 
 - [ ] Flash-rate review (≤ 3/s) and reduced-motion alternatives for every new animation (extend the single reduced-motion block)
 - [ ] Remove now-unused keyframes/classes (grep before deleting)
 
+### Skip control rework (added 2026-10-13)
+
+- [ ] Visual rework of the lower-right skip control: label `HOLD TO SKIP`, hold progress shown as a bar that grows with `transform: scaleX` (animate only `transform`/`opacity`, so no conic gradients or `stroke-dashoffset`), a calm idle state **without lowering the text opacity**, minimum 104 x 44 px touch target, font at least 11px. Prefer placing it above the prompt/keyboard on phones so it never covers text. The 3 s hold stays. The skip logic itself is phase 3.
+- [ ] Trace HUD (5.4): also stop it overlapping the ghost panel label on phones; add the "TRACE PENDING" and "TRACE CLOSED" looks that phase 3.5 sets up.
+
 ## Out of scope
 
 The TRACED sequence content (phase 6), audio (phase 2), dev panel animation previews (phase 7; but keep effect names stable so it can preview them).
