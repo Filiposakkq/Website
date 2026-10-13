@@ -7,6 +7,7 @@
 // parameter set of a reactive cue) and every ambient bed through an OfflineAudioContext, then checks:
 //   - no exception, no unknown-cue warning, no NaN/Infinity in the samples
 //   - not silent (RMS above a floor)
+//   - at least 9 dB under full scale (so nothing relies on the output limiter)
 //   - peak at or below the output ceiling (-1 dBFS) and never above 1.0
 //   - silent after the cue's declared duration (it does not play longer than `audio.duration()` says)
 //   - beds: audible while running, silent after setScene('idle'), no click when crossfading between scenes
@@ -65,6 +66,7 @@ function startServer() {
 async function lintInPage({ only: filter }) {
   const RATE = 44100;
   const CEILING = 0.89; // -1 dBFS
+  const HEADROOM_DB = -9; // cues must stay this far under full scale, so the output limiter never has to clip them
   const RMS_FLOOR = 1e-4;
   const TAIL_LIMIT = 1e-3;
   const GUARD = 0.7;
@@ -182,6 +184,7 @@ async function lintInPage({ only: filter }) {
     if (whole.bad) problems.push(`${whole.bad} non-finite samples`);
     if (active.rms < RMS_FLOOR) problems.push(`silent (RMS ${db(active.rms).toFixed(1)} dB)`);
     if (whole.peak > CEILING + 1e-6) problems.push(`peak ${db(whole.peak).toFixed(2)} dBFS is over the -1 dBFS ceiling`);
+    else if (db(whole.peak) > HEADROOM_DB) problems.push(`peak ${db(whole.peak).toFixed(1)} dBFS leaves less than ${-HEADROOM_DB} dB of headroom (the limiter would be shaping it)`);
     if (tail.peak > TAIL_LIMIT) problems.push(`still sounding ${(tail.peak > 0 ? db(tail.peak) : -Infinity).toFixed(1)} dBFS after the declared ${slot.declared.toFixed(2)} s`);
     rows.push({ name: label, kind: slot.entry.kind, category: slot.entry.category, declared: slot.declared, peak: db(whole.peak), rms: db(active.rms), tail: db(tail.peak), problems });
   }

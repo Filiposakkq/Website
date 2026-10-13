@@ -80,11 +80,32 @@ Notes from the audit:
 - `tty.js` already ignores `event.repeat` and any key that is not a single character, Backspace or Enter, so the `onKeyPress` hook never fires for modifier or navigation keys.
 - Nothing in `casefile.js`, `trace.js`, `tty.js` or `developer-menu.js` calls the audio controller directly.
 
+## New cues added in phase 2 (registered, wired later unless noted)
+
+All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says who has to call them. Phase 2 wires only the typing and trace cues (see the next section).
+
+| Cue | Category | Wired by |
+|---|---|---|
+| `boot-complete` | boot | phase 3 (realistic boot) |
+| `boot-memtest` | boot | phase 3 (rising sweep for the memory counter) |
+| `boot-fail` | boot | phase 3 (the `[FAILED] Failed to start Firewall Service` line) |
+| `key-tick` | terminal | **phase 2** (typing, rate limited to 15 per second) |
+| `cmd-run`, `cmd-fail` | terminal | phase 3 (Linux commands) |
+| `ghost-appear` | story | phase 3 (story engine) |
+| `trust-choice` | story | phase 3 (story engine, the trust choice) |
+| `trace-start` | trace | phase 3 (trace policy) |
+| `trace-warn` | trace | **phase 2** (crosses 120 s) |
+| `evidence-unlock`, `evidence-decrypt`, `board-open`, `node-select` | evidence | phase 4 |
+| `decrypt-progress` (12 per second max), `packet-intercept`, `relay-connect`, `breach-alert` | hacking | phase 4 |
+| `traced-alert`, `system-takeover`, `session-kill` | game over | phase 6 |
+
+Aliases (different name, same sound; `audio.list()` marks them `kind: 'alias'`): `trace-expire` is `trace-expired`, `identity-reveal` is `identity`.
+
 ## Scenes (`audio.setScene(name)`)
 
 | Scene | Set by |
 |---|---|
-| `idle` | `armSession`, `resetGame` (silence) |
+| `idle` | `armSession`, `resetGame` (silence, no bed) |
 | `boot` | `launchStory`, `resetGame`, DEV route |
 | `story` | `runStory`, `playIdentityReveal` (end), DEV route |
 | `puzzle` | `runStory`, `finishSequence`, `watcherTakeover`, DEV route |
@@ -92,3 +113,9 @@ Notes from the audit:
 | `reveal` | `playIdentityReveal` |
 | `shutdown` | `gameOver` |
 | `intrusion` | `watcherTakeover` |
+
+Beds (data in `BEDS`, also accepted by name in `setScene`): `ambient-boot` (scene `boot`), `ambient-story` (scenes `story`, `reveal`, `ghost`, as three flavours of one bed), `ambient-puzzle` (scene `puzzle`), `ambient-traced` (scenes `shutdown`, `intrusion`).
+
+## Reactive cues
+
+`audio.play(name, params)`: `trace-tick` reads `{ secondsLeft }` (pitch 1.0 to 2.1 kHz as time drops, louder below 120 s, metallic layer below 60 s, a second ping half a second later at 30 s and below). Every cue also accepts `{ gain }`.

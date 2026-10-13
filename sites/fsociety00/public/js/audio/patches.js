@@ -244,9 +244,12 @@ export const CUES = {
       tone(146.8, 0.42, { type: 'triangle', volume: 0.05, delay: 0.22, endFrequency: 220 }),
       noise(0.45, { cutoff: 1100, volume: 0.025, type: 'lowpass' }),
     )),
-  'trace-tick': cue('trace', "Short square tick (reactive from phase 2.5)", layers(
-      tone(880, 0.035, { type: 'square', volume: 0.012 }),
-    )),
+  'trace-tick': cue('trace', 'Cold radar ping once per second; pitch, grit and rate follow the seconds left (reactive)',
+    tone(1180, 0.07, { type: 'sine', volume: 0.02, attack: 0.004 }),
+    {
+      jitter: { detune: 4, gain: 0.03 },
+      samples: [{ secondsLeft: 480 }, { secondsLeft: 200 }, { secondsLeft: 100 }, { secondsLeft: 45 }, { secondsLeft: 20 }, { secondsLeft: 5 }],
+    }),
   'trace-status': cue('trace', "Two-note blip for the trace command", layers(
       tone(630, 0.07, { type: 'triangle', volume: 0.02 }),
       tone(945, 0.09, { type: 'sine', volume: 0.018, delay: 0.065 }),
@@ -329,6 +332,118 @@ export const CUES = {
       tone(440, 0.75, { type: 'sine', volume: 0.1, delay: 0.36 }),
       tone(659.3, 0.5, { type: 'triangle', volume: 0.045, delay: 0.58 }),
     )),
+
+
+  // ---- New cues from the phase 2 sound brief (registered here; most are wired by later phases, see usedBy) ----
+
+  // Boot
+  'boot-complete': cue('boot', 'POST finished: one clean beep, a rising second beep and a short hardware settle', layers(
+    tone(784, 0.1, { type: 'square', volume: 0.026, attack: 0.004 }),
+    tone(1175, 0.2, { type: 'triangle', volume: 0.034, delay: 0.1 }),
+    noise(0.28, { cutoff: 300, volume: 0.02, type: 'lowpass', delay: 0.05 }),
+  ), { usedBy: 'phase 3 (realistic boot)' }),
+  'boot-memtest': cue('boot', 'Rising sweep to match the memory counter, with a dusty band-noise rise', layers(
+    tone(110, 1.2, { type: 'sawtooth', volume: 0.026, endFrequency: 880, attack: 0.1 }),
+    noise(1.2, { cutoff: 300, cutoffEnd: 2600, volume: 0.022, type: 'bandpass', q: 3, attack: 0.15 }),
+  ), { usedBy: 'phase 3 (realistic boot)' }),
+  'boot-fail': cue('boot', 'Short distorted burst for a [FAILED] boot line', layers(
+    fm(180, 0.35, { ratio: 1.5, index: 4, type: 'square', volume: 0.05, endFrequency: 70, attack: 0.004 }),
+    noise(0.3, { cutoff: 1800, volume: 0.04, type: 'bandpass', q: 1.5, attack: 0.004 }),
+    tone(95, 0.4, { type: 'sawtooth', volume: 0.05, endFrequency: 40, attack: 0.01 }),
+  ), { usedBy: 'phase 3 (the [FAILED] Firewall Service line)' }),
+
+  // Terminal
+  'key-tick': cue('terminal', 'Typing click: four mechanical variants, quieter than key-tap, limited to 15 per second', variants(
+    layers(click(2100, 0.02, 0.022, 0, 500), tone(150, 0.03, { type: 'triangle', volume: 0.008, endFrequency: 90, spread: 25, attack: 0.002 })),
+    layers(click(1700, 0.022, 0.026, 0, 400), tone(120, 0.035, { type: 'triangle', volume: 0.009, endFrequency: 80, spread: 20, attack: 0.002 })),
+    layers(click(2500, 0.017, 0.018, 0, 600), click(1300, 0.012, 0.024, 0.016, 300)),
+    layers(click(1900, 0.02, 0.024, 0, 450), tone(180, 0.025, { type: 'sine', volume: 0.007, endFrequency: 110, spread: 30, attack: 0.002 })),
+  ), { rate: 15, jitter: { detune: 25, gain: 0.12 } }),
+  'cmd-run': cue('terminal', 'Brief data burst when a command runs', layers(
+    ...each([0, 0.03, 0.06, 0.09], (delay) => noise(0.022, { cutoff: 3200, volume: 0.016, delay, type: 'highpass', attack: 0.003, spread: 800 })),
+    tone(900, 0.07, { type: 'square', volume: 0.012, endFrequency: 1500, attack: 0.005 }),
+  ), { usedBy: 'phase 3 (Linux commands)' }),
+  'cmd-fail': cue('terminal', 'Low buzz with a static crackle when a command fails', layers(
+    tone(80, 0.3, { type: 'sawtooth', volume: 0.05, endFrequency: 60, attack: 0.01 }),
+    ...each([0.02, 0.09, 0.15, 0.22], (delay) => noise(0.03, { cutoff: 2600, volume: 0.022, delay, type: 'bandpass', attack: 0.003, spread: 900 })),
+  ), { usedBy: 'phase 3 (Linux commands)' }),
+
+  // Story / tension
+  'ghost-appear': cue('story', 'Detuned pad with a slow vibrato: something is in the system', layers(
+    tone(55, 1.8, { type: 'sine', volume: 0.07, attack: 0.6, vibrato: { rate: 0.4, depth: 12 } }),
+    tone(55, 1.8, { type: 'sine', volume: 0.05, attack: 0.6, detune: 18, vibrato: { rate: 0.3, depth: 14 } }),
+    tone(110, 1.6, { type: 'triangle', volume: 0.026, attack: 0.5, detune: -9, vibrato: { rate: 0.5, depth: 10 } }),
+    noise(1.6, { cutoff: 400, cutoffEnd: 900, volume: 0.02, type: 'lowpass', attack: 0.5 }),
+  ), { usedBy: 'phase 3 (story engine)' }),
+  'trust-choice': cue('story', 'Held drone that climbs for three seconds: the moment of decision', layers(
+    tone(49, 3.2, { type: 'sawtooth', volume: 0.05, endFrequency: 98, attack: 0.8 }),
+    tone(73.4, 3.2, { type: 'sine', volume: 0.05, endFrequency: 147, attack: 0.9 }),
+    tone(440, 3, { type: 'triangle', volume: 0.012, attack: 1.2, vibrato: { rate: 5, depth: 25 } }),
+    noise(3, { cutoff: 200, cutoffEnd: 1800, volume: 0.024, type: 'bandpass', q: 2, attack: 1 }),
+  ), { usedBy: 'phase 3 (story engine, trust choice)' }),
+
+  // Trace
+  'trace-start': cue('trace', 'Cold two-note radar ping when a trace begins', layers(
+    tone(1320, 0.6, { type: 'sine', volume: 0.04, attack: 0.005 }),
+    tone(990, 0.5, { type: 'sine', volume: 0.026, delay: 0.25, attack: 0.005 }),
+  ), { usedBy: 'phase 3 (trace policy)' }),
+  'trace-warn': cue('trace', 'Two slow beeps when the trace reaches two minutes', layers(
+    tone(740, 0.16, { type: 'square', volume: 0.03, attack: 0.004 }),
+    tone(880, 0.2, { type: 'square', volume: 0.034, delay: 0.24, attack: 0.004 }),
+  )),
+
+  // Evidence
+  'evidence-unlock': cue('evidence', 'Data chime: a piece of evidence unlocks', layers(
+    tone(1318.5, 0.18, { type: 'sine', volume: 0.03, attack: 0.004 }),
+    tone(1760, 0.32, { type: 'sine', volume: 0.028, delay: 0.09, attack: 0.004 }),
+    noise(0.04, { cutoff: 5000, volume: 0.012, type: 'highpass', attack: 0.002 }),
+  ), { usedBy: 'phase 4 (evidence board)' }),
+  'evidence-decrypt': cue('evidence', 'Filtered sweep that resolves to a clean tone', layers(
+    noise(0.7, { cutoff: 300, cutoffEnd: 2400, volume: 0.04, type: 'bandpass', q: 6, attack: 0.25 }),
+    tone(880, 0.45, { type: 'sine', volume: 0.034, delay: 0.55, attack: 0.02 }),
+  ), { usedBy: 'phase 4 (evidence board)' }),
+  'board-open': cue('evidence', 'Panel slide: a noise sweep and a soft thud', layers(
+    noise(0.35, { cutoff: 400, cutoffEnd: 2200, volume: 0.03, type: 'bandpass', q: 1.5, attack: 0.1 }),
+    tone(98, 0.22, { type: 'triangle', volume: 0.03, endFrequency: 70, attack: 0.01 }),
+  ), { usedBy: 'phase 4 (evidence board)' }),
+  'node-select': cue('evidence', 'Soft click when a node is selected', layers(
+    click(1400, 0.025, 0.03),
+    tone(660, 0.05, { type: 'sine', volume: 0.012, attack: 0.004 }),
+  ), { usedBy: 'phase 4 (evidence board)' }),
+
+  // Hacking
+  'decrypt-progress': cue('hacking', 'Glitchy digital tick while a decrypt runs, limited to 12 per second', layers(
+    tone(600, 0.03, { type: 'square', volume: 0.012, spread: 400, attack: 0.003 }),
+    noise(0.02, { cutoff: 4000, volume: 0.008, type: 'highpass', attack: 0.002 }),
+  ), { rate: 12, usedBy: 'phase 4 (decrypt command)' }),
+  'packet-intercept': cue('hacking', 'Four quick random blips and a falling blip: a packet is caught', layers(
+    ...each([0, 0.04, 0.09, 0.13], (delay) => tone(1500, 0.022, { type: 'square', volume: 0.014, delay, spread: 800, attack: 0.003 })),
+    noise(0.16, { cutoff: 2400, volume: 0.02, type: 'bandpass', attack: 0.01 }),
+    tone(1100, 0.12, { type: 'sine', volume: 0.02, delay: 0.17, endFrequency: 500, attack: 0.005 }),
+  ), { usedBy: 'phase 4 (intercept command)' }),
+  'relay-connect': cue('hacking', 'Three rising notes: a relay accepts the connection', layers(
+    tone(330, 0.12, { type: 'triangle', volume: 0.03, attack: 0.004 }),
+    tone(495, 0.12, { type: 'triangle', volume: 0.03, delay: 0.09, attack: 0.004 }),
+    tone(742, 0.22, { type: 'sine', volume: 0.034, delay: 0.18, attack: 0.004 }),
+  ), { usedBy: 'phase 4 (network map)' }),
+  'breach-alert': cue('hacking', 'Three metallic FM pulses: the other side noticed', layers(
+    ...each([0, 0.3, 0.6], (delay) => fm(520, 0.22, { ratio: 1.41, index: 3, type: 'square', volume: 0.05, delay, attack: 0.004 })),
+  ), { usedBy: 'phase 4 (hacking gameplay)' }),
+
+  // Game over
+  'traced-alert': cue('gameover', 'Four falling FM alarm blasts: you have been traced', layers(
+    ...each([0, 0.35, 0.7, 1.05], (delay) => fm(740, 0.28, { ratio: 2.01, index: 3, type: 'sine', volume: 0.07, delay, endFrequency: 560, attack: 0.006 })),
+  ), { usedBy: 'phase 6 (TRACED game over)' }),
+  'system-takeover': cue('gameover', 'Escalating corruption: sub drone, rising noise and random glitch blips', layers(
+    tone(60, 2.2, { type: 'sawtooth', volume: 0.09, endFrequency: 30, attack: 0.3 }),
+    noise(2, { cutoff: 500, cutoffEnd: 6000, volume: 0.06, type: 'highpass', attack: 0.6 }),
+    ...each([0.3, 0.7, 1.1, 1.4, 1.7], (delay) => tone(600, 0.1, { type: 'square', volume: 0.03, delay, spread: 800, endFrequency: 150, attack: 0.004 })),
+  ), { usedBy: 'phase 6 (TRACED game over)' }),
+  'session-kill': cue('gameover', 'Hard cut: a falling square, a noise slap and a sub thump', layers(
+    tone(220, 0.25, { type: 'square', volume: 0.08, endFrequency: 40, attack: 0.004 }),
+    noise(0.2, { cutoff: 5000, volume: 0.07, type: 'lowpass', attack: 0.002 }),
+    tone(55, 0.5, { type: 'sine', volume: 0.1, delay: 0.05, endFrequency: 30, attack: 0.005 }),
+  ), { usedBy: 'phase 6 (TRACED game over)' }),
 
 };
 
@@ -442,10 +557,31 @@ export const SCENES = {
 };
 
 /** Alternative names that play another cue (new brief names for sounds that already exist). */
-export const ALIASES = {};
+export const ALIASES = {
+  'trace-expire': 'trace-expired', // brief name for the existing flatline cue
+  'identity-reveal': 'identity', // brief name for the existing reveal swell
+};
 
 /** Cues whose sound depends on a parameter: `(params, patch) => patch`. */
-export const REACTIVE = {};
+const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+
+export const REACTIVE = {
+  /**
+   * Trace ping. The less time is left: the higher the pitch (1.0 kHz at 240 s and above to 2.1 kHz at 0), the louder,
+   * and below 60 s it gets a metallic FM layer. At 30 s and below the rate doubles (a second ping half a second later).
+   */
+  'trace-tick': ({ secondsLeft = 480 } = {}) => {
+    const left = Math.max(0, secondsLeft);
+    const urgency = 1 - clamp(left, 0, 240) / 240;
+    const freq = 1000 + urgency * 1100;
+    const volume = left > 120 ? 0.014 : left > 60 ? 0.02 : 0.028;
+    const ping = (delay) => [
+      tone(freq, 0.07, { type: 'sine', volume, delay, attack: 0.004 }),
+      ...(left <= 60 ? [fm(freq * 0.5, 0.06, { ratio: 2.7, index: 2, type: 'square', volume: volume * 0.5, delay, attack: 0.004 })] : []),
+    ];
+    return layers(...ping(0), ...(left <= 30 ? ping(0.5) : []));
+  },
+};
 
 /** Default random spread applied to every play unless a cue sets `jitter`. */
 export const DEFAULT_JITTER = { detune: 7, gain: 0.04 };
