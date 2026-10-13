@@ -4,6 +4,8 @@ What changed for players and for the project, one section per merged change. New
 
 ## Unreleased
 
+- "hello, friend." in the Mr. Robot reveal now appears in the middle of the window in the real playthrough (it was positioned against the long log and ended up off-screen). Cause: an animated filter on the terminal made it the containing block of the fixed text.
+- Ghost panel is readable: it was painted *under* the terminal text (stacking order), so the log showed through it; it is now above the terminal and solid on phones.
 - Skip control (lower right) is smaller and has a more transparent background, so it covers less text on phones. (Docs PR after phase 1.)
 - Documentation: state after phase 1, prompts, phase conflict map, deploy and merge procedures, owner test checklist, story bible.
 

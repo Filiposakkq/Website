@@ -564,7 +564,12 @@ async function typingFor(ms, name = 'unknown', nameCls = 'dim') {
 // zpráva od "někoho" psaná po lidsku: nepravidelné tempo, pauzy, překlep
 // text je řetězec, nebo pole částí [{ t: 'text', cls: 'ok' }, ...]
 // (část s cls 'ok' se vypíše zeleně i uvnitř červené řeči watchera)
-async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', nameCls = 'dim' } = {}) {
+// A floating line is fixed to the viewport, so it must live outside `.screen`: an animated
+// filter/transform on `.screen` makes it the containing block, and "centre" would then be the
+// middle of the whole scrolled log instead of the middle of the window.
+const helloSlots = new WeakMap(); // floating element -> its hidden placeholder in the log
+
+async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', nameCls = 'dim', floating = false } = {}) {
   if (name !== 'Mr. Robot') audio.play('message');
   const parts = typeof text === 'string' ? [{ t: text }] : text;
   const d = document.createElement('div');
@@ -573,7 +578,20 @@ async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', 
   who.textContent = `<${name}> `;
   const t = document.createElement('span');
   if (cls) t.className = cls;
-  d.append(who, t);
+  if (floating) {
+    const slot = document.createElement('span');
+    slot.className = 'mr-hello-chat mr-hello-placeholder';
+    slot.textContent = parts.map((part) => part.t).join('');
+    d.append(who, slot);
+    const layer = document.createElement('div');
+    layer.className = 'hello-flight-layer';
+    layer.setAttribute('aria-hidden', 'true');
+    layer.appendChild(t);
+    document.body.appendChild(layer);
+    helloSlots.set(t, slot);
+  } else {
+    d.append(who, t);
+  }
   out.appendChild(d);
   let i = 0;
   for (const part of parts) {
@@ -1035,7 +1053,7 @@ async function playIdentityReveal(trusted) {
   screen.classList.add('identity-lock');
   audio.play('identity-hit');
   audio.play('hello-friend');
-  const hello = await say('hello, friend.', { ...R, cls: 'big mr-hello mr-hello-center', speed: 112 });
+  const hello = await say('hello, friend.', { ...R, cls: 'big mr-hello mr-hello-center', speed: 112, floating: true });
   await glitchHello(hello);
   await wait(900);
   await moveHelloIntoChat(hello);
@@ -1063,18 +1081,24 @@ async function playIdentityReveal(trusted) {
 }
 
 async function moveHelloIntoChat(hello) {
-  const targetSlot = document.createElement('span');
-  targetSlot.className = 'mr-hello-chat mr-hello-placeholder';
+  let targetSlot = helloSlots.get(hello);
+  let flightLayer = hello.parentElement?.classList.contains('hello-flight-layer') ? hello.parentElement : null;
+  if (!targetSlot) {
+    targetSlot = document.createElement('span');
+    targetSlot.className = 'mr-hello-chat mr-hello-placeholder';
+    hello.replaceWith(targetSlot);
+  }
   targetSlot.textContent = hello.textContent;
-  hello.replaceWith(targetSlot);
   scroll();
   const target = targetSlot.getBoundingClientRect();
 
-  const flightLayer = document.createElement('div');
-  flightLayer.className = 'hello-flight-layer';
-  flightLayer.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(flightLayer);
-  flightLayer.appendChild(hello);
+  if (!flightLayer) {
+    flightLayer = document.createElement('div');
+    flightLayer.className = 'hello-flight-layer';
+    flightLayer.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(flightLayer);
+    flightLayer.appendChild(hello);
+  }
 
   if (!motionReduced()) {
     const start = hello.getBoundingClientRect();

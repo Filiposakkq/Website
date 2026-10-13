@@ -572,7 +572,7 @@ dialog.launch::backdrop, dialog.power-panel::backdrop { background: #000; }
 .ghost-sequence {
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 3; /* above .screen (2), whose text used to be painted over the panel; below the trace HUD (4) */
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -682,6 +682,7 @@ dialog.launch::backdrop, dialog.power-panel::backdrop { background: #000; }
     width: min(420px, calc(100vw - 24px));
     max-height: 54vh;
     padding: 14px;
+    background: #000703; /* solid on phones: terminal text must not show through */
   }
   .ghost-subtitle { margin-bottom: 14px; }
   .ghost-steps { gap: 5px; }
