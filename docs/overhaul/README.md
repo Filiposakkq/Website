@@ -366,7 +366,6 @@ None of these is a regression and none blocks the game; each has a home phase.
 |---|---|
 | 41 of 73 `@keyframes` animate `filter`, `box-shadow`, `text-shadow`, `clip-path`, `letter-spacing`, colors, `background-position`, `top`; one transition animates `top`, `left`, `font-size` (rule: only `transform`/`opacity`) | Phase 5 |
 | 26 font-size declarations below 11px in `.case-*` (player-facing on phones) and `.developer-*` (`tools/check-fonts.sh --all` lists them) | Phase 4 (`.case-*`), phase 7 (`.developer-*`) |
-| Smoke does not assert that no `AudioContext` exists before the launch click, and does not test `body.quiet-motion` without the media query | Phase 2 |
 | The DEV `boot` route calls `runStory()` directly, so the ambient-interval cleanup in `startStory`'s `finally` does not run when it ends normally (localhost only) | Phase 7 |
 | `trace.js` falls back to a raw `setInterval` when no session is passed (currently unreachable) | Phase 3 |
 | Skip control (lower right) still covers text on small phones and its idle look is a compromise: rework it (HOLD TO SKIP label, circular hold progress, placed above the prompt, 3 s hold kept, smoke test keeps using a real mouse press) | Phase 3 (skip-hold state is per session) and phase 5 (visuals) |

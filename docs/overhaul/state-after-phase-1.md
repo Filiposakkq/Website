@@ -49,3 +49,12 @@ Written 2026-10-13 for the Claudes that start phases 2-9. **Read this before the
 ## Known issues carried over from phase 1
 
 See "Known issues carried over" in the master README (each has a home phase).
+
+## After phase 2 (audio), added 2026-10-13
+
+This file describes the code after phase 1. Phase 2 changed only the audio side:
+
+- `js/audio.js` is now a thin controller; the sounds are data in `js/audio/patches.js` and the Web Audio code is in `js/audio/render.js`. API: `play(name, params?)`, `setScene`, `unlock`, `list()`, `duration()`, `stopAll({ beds })`, `dispose()`, `pendingNodes()`, `prepare()`. Every cue is listed in [`audio-cues.md`](audio-cues.md) with who plays it.
+- `js/trace-sound.js` plays the trace tick, warning and critical sounds; `trace.js` takes an `onSecond` option for it. `level01.js` no longer plays trace sounds.
+- Typing uses `key-tick` (rate limited); the session abort hook stops cues and the voice clip.
+- `tools/audio-lint.mjs` is new; `tools/smoke.mjs` has 4 more scenarios (20 in total).

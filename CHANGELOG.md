@@ -4,6 +4,7 @@ What changed for players and for the project, one section per merged change. New
 
 ## Unreleased
 
+- Phase 2 (audio, in review): the sound engine is data-driven (`js/audio/patches.js`, one table for 83 cues and 4 ambient beds) instead of a 300-line switch. Typing now ticks softly (rate limited, quieter for auto-typed text), the trace ticks once per second and gets higher and faster as time runs out (warning at 2 minutes, critical at 1 minute), ambient beds stop on the audio clock, and a reboot or scene jump silences everything that was playing. 21 new cues are registered for the next phases. New `tools/audio-lint.mjs`; three new smoke scenarios (no audio before the click, `quiet-motion` alone, no sound after reboot). Sounds need the owner's ears: see the listening checklist.
 - "hello, friend." in the Mr. Robot reveal now appears in the middle of the window in the real playthrough (it was positioned against the long log and ended up off-screen). Cause: an animated filter on the terminal made it the containing block of the fixed text.
 - Ghost panel is readable: it was painted *under* the terminal text (stacking order), so the log showed through it; it is now above the terminal and solid on phones.
 - Skip control (lower right) is smaller and has a more transparent background, so it covers less text on phones. (Docs PR after phase 1.)
