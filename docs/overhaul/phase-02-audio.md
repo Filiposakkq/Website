@@ -125,8 +125,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 2.1 Audit cues + audio-cues.md | todo | | |
-| 2.2 Patch table + renderer; port all existing cues | todo | | |
+| 2.1 Audit cues + audio-cues.md | done | (this commit) | all 62 existing cues + scenes mapped to callers; found `trace-tick` is not per-second today, `typing`/`ghost` unused |
+| 2.2 Patch table + renderer; port all existing cues | in progress | | |
 | 2.3 Ambient beds + stopBed on the audio clock | todo | | |
 | 2.4 New cues (boot, terminal, story, trace, evidence, hacking, game over) | todo | | |
 | 2.5 Typing sounds (extra 6) + reactive trace ticks | todo | | |
@@ -136,3 +136,16 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
+
+### Resume point (session 1, 2026-10-13)
+
+- Branch `overhaul/phase-02-audio`, created from `main` at `a993475`. Started at 2.2 after the 2.1 audit.
+- `last green commit`: none recorded yet (the baseline smoke has not been run in this session: unverified).
+- In progress: 2.2 (patch table + renderer). Plan: `js/audio/patches.js` (data), `js/audio/render.js` (renderer), `js/audio.js` stays the public entry (`createAudioController`).
+- Known fallout to handle: the existing smoke scenario `reduced: every audio cue renders offline` finds cues by regex `case '...':` in `audio.js`; the rewrite removes the switch, so that scenario moves to `audio.list()`.
+- Next command: `node tools/smoke.mjs --serial` (baseline), then continue 2.2.
+
+### Notes
+
+- The owner named the branch `overhaul/phase-02-audio` (docs said `phase-2-audio`).
+- Pushes in this session go through a git proxy that only allows repos attached to the session; the first push attempt failed until the GitHub connection was linked and the repo attached.
