@@ -2,7 +2,7 @@
 
 Read [`README.md`](README.md) first.
 
-- **Branch:** `overhaul/phase-2-audio`
+- **Branch:** `overhaul/phase-02-audio` (the owner's name; older docs said `phase-2-audio`)
 - **Depends on:** phase 1 merged (needs the session/abort model and the smoke test)
 - **Can run in parallel with:** phases 3, 5, 8 (it mostly touches only `js/audio.js`)
 - **Review items covered:** 3 (final), 10, "`stopBed()` mixes the audio clock with `setTimeout`"
