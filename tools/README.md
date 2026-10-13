@@ -30,8 +30,25 @@ Notes:
 - The skip control is held with a **real** mouse press (or keyboard), not a synthetic `pointerdown`:
   the game calls `setPointerCapture`, which throws for pointer ids that do not exist.
 - Set `SMOKE_SITE_DIR=<copy of sites/fsociety00/public>` to test a snapshot while you keep editing; set `SMOKE_SHOTS=<dir>` to get a screenshot when a scenario fails.
-- Audio cannot be heard in headless runs. The script only checks that nothing throws.
+- Audio cannot be heard in headless runs. The smoke only checks that nothing throws, that no `AudioContext` exists before the launch click, and that a reboot leaves no source node running (a test-only probe installed with `addInitScript`; the game exposes no global). Levels and tails are in `audio-lint.mjs`.
 - A full run takes a few minutes because the story runs in real time (scenarios run in parallel).
+
+## `audio-lint.mjs` — audio engine lint (phase 2)
+
+```sh
+node tools/audio-lint.mjs                 # every cue, alias and bed; prints a table
+node tools/audio-lint.mjs --only=trace    # names containing "trace"
+node tools/audio-lint.mjs --json          # machine-readable
+```
+
+Loads `js/audio.js` in headless Chromium and renders everything through an `OfflineAudioContext`
+(seeded random, so a run is repeatable). Checks, per cue (and per sample parameter set of a reactive cue):
+no exception, no `console.warn` (unknown cue), no NaN/Infinity, not silent (RMS floor), peak at or below the
+-1 dBFS output ceiling, and silence after the duration `audio.duration()` declares. For beds: audible while
+running, silent after `setScene('idle')` (nodes stopped on the audio clock), no click when crossfading
+through every scene. Also: rate-limited cues admit at most `rate` plays per second, and `stopAll()` leaves no
+pending source node and no sound. Exit code 1 on any problem. The voice clip is a file and is skipped.
+It judges numbers, not taste: the owner still has to listen (listening checklist in the phase 2 PR).
 
 ## `check-fonts.sh` — minimum font size
 

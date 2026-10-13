@@ -126,8 +126,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | Step | Status | Commit | Notes |
 |---|---|---|---|
 | 2.1 Audit cues + audio-cues.md | done | (this commit) | all 62 existing cues + scenes mapped to callers; found `trace-tick` is not per-second today, `typing`/`ghost` unused |
-| 2.2 Patch table + renderer; port all existing cues | in progress | | |
-| 2.3 Ambient beds + stopBed on the audio clock | todo | | |
+| 2.2 Patch table + renderer; port all existing cues | wip | (this commit) | `js/audio/patches.js` (62 cues ported as data, 4 beds), `js/audio/render.js`, `audio.js` rewritten, `tools/audio-lint.mjs` (0 problems), 3 new smoke scenarios. Full smoke not yet run on this commit: unverified |
+| 2.3 Ambient beds + stopBed on the audio clock | wip | (this commit) | beds are data and stop on the audio clock already (done together with 2.2); needs the full smoke and review of the bed sound |
 | 2.4 New cues (boot, terminal, story, trace, evidence, hacking, game over) | todo | | |
 | 2.5 Typing sounds (extra 6) + reactive trace ticks | todo | | |
 | 2.6 Session cleanup + tools/audio-lint.mjs | todo | | |

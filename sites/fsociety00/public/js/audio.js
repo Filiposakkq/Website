@@ -1,21 +1,42 @@
-const HELLO_CLIP_URL = './audio/hello-friend-mr-robot.mp3';
+import { ALIASES, BEDS, CUES, DEFAULT_JITTER, REACTIVE, SCENES } from './audio/patches.js';
+import { createRenderer, patchDuration } from './audio/render.js';
+
+const HELLO_CLIP_URL = CUES['hello-friend'].patch.url;
+const MASTER_GAIN = 0.52;
+/** Output ceiling: the soft clip at the end of the master chain keeps every sample below this (about -1 dBFS). */
+const CEILING = 0.89;
 
 /**
- * @param {{ context?: BaseAudioContext }} [options]  `context` is for tests: pass an OfflineAudioContext
- *        to render every cue without a speaker (see tools/smoke.mjs). The game never passes it.
+ * The game's audio controller: `{ unlock, setScene, play, list, duration, stopAll, dispose, pendingNodes, prepare }`.
+ * The sounds themselves are data in `audio/patches.js`; `audio/render.js` turns them into Web Audio nodes.
+ *
+ * @param {{ context?: BaseAudioContext, random?: () => number, now?: () => number }} [options]
+ *        `context` and `random` are for tests (tools/audio-lint.mjs passes an OfflineAudioContext and a seeded
+ *        random); the game never passes them. `now` is the wall clock used by the per-cue rate limiter.
  */
-export function createAudioController({ context: providedContext = null } = {}) {
+export function createAudioController({
+  context: providedContext = null,
+  random = Math.random,
+  now = () => performance.now(),
+} = {}) {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   let context = null;
   let master = null;
-  let compressor = null;
-  let noiseBuffer = null;
-  let activeBed = null;
+  let renderer = null;
+  let activeBed = null; // { key, stop }
   const voiceClip = new Audio(HELLO_CLIP_URL);
   voiceClip.preload = 'auto';
   voiceClip.volume = 0.86;
   let voiceReady = false;
   let currentScene = 'idle';
+  const lastPlayed = new Map();
+  const warned = new Set();
+
+  function warnOnce(key, message) {
+    if (warned.has(key)) return;
+    warned.add(key);
+    console.warn(message);
+  }
 
   function ensureContext() {
     if (context) return true;
@@ -23,509 +44,166 @@ export function createAudioController({ context: providedContext = null } = {}) 
 
     context = providedContext ?? new AudioContextClass();
     master = context.createGain();
-    compressor = context.createDynamicsCompressor();
+    const compressor = context.createDynamicsCompressor();
     compressor.threshold.value = -24;
     compressor.knee.value = 18;
     compressor.ratio.value = 4;
     compressor.attack.value = 0.008;
     compressor.release.value = 0.24;
-    master.gain.value = 0.52;
-    master.connect(compressor);
-    compressor.connect(context.destination);
+    master.gain.value = MASTER_GAIN;
 
-    noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+    // Last stage: a soft clip. Input beyond +-1 is clamped to the curve's end, so nothing can leave above CEILING.
+    const limiter = context.createWaveShaper();
+    const curve = new Float32Array(2049);
+    for (let index = 0; index < curve.length; index++) {
+      const x = (index / (curve.length - 1)) * 2 - 1;
+      curve[index] = CEILING * Math.tanh(x / CEILING);
+    }
+    limiter.curve = curve;
+    limiter.oversample = '2x';
+
+    master.connect(compressor);
+    compressor.connect(limiter);
+    limiter.connect(context.destination);
+
+    const noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
     const samples = noiseBuffer.getChannelData(0);
     for (let index = 0; index < samples.length; index++) {
-      samples[index] = Math.random() * 2 - 1;
+      samples[index] = random() * 2 - 1;
     }
+    renderer = createRenderer({ context, destination: master, noiseBuffer, random });
     return true;
   }
 
-  // Attack/hold/decay. Short sounds used to ramp up for a fixed 35 ms even when they lasted less than
-  // that, so the decay ramp ended before the attack ramp did. The attack is now a fraction of the
-  // duration and the hold point is clamped between the end of the attack and the end of the sound.
-  function envelope(gain, start, peak, duration, hold = 0) {
-    const level = Math.max(0.0001, peak);
-    const attack = Math.min(0.035, duration * 0.4);
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(level, start + attack);
-    if (hold > 0) gain.gain.setValueAtTime(level, start + Math.max(attack, Math.min(hold, duration)));
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  }
+  // ---- beds / scenes ----
 
-  function tone(frequency, duration, {
-    endFrequency = frequency,
-    type = 'sine',
-    volume = 0.12,
-    delay = 0,
-    destination = master,
-  } = {}) {
-    if (!context) return;
-    const start = context.currentTime + delay;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, start);
-    oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), start + duration);
-    envelope(gain, start, volume, duration);
-    oscillator.connect(gain);
-    gain.connect(destination);
-    oscillator.start(start);
-    oscillator.stop(start + duration + 0.04);
-  }
-
-  function noise(duration, {
-    cutoff = 1500,
-    volume = 0.04,
-    delay = 0,
-    type = 'lowpass',
-  } = {}) {
-    if (!context || !noiseBuffer) return;
-    const start = context.currentTime + delay;
-    const source = context.createBufferSource();
-    const filter = context.createBiquadFilter();
-    const gain = context.createGain();
-    source.buffer = noiseBuffer;
-    source.loop = true;
-    filter.type = type;
-    filter.frequency.setValueAtTime(cutoff, start);
-    envelope(gain, start, volume, duration);
-    source.connect(filter);
-    filter.connect(gain);
-    gain.connect(master);
-    source.start(start);
-    source.stop(start + duration + 0.05);
-  }
-
-  function keyImpact(delay, frequency, volume, duration) {
-    if (!context || !noiseBuffer) return;
-    const start = context.currentTime + delay;
-    const source = context.createBufferSource();
-    const filter = context.createBiquadFilter();
-    const gain = context.createGain();
-    source.buffer = noiseBuffer;
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(frequency, start);
-    filter.Q.value = 0.8;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(volume, start + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-    source.connect(filter);
-    filter.connect(gain);
-    gain.connect(master);
-    source.start(start, Math.random() * 1.8, duration);
-    source.stop(start + duration + 0.005);
-  }
-
-  function makeBed(scene) {
-    const now = context.currentTime;
-    const bus = context.createGain();
-    bus.gain.setValueAtTime(0.0001, now);
-    bus.gain.exponentialRampToValueAtTime(0.14, now + 0.9);
-    bus.connect(master);
-    const nodes = [bus];
-
-    const addDrone = (frequency, volume, type = 'sine', detune = 0) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency;
-      oscillator.detune.value = detune;
-      gain.gain.value = volume;
-      oscillator.connect(gain);
-      gain.connect(bus);
-      oscillator.start();
-      nodes.push(oscillator, gain);
-    };
-    const addFilteredNoise = (cutoff, volume) => {
-      const source = context.createBufferSource();
-      const filter = context.createBiquadFilter();
-      const gain = context.createGain();
-      source.buffer = noiseBuffer;
-      source.loop = true;
-      filter.type = 'lowpass';
-      filter.frequency.value = cutoff;
-      gain.gain.value = volume;
-      source.connect(filter);
-      filter.connect(gain);
-      gain.connect(bus);
-      source.start();
-      nodes.push(source, filter, gain);
-    };
-    const addPulse = (rate, depth) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.frequency.value = rate;
-      gain.gain.value = depth;
-      oscillator.connect(gain);
-      gain.connect(bus.gain);
-      oscillator.start();
-      nodes.push(oscillator, gain);
-    };
-
-    if (scene === 'boot') {
-      addDrone(49, 0.24, 'triangle');
-      addDrone(73.4, 0.08, 'sine', -7);
-      addFilteredNoise(230, 0.12);
-      addPulse(0.65, 0.018);
-    } else if (scene === 'story') {
-      addDrone(42, 0.19, 'sine');
-      addFilteredNoise(1150, 0.16);
-      addFilteredNoise(2900, 0.025);
-      addPulse(0.18, 0.012);
-    } else if (scene === 'puzzle') {
-      addDrone(55, 0.16, 'triangle');
-      addDrone(82.4, 0.06, 'sine', 5);
-      addFilteredNoise(420, 0.1);
-      addFilteredNoise(1700, 0.018);
-      addPulse(0.42, 0.014);
-    } else if (scene === 'ghost') {
-      addDrone(36.7, 0.22, 'sine');
-      addDrone(55, 0.08, 'triangle');
-      addFilteredNoise(260, 0.1);
-      addFilteredNoise(2200, 0.018);
-      addPulse(0.12, 0.022);
-    } else if (scene === 'reveal') {
-      addDrone(41.2, 0.18, 'sine');
-      addDrone(61.7, 0.1, 'triangle', -3);
-      addDrone(164.8, 0.025, 'sine', 6);
-      addFilteredNoise(3600, 0.014);
-      addPulse(0.08, 0.01);
-    } else if (scene === 'shutdown') {
-      addDrone(46.2, 0.16, 'sawtooth');
-      addFilteredNoise(180, 0.09);
-      addPulse(0.9, 0.025);
+  function resolveScene(scene) {
+    if (Object.hasOwn(SCENES, scene)) {
+      const target = SCENES[scene];
+      return target ? { bed: target.bed, scene: target.scene ?? null } : null;
     }
-    return { bus, nodes };
-  }
-
-  function stopBed() {
-    if (!activeBed || !context) return;
-    const oldBed = activeBed;
-    const end = context.currentTime + 0.5;
-    oldBed.bus.gain.cancelScheduledValues(context.currentTime);
-    oldBed.bus.gain.setTargetAtTime(0.0001, context.currentTime, 0.09);
-    window.setTimeout(() => {
-      oldBed.nodes.forEach((node) => {
-        if (typeof node.stop === 'function') {
-          try {
-            node.stop();
-          } catch (error) {
-            if (!(error instanceof DOMException && error.name === 'InvalidStateError')) throw error;
-          }
-        }
-        node.disconnect();
-      });
-    }, Math.max(0, (end - context.currentTime) * 1000));
-    activeBed = null;
+    if (Object.hasOwn(BEDS, scene)) return { bed: scene, scene: BEDS[scene].defaultScene };
+    warnOnce(`scene:${scene}`, `Unknown audio scene: ${scene}`);
+    return null;
   }
 
   function setScene(scene) {
     currentScene = scene;
-    if (!context || scene === 'idle') {
-      stopBed();
-      return;
+    if (!context) return; // remembered; unlock() starts the bed
+    const target = resolveScene(scene);
+    const key = target ? `${target.bed}:${target.scene ?? ''}` : null;
+    if (activeBed && activeBed.key === key) return; // already playing this bed: do not restart it
+    if (activeBed) {
+      activeBed.stop(context.currentTime);
+      activeBed = null;
     }
-    stopBed();
-    activeBed = makeBed(scene);
+    if (target) {
+      const bed = renderer.startBed(BEDS[target.bed], target.scene);
+      activeBed = { key, stop: bed.stop };
+    }
   }
 
-  function play(effect) {
-    if (!context) return;
-    switch (effect) {
-      case 'power-on':
-        tone(392, 0.42, { type: 'sine', volume: 0.12 });
-        tone(587.3, 0.55, { type: 'sine', volume: 0.09, delay: 0.12 });
-        tone(784, 0.36, { type: 'triangle', volume: 0.035, delay: 0.48 });
-        noise(0.7, { cutoff: 190, volume: 0.028, type: 'lowpass' });
-        break;
-      case 'boot-memory':
-        [110, 164.8, 220, 329.6].forEach((frequency, index) => {
-          tone(frequency, 0.1, { type: 'sine', volume: 0.045, delay: index * 0.13 });
-        });
-        break;
-      case 'boot-prompt':
-        tone(246.9, 0.12, { type: 'sine', volume: 0.04 });
-        tone(369.9, 0.16, { type: 'triangle', volume: 0.03, delay: 0.08 });
-        break;
-      case 'boot-checkpoint':
-        tone(660, 0.07, { type: 'square', volume: 0.016 });
-        tone(990, 0.085, { type: 'sine', volume: 0.019, delay: 0.045 });
-        break;
-      case 'kernel-tick':
-        tone(1180 + Math.random() * 180, 0.025, { type: 'square', volume: 0.009 });
-        break;
-      case 'relay-hop':
-        tone(430, 0.065, { type: 'sine', volume: 0.025 });
-        tone(640, 0.085, { type: 'triangle', volume: 0.019, delay: 0.055 });
-        break;
-      case 'typewriter-start':
-        noise(0.055, { cutoff: 1950, volume: 0.022, type: 'highpass' });
-        tone(118, 0.075, { type: 'triangle', volume: 0.014, delay: 0.018 });
-        break;
-      case 'elliot-echo':
-        tone(61.7, 0.9, { type: 'sine', volume: 0.085, endFrequency: 36.7 });
-        noise(0.72, { cutoff: 510, volume: 0.045, type: 'bandpass', delay: 0.08 });
-        tone(740, 0.32, { type: 'triangle', volume: 0.03, delay: 0.3, endFrequency: 185 });
-        break;
-      case 'trace-appear':
-        tone(49, 0.68, { type: 'sine', volume: 0.09, endFrequency: 73.4 });
-        tone(146.8, 0.42, { type: 'triangle', volume: 0.05, delay: 0.22, endFrequency: 220 });
-        noise(0.45, { cutoff: 1100, volume: 0.025, type: 'lowpass' });
-        break;
-      case 'progress-start':
-        tone(164.8, 0.16, { type: 'sine', volume: 0.025, endFrequency: 220 });
-        break;
-      case 'progress-tick':
-        tone(520 + Math.random() * 120, 0.035, { type: 'sine', volume: 0.012 });
-        break;
-      case 'progress-complete':
-        tone(523.3, 0.11, { type: 'sine', volume: 0.025 });
-        tone(659.3, 0.15, { type: 'sine', volume: 0.028, delay: 0.075 });
-        break;
-      case 'puzzle-start':
-        tone(55, 0.55, { type: 'sine', volume: 0.075, endFrequency: 73.4 });
-        tone(440, 0.2, { type: 'triangle', volume: 0.025, delay: 0.2 });
-        break;
-      case 'ghost-step':
-        tone(196, 0.09, { type: 'sine', volume: 0.035 });
-        tone(392, 0.14, { type: 'triangle', volume: 0.032, delay: 0.08 });
-        break;
-      case 'ghost-scan':
-        tone(39, 0.9, { type: 'sine', volume: 0.11, endFrequency: 31 });
-        tone(1046.5, 0.36, { type: 'triangle', volume: 0.025, delay: 0.24, endFrequency: 523.3 });
-        noise(0.65, { cutoff: 340, volume: 0.03, type: 'lowpass' });
-        break;
-      case 'mail-arrive':
-        tone(587.3, 0.1, { type: 'sine', volume: 0.045 });
-        tone(880, 0.18, { type: 'sine', volume: 0.04, delay: 0.1 });
-        break;
-      case 'list-hit':
-        tone(246.9, 0.09, { type: 'square', volume: 0.025 });
-        noise(0.08, { cutoff: 1500, volume: 0.012, type: 'highpass', delay: 0.035 });
-        break;
-      case 'drive-seek':
-        tone(145, 0.38, { type: 'triangle', volume: 0.055, endFrequency: 82 });
-        tone(720, 0.09, { type: 'square', volume: 0.018, delay: 0.16 });
-        noise(0.32, { cutoff: 620, volume: 0.035, type: 'bandpass' });
-        break;
-      case 'kernel-start':
-        tone(55, 0.62, { type: 'sine', volume: 0.1, endFrequency: 38 });
-        tone(440, 0.2, { type: 'triangle', volume: 0.045, delay: 0.15 });
-        tone(660, 0.24, { type: 'triangle', volume: 0.04, delay: 0.34 });
-        break;
-      case 'service':
-        tone(1050, 0.055, { type: 'square', volume: 0.018 });
-        tone(1570, 0.07, { type: 'sine', volume: 0.014, delay: 0.045 });
-        break;
-      case 'service-ready':
-        tone(523.3, 0.1, { type: 'sine', volume: 0.035 });
-        tone(784, 0.17, { type: 'sine', volume: 0.04, delay: 0.08 });
-        break;
-      case 'terminal-open':
-        tone(98, 0.28, { type: 'triangle', volume: 0.05, endFrequency: 73.4 });
-        tone(392, 0.08, { type: 'square', volume: 0.022, delay: 0.18 });
-        break;
-      case 'key-tap':
-        keyImpact(0, 1850 + Math.random() * 650, 0.038, 0.024);
-        keyImpact(0.026, 1150 + Math.random() * 500, 0.022, 0.03);
-        tone(135 + Math.random() * 35, 0.045, {
-          type: 'triangle',
-          volume: 0.018,
-          endFrequency: 82,
-        });
-        break;
-      case 'command-submit':
-        tone(740, 0.045, { type: 'square', volume: 0.018 });
-        tone(1108.7, 0.085, { type: 'sine', volume: 0.026, delay: 0.045 });
-        break;
-      case 'message':
-        tone(520, 0.09, { type: 'sine', volume: 0.018 });
-        tone(780, 0.12, { type: 'triangle', volume: 0.022, delay: 0.08 });
-        break;
-      case 'success':
-        [392, 523.3, 659.3, 784].forEach((frequency, index) => {
-          tone(frequency, 0.3, { type: 'sine', volume: 0.045, delay: index * 0.12 });
-        });
-        break;
-      case 'failure':
-        tone(190, 0.42, { type: 'sawtooth', volume: 0.06, endFrequency: 65 });
-        noise(0.3, { cutoff: 420, volume: 0.028 });
-        break;
-      case 'hint':
-        tone(392, 0.12, { type: 'triangle', volume: 0.035 });
-        tone(311.1, 0.16, { type: 'sine', volume: 0.03, delay: 0.13 });
-        break;
-      case 'trace-tick':
-        tone(880, 0.035, { type: 'square', volume: 0.012 });
-        break;
-      case 'trace-status':
-        tone(630, 0.07, { type: 'triangle', volume: 0.02 });
-        tone(945, 0.09, { type: 'sine', volume: 0.018, delay: 0.065 });
-        break;
-      case 'trace-critical':
-        [0, 0.18, 0.36].forEach((delay) => {
-          tone(660, 0.11, { type: 'square', volume: 0.04, delay });
-        });
-        break;
-      case 'trace-expired':
-        tone(880, 0.85, { type: 'sine', volume: 0.09, endFrequency: 55 });
-        noise(0.6, { cutoff: 850, volume: 0.04, type: 'bandpass' });
-        break;
-      case 'network-lock':
-        tone(330, 0.24, { type: 'sine', volume: 0.06, endFrequency: 495 });
-        tone(660, 0.32, { type: 'triangle', volume: 0.035, delay: 0.16 });
-        noise(0.28, { cutoff: 2100, volume: 0.018, type: 'bandpass' });
-        break;
-      case 'disk-unseal':
-        tone(82, 0.72, { type: 'sawtooth', volume: 0.065, endFrequency: 41 });
-        tone(246.9, 0.38, { type: 'triangle', volume: 0.05, delay: 0.2, endFrequency: 493.9 });
-        noise(0.55, { cutoff: 360, volume: 0.035 });
-        break;
-      case 'trace-warning':
-        tone(880, 0.17, { type: 'square', volume: 0.055 });
-        tone(740, 0.16, { type: 'square', volume: 0.045, delay: 0.21 });
-        tone(880, 0.22, { type: 'square', volume: 0.052, delay: 0.42 });
-        break;
-      case 'transmission':
-        tone(520, 0.42, { type: 'sine', volume: 0.05, endFrequency: 570 });
-        tone(760, 0.29, { type: 'triangle', volume: 0.035, delay: 0.18 });
-        noise(0.65, { cutoff: 2800, volume: 0.022, type: 'bandpass' });
-        break;
-      case 'disconnect':
-        tone(740, 0.28, { type: 'sine', volume: 0.055, endFrequency: 320 });
-        noise(0.18, { cutoff: 3400, volume: 0.025, type: 'highpass', delay: 0.12 });
-        break;
-      case 'incoming-call':
-        [0, 0.32, 0.82].forEach((delay) => {
-          tone(660, 0.13, { type: 'sine', volume: 0.035, delay });
-          tone(880, 0.16, { type: 'sine', volume: 0.03, delay: delay + 0.08 });
-        });
-        break;
-      case 'file-read':
-        noise(0.11, { cutoff: 900, volume: 0.018, type: 'bandpass' });
-        tone(330, 0.09, { type: 'sine', volume: 0.018, delay: 0.05 });
-        break;
-      case 'typing':
-        [0, 0.075, 0.19].forEach((delay, index) => {
-          noise(0.045, { cutoff: 2200 + index * 350, volume: 0.018, delay, type: 'highpass' });
-        });
-        break;
-      case 'logo':
-        tone(73.4, 0.8, { type: 'sine', volume: 0.095, endFrequency: 49 });
-        tone(293.7, 0.48, { type: 'triangle', volume: 0.05, delay: 0.14 });
-        tone(440, 0.65, { type: 'sine', volume: 0.035, delay: 0.28 });
-        break;
-      case 'static':
-        noise(0.3, { cutoff: 4200, volume: 0.045, type: 'bandpass' });
-        tone(1800, 0.11, { type: 'sawtooth', volume: 0.025, endFrequency: 420 });
-        break;
-      case 'corrupt':
-        tone(1200, 0.14, { type: 'square', volume: 0.03, endFrequency: 180 });
-        tone(240, 0.2, { type: 'sawtooth', volume: 0.035, delay: 0.1, endFrequency: 90 });
-        break;
-      case 'glitch-rgb':
-        tone(1400, 0.12, { type: 'square', volume: 0.038, endFrequency: 350 });
-        tone(510, 0.19, { type: 'sawtooth', volume: 0.028, delay: 0.06, endFrequency: 1180 });
-        noise(0.14, { cutoff: 3600, volume: 0.025, type: 'highpass' });
-        break;
-      case 'glitch-slice':
-        [0, 0.12, 0.27].forEach((delay) => {
-          noise(0.075, { cutoff: 1900, volume: 0.035, delay, type: 'bandpass' });
-        });
-        tone(92, 0.42, { type: 'sine', volume: 0.06, endFrequency: 48 });
-        break;
-      case 'glitch-roll':
-        tone(260, 0.54, { type: 'sawtooth', volume: 0.035, endFrequency: 52 });
-        tone(780, 0.42, { type: 'sine', volume: 0.032, delay: 0.08, endFrequency: 110 });
-        break;
-      case 'glitch-invert':
-        tone(110, 0.2, { type: 'square', volume: 0.045, endFrequency: 880 });
-        tone(880, 0.24, { type: 'triangle', volume: 0.03, delay: 0.12, endFrequency: 110 });
-        break;
-      case 'glitch-zoom':
-        tone(65.4, 0.55, { type: 'sine', volume: 0.075, endFrequency: 130.8 });
-        tone(523.3, 0.28, { type: 'triangle', volume: 0.03, delay: 0.16, endFrequency: 1046.5 });
-        break;
-      case 'signal':
-        tone(880, 0.16, { type: 'sine', volume: 0.12, endFrequency: 510 });
-        tone(1320, 0.11, { type: 'triangle', volume: 0.045, delay: 0.08 });
-        noise(0.13, { cutoff: 3200, volume: 0.025 });
-        break;
-      case 'intrusion':
-        tone(180, 0.85, { type: 'sawtooth', volume: 0.1, endFrequency: 74 });
-        tone(920, 0.38, { type: 'square', volume: 0.035, endFrequency: 240, delay: 0.08 });
-        noise(0.5, { cutoff: 900, volume: 0.05, type: 'bandpass' });
-        break;
-      case 'ghost':
-        tone(58, 1.1, { type: 'sine', volume: 0.16, endFrequency: 26 });
-        tone(440, 0.2, { type: 'triangle', volume: 0.05, delay: 0.36 });
-        noise(0.48, { cutoff: 500, volume: 0.035 });
-        break;
-      case 'identity':
-        tone(110, 1.35, { type: 'sine', volume: 0.16, endFrequency: 55 });
-        tone(392, 1.2, { type: 'sine', volume: 0.075, delay: 0.2, endFrequency: 784 });
-        tone(587.3, 1.55, { type: 'triangle', volume: 0.045, delay: 0.36, endFrequency: 880 });
-        noise(0.9, { cutoff: 2600, volume: 0.018 });
-        break;
-      case 'identity-hit':
-        tone(49, 0.65, { type: 'sine', volume: 0.12, endFrequency: 37 });
-        noise(0.22, { cutoff: 5200, volume: 0.05, type: 'bandpass', delay: 0.12 });
-        tone(1046.5, 0.14, { type: 'triangle', volume: 0.04, delay: 0.18, endFrequency: 523.3 });
-        break;
-      case 'shutdown':
-        tone(880, 1.05, { type: 'sine', volume: 0.12, endFrequency: 48 });
-        tone(1760, 0.74, { type: 'sine', volume: 0.035, endFrequency: 92 });
-        noise(0.7, { cutoff: 400, volume: 0.05 });
-        break;
-      case 'shutdown-stage':
-        tone(130, 0.25, { type: 'triangle', volume: 0.04, endFrequency: 75 });
-        noise(0.19, { cutoff: 1300, volume: 0.022, type: 'lowpass', delay: 0.08 });
-        break;
-      case 'power-cut':
-        tone(1200, 0.28, { type: 'sawtooth', volume: 0.055, endFrequency: 45 });
-        noise(0.42, { cutoff: 480, volume: 0.055 });
-        break;
-      case 'reboot':
-        tone(220, 0.5, { type: 'sine', volume: 0.07, delay: 0 });
-        tone(330, 0.5, { type: 'sine', volume: 0.08, delay: 0.18 });
-        tone(440, 0.75, { type: 'sine', volume: 0.1, delay: 0.36 });
-        tone(659.3, 0.5, { type: 'triangle', volume: 0.045, delay: 0.58 });
-        break;
-      case 'ghost-transition':
-        tone(55, 0.82, { type: 'sine', volume: 0.1, endFrequency: 27 });
-        tone(880, 0.38, { type: 'triangle', volume: 0.035, delay: 0.24, endFrequency: 220 });
-        noise(0.6, { cutoff: 720, volume: 0.035, delay: 0.1 });
-        break;
-      case 'ghost-command':
-        tone(43.7, 0.75, { type: 'sine', volume: 0.1, endFrequency: 29.1 });
-        tone(293.7, 0.24, { type: 'triangle', volume: 0.035, delay: 0.25, endFrequency: 196 });
-        noise(0.4, { cutoff: 800, volume: 0.03, delay: 0.18 });
-        break;
-      case 'ghosted-stamp':
-        tone(32.7, 1, { type: 'sine', volume: 0.13, endFrequency: 24.5 });
-        noise(0.52, { cutoff: 3800, volume: 0.06, type: 'bandpass', delay: 0.06 });
-        tone(987.8, 0.23, { type: 'square', volume: 0.045, delay: 0.18, endFrequency: 164.8 });
-        tone(65.4, 0.5, { type: 'triangle', volume: 0.07, delay: 0.32, endFrequency: 32.7 });
-        break;
-      case 'hello-move':
-        tone(82.4, 0.68, { type: 'sine', volume: 0.055, endFrequency: 164.8 });
-        tone(659.3, 0.48, { type: 'triangle', volume: 0.024, delay: 0.12, endFrequency: 392 });
-        break;
-      case 'hello-friend':
-        if (!voiceReady) {
-          console.error('The hello friend voice clip is not unlocked yet.');
-          break;
-        }
-        voiceClip.currentTime = 0;
-        void voiceClip.play().catch((error) => {
-          console.error('The hello friend voice clip could not be played.', error);
-        });
-        break;
-      default:
-        console.warn(`Unknown audio cue: ${effect}`);
-    }
+  // ---- cues ----
+
+  function resolveCue(name) {
+    const real = Object.hasOwn(ALIASES, name) ? ALIASES[name] : name;
+    return Object.hasOwn(CUES, real) ? { name: real, cue: CUES[real] } : null;
   }
+
+  /** Per-cue rate limit (`cue.rate` = plays per second at most). */
+  function allowed(name, perSecond) {
+    const time = now();
+    if (time - (lastPlayed.get(name) ?? -Infinity) < 1000 / perSecond) return false;
+    lastPlayed.set(name, time);
+    return true;
+  }
+
+  function playVoice() {
+    if (!voiceReady) {
+      console.error('The hello friend voice clip is not unlocked yet.');
+      return;
+    }
+    voiceClip.currentTime = 0;
+    void voiceClip.play().catch((error) => {
+      console.error('The hello friend voice clip could not be played.', error);
+    });
+  }
+
+  /**
+   * @param {string} name  a cue from `list()`; unknown names warn once and are ignored
+   * @param {{ gain?: number, secondsLeft?: number }} [params]  `gain` scales the level; reactive cues read the rest
+   */
+  function play(name, params = {}) {
+    if (!context) return;
+    const found = resolveCue(name);
+    if (!found) {
+      warnOnce(`cue:${name}`, `Unknown audio cue: ${name}`);
+      return;
+    }
+    const { name: cueName, cue } = found;
+    if (cue.rate && !allowed(cueName, cue.rate)) return;
+    if (cue.patch.kind === 'clip') {
+      playVoice();
+      return;
+    }
+    const patch = REACTIVE[cueName] ? REACTIVE[cueName](params, cue.patch) : cue.patch;
+    const jitter = cue.jitter === false ? null : { ...DEFAULT_JITTER, ...cue.jitter };
+    renderer.playPatch(patch, { start: context.currentTime, gain: params.gain ?? 1, jitter });
+  }
+
+  /** Length in seconds of a cue (for a reactive cue with the given params), or null for a clip or unknown name. */
+  function duration(name, params = {}) {
+    const found = resolveCue(name);
+    if (!found || found.cue.patch.kind === 'clip') return null;
+    const patch = REACTIVE[found.name] ? REACTIVE[found.name](params, found.cue.patch) : found.cue.patch;
+    return patchDuration(patch);
+  }
+
+  /** The registry: every cue, alias and bed with its category and description (the phase 7 preview panel reads this). */
+  function list() {
+    const entries = Object.entries(CUES).map(([name, cue]) => ({
+      name,
+      kind: 'cue',
+      category: cue.category,
+      description: cue.description,
+      synth: cue.patch.kind !== 'clip',
+      duration: duration(name),
+      reactive: Object.hasOwn(REACTIVE, name),
+      rate: cue.rate ?? null,
+      samples: cue.samples ?? null,
+      usedBy: cue.usedBy ?? null,
+    }));
+    for (const [alias, target] of Object.entries(ALIASES)) {
+      entries.push({
+        name: alias,
+        kind: 'alias',
+        aliasOf: target,
+        category: CUES[target].category,
+        description: CUES[target].description,
+        synth: CUES[target].patch.kind !== 'clip',
+        duration: duration(target),
+        reactive: Object.hasOwn(REACTIVE, target),
+        rate: CUES[target].rate ?? null,
+        samples: CUES[target].samples ?? null,
+        usedBy: CUES[target].usedBy ?? null,
+      });
+    }
+    for (const [name, bed] of Object.entries(BEDS)) {
+      entries.push({
+        name,
+        kind: 'bed',
+        category: bed.category,
+        description: bed.description,
+        synth: true,
+        duration: null,
+        scenes: Object.keys(bed.scenes),
+        usedBy: null,
+      });
+    }
+    return entries;
+  }
+
+  // ---- lifecycle ----
 
   function unlock() {
     ensureContext();
@@ -541,12 +219,26 @@ export function createAudioController({ context: providedContext = null } = {}) 
     });
     const contextUnlock = context.resume();
     return Promise.all([voiceUnlock, contextUnlock]).then(() => {
-      master.gain.setTargetAtTime(0.52, context.currentTime, 0.04);
+      master.gain.setTargetAtTime(MASTER_GAIN, context.currentTime, 0.04);
       setScene(currentScene);
     }).catch((error) => {
       console.error('Could not start required scene audio.', error);
       throw error;
     });
+  }
+
+  /** Silences everything now (short fade): beds, scheduled and playing cues, and the voice clip. */
+  function stopAll() {
+    if (renderer) renderer.stopAll();
+    activeBed = null;
+    voiceClip.pause();
+    voiceClip.currentTime = 0;
+  }
+
+  /** `stopAll()` and forget the scene. The controller can be used again afterwards. */
+  function dispose() {
+    stopAll();
+    currentScene = 'idle';
   }
 
   /** Creates the audio graph without unlocking audio or loading the voice clip. For tests. */
@@ -555,5 +247,16 @@ export function createAudioController({ context: providedContext = null } = {}) 
     return context;
   }
 
-  return { unlock, setScene, play, prepare };
+  return {
+    unlock,
+    setScene,
+    play,
+    list,
+    duration,
+    stopAll,
+    dispose,
+    /** Source nodes still scheduled or playing (tests only; there is no global for it). */
+    pendingNodes: () => (renderer ? renderer.pendingNodes() : 0),
+    prepare,
+  };
 }
