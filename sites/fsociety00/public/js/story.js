@@ -1,9 +1,15 @@
 import { startTrace } from './trace.js';
-import { createLevel01 } from './level01.js';
+import { createLevel01, revealLevel01SourcePart } from './level01.js';
+import { createSession, isAbortError, swallowAbort } from './session.js';
+import { createGameContext } from './context.js';
 import { createTerminal } from './tty.js';
 import { installDeveloperMenu } from './developer-menu.js';
 import { createAudioController } from './audio.js';
 import { createCaseFile } from './casefile.js';
+import { rand, pad2, scrambleText } from './util.js';
+import { renderChoices } from './choices.js';
+import { createRain } from './rain.js';
+import { chooseTrust } from './story-choices.js';
 
 const out = document.getElementById('output');
 const screen = document.getElementById('screen');
@@ -26,7 +32,11 @@ const shutdownCounter = document.getElementById('shutdownCounter');
 const shutdownMeter = document.getElementById('shutdownMeter');
 const shutdownEvents = document.getElementById('shutdownEvents');
 const skipLabel = skipHint.querySelector('.skip-label');
+const srAnnouncer = document.getElementById('srAnnouncer');
 const audio = createAudioController();
+// The rain reacts to prefers-reduced-motion / body.quiet-motion changes by itself (see rain.js).
+const rain = createRain(document.getElementById('rain'));
+const setRain = (opacity, immediate = false) => rain.setOpacity(opacity, immediate);
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const ambientIntervals = new Set();
 const SKIP_HOLD_MS = 3000;
@@ -40,23 +50,26 @@ const caseFile = createCaseFile({
 const createTrace = (seconds) => {
   activeTrace?.halt(true);
   audio.play('trace-appear');
-  activeTrace = startTrace(seconds);
+  activeTrace = startTrace(seconds, { session });
   return activeTrace;
 };
 document.body.classList.toggle('quiet-motion', motionPreference.matches);
 motionPreference.addEventListener('change', () => {
   document.body.classList.toggle('quiet-motion', motionPreference.matches);
-  if (window.syncRainMotion) window.syncRainMotion();
 });
 
-// koho hráč nakonec zvolil: 'unknown' | 'watcher' | null
-let trusted = null;
-
-// Hold the on-screen control to skip boot or advance to the trust choice.
-let skip = false;
-let skippable = true;
-let skipToChoice = false;
-let skipToChoiceArmed = true;
+// One session per run of the story (see session.js). Aborting it stops every timer, sleep and
+// listener the run started, so a reboot or developer jump cannot leak into the next run.
+let session = createSession();
+const newRunState = () => ({
+  skip: false,
+  skippable: true,
+  skipToChoice: false,
+  skipToChoiceArmed: true,
+  announce: true, // false while the fake BIOS / kernel text scrolls past
+});
+// Hold the on-screen control to skip boot or advance to the trust choice. Reset for every session.
+let run = newRunState();
 let holdStartedAt = 0;
 let holdTarget = null;
 let holdFrame = 0;
@@ -88,18 +101,18 @@ function advanceSkipHold(now) {
 
   const target = holdTarget;
   cancelSkipHold();
-  if (target === 'boot' && skippable) {
-    skip = true;
+  if (target === 'boot' && run.skippable) {
+    run.skip = true;
     skipHint.classList.add('done');
-  } else if (target === 'intro' && !skippable && skipToChoiceArmed) {
-    skipToChoice = true;
+  } else if (target === 'intro' && !run.skippable && run.skipToChoiceArmed) {
+    run.skipToChoice = true;
     skipHint.hidden = true;
   }
 }
 
 function beginSkipHold() {
   if (holdStartedAt || skipHint.hidden || skipHint.disabled) return;
-  holdTarget = skippable ? 'boot' : skipToChoiceArmed ? 'intro' : null;
+  holdTarget = run.skippable ? 'boot' : run.skipToChoiceArmed ? 'intro' : null;
   if (!holdTarget) return;
   holdStartedAt = performance.now();
   skipHint.classList.add('holding');
@@ -135,11 +148,11 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) cancelSkipHold();
 });
 
-const isSkipping = () => skip || skipToChoice;
+const isSkipping = () => run.skip || run.skipToChoice;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const wait = (ms) => (isSkipping() || motionReduced() || ms <= 0 ? Promise.resolve() : sleep(ms));
-const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+// Everything sleeps through the *current* session, so aborting it wakes every awaiting chain at once.
+const sleep = (ms) => session.sleep(ms);
+const wait = (ms) => (isSkipping() || motionReduced() || ms <= 0 ? session.wait(0) : session.sleep(ms));
 const ip = () => `203.0.113.${rand(1, 254)}`;
 const scroll = () => window.scrollTo(0, document.body.scrollHeight);
 const terminal = createTerminal({
@@ -148,18 +161,98 @@ const terminal = createTerminal({
   scroll,
   onKeyPress: (key) => audio.play(key === 'Enter' ? 'command-submit' : 'key-tap'),
 });
-const { readCommand, abort: ttyAbort, close: closePrompt } = terminal;
+const { abort: ttyAbort, close: closePrompt } = terminal;
+// Rejects with the abort error when the session aborts mid-prompt (no leaked promise).
+const readCommand = () => terminal.readCommand({ signal: session.signal });
+const sessionTerminal = { readCommand, abort: ttyAbort, close: closePrompt };
 
-function line(text = '', cls = '') {
+// The launch screen and the power panel are native modal <dialog>s (focus trap, inert page behind them).
+// Neither may be dismissed with Escape: the launch screen needs the initialize gesture, and the power
+// panel only closes through REBOOT. Chrome closes a dialog on a second Escape even when `cancel` was
+// prevented, so an unexpected close reopens it.
+function lockModal(dialog) {
+  dialog.addEventListener('cancel', (event) => event.preventDefault());
+  dialog.addEventListener('close', () => {
+    if (dialog.dataset.closing) {
+      delete dialog.dataset.closing;
+      return;
+    }
+    dialog.showModal();
+  });
+}
+function openModal(dialog) {
+  if (!dialog.open) dialog.showModal();
+}
+function closeModal(dialog) {
+  if (!dialog.open) return;
+  dialog.dataset.closing = '1';
+  dialog.close();
+}
+lockModal(launch);
+lockModal(powerPanel);
+
+function stopAmbient() {
+  ambientIntervals.forEach((id) => session.clearInterval(id));
+  ambientIntervals.clear();
+}
+
+// Removes the transient overlays and effect classes a run may leave behind when it is cut short.
+function sweepStage() {
+  document.querySelectorAll('.elliot-echo, .ghost-sequence, .breach-sequence, .identity-surge, .hello-flight-layer')
+    .forEach((element) => element.remove());
+  screen.classList.remove('glitch', 'flash', 'g-rgb', 'g-slice', 'g-roll', 'g-invert', 'g-zoom', 'intrusion',
+    'identity-lock', 'ghosted-hit', 'elliot-present', 'boot-entry', 'shutdown');
+  noiseEl.classList.remove('on');
+  srAnnouncer.replaceChildren();
+  shutdownSequence.hidden = true;
+  screen.style.opacity = '1';
+}
+
+// What has to stop when a session aborts.
+function armSession(target) {
+  target.onAbort(() => {
+    cancelSkipHold();
+    closePrompt();
+    activeTrace?.halt(true);
+    activeTrace = null;
+    stopAmbient();
+    caseFile.close();
+    audio.setScene('idle');
+    sweepStage();
+  });
+}
+
+function beginSession(reason) {
+  session.abort(reason);
+  session = createSession();
+  run = newRunState();
+  armSession(session);
+}
+armSession(session);
+
+// Screen readers: #output is role=log with aria-live=off, because it is mutated one character at a time
+// and would be read keystroke by keystroke. Instead, each COMPLETED line is appended here. Decorative
+// output (BIOS/kernel spam, progress bars, glitch text) is silent.
+function announce(text) {
+  const message = String(text ?? '').trim();
+  if (!message || !run.announce) return;
+  const entry = document.createElement('div');
+  entry.textContent = message;
+  srAnnouncer.appendChild(entry);
+  while (srAnnouncer.children.length > 12) srAnnouncer.firstElementChild.remove();
+}
+
+function line(text = '', cls = '', { silent = false } = {}) {
   const d = document.createElement('div');
   if (cls) d.className = cls;
   d.textContent = text || '\u00a0';
   out.appendChild(d);
   scroll();
+  if (!silent) announce(text);
   return d;
 }
 
-async function type(text, cls = '', speed = 35) {
+async function type(text, cls = '', speed = 35, { silent = false } = {}) {
   audio.play('typewriter-start');
   const d = line('', cls);
   d.textContent = '';
@@ -168,6 +261,7 @@ async function type(text, cls = '', speed = 35) {
     d.textContent += ch;
     await wait(motionReduced() ? 0 : speed * 0.78);
   }
+  if (!silent) announce(text);
   return d;
 }
 
@@ -195,7 +289,7 @@ let kernelLogCount = 0;
 async function klog(text, cls = 'dim') {
   if (kernelLogCount++ % 3 === 0) audio.play('kernel-tick');
   kt += Math.random() * 0.35;
-  line(`[${kt.toFixed(3).padStart(7)}] ${text}`, cls);
+  line(`[${kt.toFixed(3).padStart(7)}] ${text}`, cls, { silent: true });
   await wait(rand(24, 88));
 }
 
@@ -304,7 +398,6 @@ async function staticBurst(ms = 350) {
 async function corrupt(rounds = 6) {
   if (isSkipping() || motionReduced()) return;
   audio.play('corrupt');
-  const junk = '#%&@$*+=?01<>/\\|';
   const walker = document.createTreeWalker(out, NodeFilter.SHOW_TEXT);
   const nodes = [];
   const orig = [];
@@ -314,9 +407,7 @@ async function corrupt(rounds = 6) {
   }
   for (let r = 0; r < rounds; r++) {
     nodes.forEach((n, i) => {
-      n.nodeValue = [...orig[i]]
-        .map((ch) => (!/\s/.test(ch) && Math.random() < 0.18 ? junk[rand(0, junk.length - 1)] : ch))
-        .join('');
+      n.nodeValue = scrambleText(orig[i], { intensity: 0.18 });
     });
     await wait(70);
   }
@@ -327,10 +418,7 @@ async function corrupt(rounds = 6) {
 async function glitchHello(el) {
   if (motionReduced()) return;
   const orig = el.textContent;
-  const junk = '#%&@$*+=?01<>/\\|';
-  const scr = () => [...orig]
-    .map((ch) => (/[a-z]/i.test(ch) && Math.random() < 0.42 ? junk[rand(0, junk.length - 1)] : ch))
-    .join('');
+  const scr = () => scrambleText(orig, { intensity: 0.42, eligible: (ch) => /[a-z]/i.test(ch) });
   for (let i = 0; i < 4; i++) {
     el.textContent = scr();
     await wait(55);
@@ -430,7 +518,7 @@ async function logo(words) {
   }
 
   // 1) šum: všechny buňky náhodně blikají, jako když se signál dešifruje
-  const noise = motionReduced() ? null : setInterval(() => {
+  const noise = motionReduced() ? null : session.setInterval(() => {
     glyphs.forEach((o) => {
       if (!o.locked) o.cells.forEach((c) => c.classList.toggle('on', Math.random() < 0.45));
     });
@@ -444,7 +532,7 @@ async function logo(words) {
     o.g.classList.add('lock');
     await wait(190);
   }
-  if (noise !== null) clearInterval(noise);
+  if (noise !== null) session.clearInterval(noise);
 
   // 3) sken přejede přes hotové logo
   box.classList.add('done');
@@ -452,11 +540,11 @@ async function logo(words) {
 
   // 4) logo zůstane "živé": občas se jedno písmeno na chvíli zkroutí
   if (!motionReduced()) {
-    const interval = setInterval(() => {
+    const interval = session.setInterval(() => {
       const o = glyphs[rand(0, glyphs.length - 1)];
       o.g.style.setProperty('--j', `${rand(-3, 3)}px`);
       o.g.classList.add('jit');
-      setTimeout(() => o.g.classList.remove('jit'), 140);
+      session.setTimeout(() => o.g.classList.remove('jit'), 140);
     }, 2600);
     ambientIntervals.add(interval);
   }
@@ -509,12 +597,13 @@ async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', 
       i++;
     }
   }
+  announce(`${name} says: ${parts.map((part) => part.t).join('')}`);
   return t;
 }
 
 // vzdálené smazání: text zčervená, rozpadne se na šum a "zhltne se" řádek po řádku
 async function wipe(els) {
-  if (window.setRain && !motionReduced()) setRain(0.7);
+  if (!motionReduced()) setRain(0.7);
   els.forEach((element, index) => {
     element.classList.add('purging');
     element.style.setProperty('--purge-delay', `${Math.min(index, 6) * 20}ms`);
@@ -523,21 +612,20 @@ async function wipe(els) {
     await sleep(520);
   }
   els.forEach((element) => element.remove());
-  if (window.setRain) setRain(0.22);
+  setRain(0.22);
 }
 
 // The remote session ends; the local terminal then powers down.
 async function gameOver(trace, reason) {
   caseFile.setFailureOutcome(reason);
   closePrompt();
-  ambientIntervals.forEach(clearInterval);
-  ambientIntervals.clear();
+  stopAmbient();
   const traceExpired = reason === 'TRACE COMPLETE';
   audio.setScene('shutdown');
   audio.play(traceExpired ? 'trace-expired' : 'shutdown');
   trace.halt(!traceExpired);
   document.body.classList.add('powering-down');
-  if (window.setRain) setRain(0, true);
+  setRain(0, true);
   line();
   line(`*** ${reason} ***`, 'warn');
   line(traceExpired ? 'TRACE WINDOW EXPIRED // 00:00' : 'REMOTE SESSION CLOSED', 'warn');
@@ -568,7 +656,7 @@ async function gameOver(trace, reason) {
     const [phase, event] = phases[index];
     shutdownSequence.dataset.phase = String(index + 1);
     shutdownPhase.textContent = phase;
-    shutdownCounter.textContent = `${String(index + 1).padStart(2, '0')} / ${String(phases.length).padStart(2, '0')}`;
+    shutdownCounter.textContent = `${pad2(index + 1)} / ${pad2(phases.length)}`;
     shutdownMeter.style.setProperty('--shutdown-progress', String((index + 1) / phases.length));
     const entry = document.createElement('div');
     entry.className = 'shutdown-event';
@@ -583,7 +671,7 @@ async function gameOver(trace, reason) {
   shutdownLine.classList.add('powering-down-line-active');
   screen.classList.add('shutdown');
   await wait(1350);
-  powerPanel.hidden = false;
+  openModal(powerPanel);
   restartControl.focus();
 }
 
@@ -616,19 +704,22 @@ async function watcherTakeover(trace) {
     feed.appendChild(entry);
     audio.play(index === stages.length - 1 ? 'disconnect' : 'signal');
     progress.style.transform = `scaleX(${(stages.length - index - 1) / stages.length})`;
-    if (window.setRain) setRain(0.75);
+    setRain(0.75);
     await wait(1050);
   }
   overlay.remove();
   screen.classList.remove('intrusion');
   audio.setScene('puzzle');
-  if (window.setRain) setRain(0.22);
+  setRain(0.22);
   line('[WATCHER] your shell has been closed.', 'warn');
   line('[WATCHER] you should have stayed out.', 'warn');
   await wait(300);
 }
 
 async function resetGame() {
+  restartControl.disabled = true;
+  beginSession('reboot'); // abort the previous run for good, then start a fresh session
+  await Promise.resolve(); // let the aborted chains unwind before touching the DOM
   audio.setScene('idle');
   audio.play('reboot');
   restartControl.disabled = true;
@@ -652,7 +743,7 @@ async function resetGame() {
   }
   await wait(800);
   powerPanel.classList.remove('rebooting');
-  powerPanel.hidden = true;
+  closeModal(powerPanel);
   screen.classList.add('recovering');
   powerTitle.innerHTML = 'SESSION<br>TERMINATED';
   powerStatus.innerHTML = 'REMOTE SESSION CLOSED <span>///</span> LOCAL DISPLAY OFFLINE';
@@ -660,20 +751,15 @@ async function resetGame() {
   restartControl.textContent = '[ REBOOT SYSTEM ]';
   restartControl.disabled = false;
   document.body.classList.remove('powering-down');
-  if (window.setRain) setRain(0, true);
+  setRain(0, true);
   window.scrollTo(0, 0);
   document.getElementById('hud')?.remove();
-  skip = false;
-  skippable = true;
-  skipToChoice = false;
-  skipToChoiceArmed = true;
   cancelSkipHold();
-  trusted = null;
   caseFile.start();
   setSkipHint('BOOT');
   line('LOCAL CONSOLE RESTORED', 'dim');
   audio.setScene('boot');
-  void boot();
+  void startStory();
   await wait(1900);
   screen.classList.remove('recovering');
 }
@@ -681,7 +767,6 @@ async function resetGame() {
 // přepíše všechny výskyty jména na obrazovce: nejdřív se rozpadne na šum,
 // pak se šum po písmenech zamkne do nového jména
 async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
-  const junk = '#%&@$*+=?01<>/\\|';
   const targets = [];
   const walker = document.createTreeWalker(out, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
@@ -694,28 +779,29 @@ async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
     });
     return;
   }
-  const j = () => junk[rand(0, junk.length - 1)];
+  const everyChar = () => true;
   const decayFrames = 6;
   const lockFrames = 10;
-  if (window.setRain) setRain(0.8);
+  setRain(0.8);
   screen.classList.add('g-rgb');
   for (let f = 0; f <= decayFrames + lockFrames; f++) {
     let mid;
     if (f < decayFrames) {
-      mid = [...from].map((ch) => (Math.random() < (f + 1) / decayFrames ? j() : ch)).join('');
+      mid = scrambleText(from, { intensity: (f + 1) / decayFrames, eligible: everyChar });
     } else {
       const locked = Math.floor(((f - decayFrames) / lockFrames) * to.length);
-      mid = [...to].map((ch, i) => (i < locked ? ch : j())).join('');
+      const chars = [...to];
+      mid = chars.slice(0, locked).join('') + scrambleText(chars.slice(locked).join(''), { intensity: 1, eligible: everyChar });
     }
     targets.forEach((t) => { t.n.nodeValue = t.base.split(from).join(mid); });
-    if (f === 3) staticBurst(500);
+    if (f === 3) staticBurst(500).catch(swallowAbort); // fire-and-forget: an abort is expected here
     await sleep(80);
   }
   screen.classList.remove('g-rgb');
   targets.forEach((t) => { t.n.nodeValue = t.base.split(from).join(to); });
   await gfx('slice');
   await gfx('invert');
-  if (window.setRain) setRain(restoreRain);
+  setRain(restoreRain);
 }
 
 // po odemčení sdb9 hráč spustí ghost.sh (napsat, nebo klepnout). Čas běží dál.
@@ -723,21 +809,16 @@ async function promptGhost(trace) {
   const state = { over: null };
   trace.onEnd = () => { state.over = 'TRACE COMPLETE'; ttyAbort(); };
 
-  const box = document.createElement('div');
-  box.className = 'choices';
-  out.appendChild(box);
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'choice';
-  el.textContent = '[1] ./ghost.sh';
   let tapped = false;
-  const go = () => {
-    if (tapped) return;
-    tapped = true;
-    ttyAbort();
-  };
-  el.addEventListener('click', go);
-  box.appendChild(el);
+  const choices = renderChoices({
+    container: out,
+    options: [{ key: '1', label: './ghost.sh' }],
+    onPick: () => {
+      if (tapped) return;
+      tapped = true;
+      ttyAbort();
+    },
+  });
 
   const runs = ['1', './ghost.sh', 'ghost.sh', 'sh ghost.sh', 'sh ./ghost.sh', 'bash ghost.sh',
     'bash ./ghost.sh', 'run ghost.sh', 'ghost'];
@@ -747,7 +828,7 @@ async function promptGhost(trace) {
     if (tapped) {
       // klepnutí: příkaz se "napíše" do terminálu sám
       closePrompt();
-      el.classList.add('locked', 'picked');
+      choices.lock();
       await cmd('./ghost.sh', 40);
       caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the branch prompt.');
       ok = true;
@@ -757,7 +838,7 @@ async function promptGhost(trace) {
       const c = raw.trim().toLowerCase();
       if (runs.includes(c)) {
         closePrompt();
-        el.classList.add('locked', 'picked');
+        choices.lock();
         caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the terminal.');
         ok = true;
       } else if (c === 'ls') {
@@ -937,11 +1018,11 @@ async function playIdentityReveal(trusted) {
   audio.setScene('reveal');
   await say('you came here looking for a name.', { speed: 55 });
   await wait(700);
-  if (window.setRain) setRain(0.26, true);
+  setRain(0.26, true);
   await say('names are how they keep track of us.', { speed: 52 });
   await wait(850);
   await say('but you already know the one they gave me-', { speed: 70 });
-  if (window.setRain) setRain(0, true);
+  setRain(0, true);
 
   await renameEverywhere('unknown', 'Mr. Robot', { restoreRain: 0 });
   await wait(1250);
@@ -961,7 +1042,7 @@ async function playIdentityReveal(trusted) {
   await wait(800);
   surge.remove();
   screen.classList.remove('identity-lock');
-  if (window.setRain) setRain(0.12);
+  setRain(0.12);
   audio.setScene('story');
   await say('bonsoir.', { ...R, cls: 'mr-reference', speed: 65 });
   await wait(1300);
@@ -1011,7 +1092,10 @@ async function moveHelloIntoChat(hello) {
       transformOrigin: 'top left',
       fill: 'forwards',
     });
+    const owner = session;
+    owner.onAbort(() => flight.cancel()); // cancelling rejects `finished` with an AbortError
     await flight.finished;
+    owner.throwIfAborted();
     flight.cancel();
   }
   targetSlot.replaceWith(hello);
@@ -1142,7 +1226,9 @@ function branchDialogueForWatcher(investigation) {
     : 'you chose the watcher. his channel stayed open until the script closed it.';
 }
 
-async function boot() {
+async function runStory() {
+  let trusted = null; // who the player chose: 'unknown' | 'watcher'
+  run.announce = false; // the BIOS / kernel text is decoration; announcing resumes with the story intro
   await wait(600);
 
   // 1) BIOS / POST
@@ -1264,16 +1350,17 @@ async function boot() {
   await wait(700);
 
   // The BIOS can no longer be skipped once the story intro begins.
-  skip = false;
-  skippable = false;
+  run.skip = false;
+  run.skippable = false;
+  run.announce = true;
   cancelSkipHold();
-  setSkipHint('INTRO', !skipToChoice);
+  setSkipHint('INTRO', !run.skipToChoice);
 
   await flash();
   await staticBurst(500);
   await gfx('roll');
   await blackout(1500);
-  if (window.setRain) setRain(0.22);
+  setRain(0.22);
   audio.setScene('story');
 
   // 9) příběh
@@ -1457,12 +1544,12 @@ async function boot() {
   line();
 
   // Stop offering skip before the trust choice.
-  skipToChoice = false;
-  skipToChoiceArmed = false;
+  run.skipToChoice = false;
+  run.skipToChoiceArmed = false;
   setSkipHint('INTRO', false);
 
   // výběr: klepnutí na možnost, nebo napsat příkaz přímo do terminálu
-  trusted = await terminal.chooseTrust({ cmd, line });
+  trusted = await chooseTrust({ out, line, cmd, terminal: sessionTerminal });
   caseFile.chooseTrust(trusted);
   line();
   await wait(700);
@@ -1515,34 +1602,66 @@ async function boot() {
   await wait(600);
   line();
 
-  const opened = await playLevel01(trace, trusted);
+  const opened = await level01()(trace, trusted);
   if (!opened) return;
   await revealName(trace, trusted);
 }
 
-const playLevel01 = createLevel01({
-  line,
-  readCommand,
-  say,
-  gfx,
-  wait,
-  staticBurst,
-  audio,
-  caseFile,
-  gameOver,
-  closePrompt,
-  abortCommand: ttyAbort,
-  takeover: watcherTakeover,
-});
+function buildContext() {
+  return createGameContext({
+    out,
+    screen,
+    line,
+    type,
+    say,
+    cmd,
+    wait,
+    session,
+    gfx,
+    flash,
+    staticBurst,
+    corrupt,
+    audio,
+    caseFile,
+    trace: { create: createTrace, current: () => activeTrace },
+    terminal: sessionTerminal,
+    gameOver,
+    takeover: watcherTakeover,
+    revealSourcePart: revealLevel01SourcePart,
+    motionReduced,
+    isSkipping,
+  });
+}
+
+// The level is built once per session, from that session's context.
+let levelSession = null;
+let levelShell = null;
+function level01() {
+  if (levelSession !== session) {
+    levelSession = session;
+    levelShell = createLevel01(buildContext());
+  }
+  return levelShell;
+}
+
+// Runs the story in the current session. An abort (reboot, developer jump) is the only error
+// swallowed here; anything else is a real bug and must surface.
+async function startStory() {
+  const owner = session;
+  try {
+    await runStory();
+  } catch (error) {
+    swallowAbort(error);
+  } finally {
+    if (!owner.isAborted()) stopAmbient(); // victory / game-over exits leave no jittering logo behind
+  }
+}
 
 async function runDeveloperRoute(route) {
-  activeTrace?.halt(true);
-  activeTrace = null;
-  ambientIntervals.forEach(clearInterval);
-  ambientIntervals.clear();
-  ttyAbort();
+  beginSession('developer route'); // stops the previous run completely, with a fresh session and skip state
+  await Promise.resolve();
   closePrompt();
-  launch.hidden = true;
+  closeModal(launch);
   out.replaceChildren();
   document.getElementById('hud')?.remove();
   document.querySelectorAll('.elliot-echo, .ghost-sequence, .breach-sequence, .identity-surge, .hello-flight-layer')
@@ -1552,20 +1671,21 @@ async function runDeveloperRoute(route) {
   screen.style.opacity = '1';
   document.body.classList.remove('powering-down');
   shutdownSequence.hidden = true;
-  powerPanel.hidden = true;
-  trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
+  closeModal(powerPanel);
+  setSkipHint('BOOT', route === 'boot'); // only the full boot has anything to skip; also resets a stale label
+  const trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
   caseFile.start(trusted);
   caseFile.chooseTrust(trusted);
   audio.setScene(route === 'boot' ? 'boot' : 'story');
 
   if (route === 'boot') {
-    await boot();
+    await runStory();
   } else if (route === 'puzzle' || route === 'puzzle-watcher') {
     audio.setScene('puzzle');
     line(`LOCAL TEST ROUTE // LEVEL 01 // ${trusted.toUpperCase()}`, 'dim');
     const trace = createTrace(120);
     trace.dock();
-    const opened = await playLevel01(trace, trusted);
+    const opened = await level01()(trace, trusted);
     if (opened) await revealName(trace, trusted);
   } else if (route === 'ending') {
     audio.setScene('ghost');
@@ -1616,7 +1736,9 @@ async function runDeveloperRoute(route) {
   }
 }
 
-initialize.addEventListener('click', async () => {
+openModal(launch);
+
+async function launchStory() {
   if (initialize.disabled) return;
   audio.setScene('boot');
   void audio.unlock().then(() => {
@@ -1635,7 +1757,7 @@ initialize.addEventListener('click', async () => {
   await wait(250);
   launch.classList.add('departing');
   await wait(520);
-  launch.hidden = true;
+  closeModal(launch);
   launch.classList.remove('initializing');
   launch.classList.remove('departing');
   initialize.disabled = false;
@@ -1643,16 +1765,18 @@ initialize.addEventListener('click', async () => {
   launchStatus.textContent = '';
   screen.classList.add('boot-entry');
   setSkipHint('BOOT');
-  void boot();
+  void startStory();
   await wait(1050);
   screen.classList.remove('boot-entry');
-});
+}
+initialize.addEventListener('click', () => { launchStory().catch(swallowAbort); });
 
-restartControl.addEventListener('click', resetGame);
+restartControl.addEventListener('click', () => { resetGame().catch(swallowAbort); });
 installDeveloperMenu((action) => {
   void audio.unlock()
     .then(() => runDeveloperRoute(action))
     .catch((error) => {
+      if (isAbortError(error)) return; // a newer route / reboot replaced this one
       console.error(`Could not start audio for developer route "${action}".`, error);
     });
 });

@@ -1,3 +1,18 @@
+const INTERACTIVE = 'button, a, input, textarea, select, summary, [contenteditable], [tabindex]';
+
+// True for the page itself or anything inside #screen that is not a control.
+function inTerminalArea(target) {
+  if (!(target instanceof Element)) return false;
+  if (target === document.body || target === document.documentElement) return true;
+  return !!target.closest('#screen') && !target.closest(INTERACTIVE);
+}
+
+const modalOpen = () => !!document.querySelector('dialog[open], [aria-modal="true"]:not([hidden])');
+
+// Printable characters, Backspace and Enter. Never Tab, Shift, arrows or Escape, and not shortcuts.
+const isTypingKey = (event) => !event.ctrlKey && !event.metaKey && !event.altKey
+  && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter');
+
 export function createTerminal({ out, promptLine, scroll, onKeyPress = () => {} }) {
   const tty = { resolve: null };
   let input = null;
@@ -36,16 +51,46 @@ export function createTerminal({ out, promptLine, scroll, onKeyPress = () => {} 
       event.preventDefault();
       submit();
     });
-    addEventListener('pointerdown', () => { if (tty.resolve) input.focus(); });
-    addEventListener('keydown', () => {
-      if (tty.resolve && document.activeElement !== input) input.focus();
+    // Send typing to the terminal only when that is clearly what the player means. Stealing focus on
+    // every key (as this used to) made Tab, arrows and dialogs unusable for keyboard users.
+    addEventListener('pointerdown', (event) => {
+      if (!tty.resolve || document.activeElement === input) return;
+      if (inTerminalArea(event.target) && !modalOpen()) input.focus();
+    });
+    addEventListener('keydown', (event) => {
+      if (!tty.resolve || document.activeElement === input) return;
+      if (!isTypingKey(event) || !inTerminalArea(event.target) || modalOpen()) return;
+      input.focus();
     });
   }
 
-  function readCommand() {
+  /**
+   * Waits for the next typed line. Resolves with the line, or null after abort().
+   * With a `signal` it rejects with the signal's reason when the session aborts, so the awaiting
+   * code unwinds instead of leaking a promise that never settles.
+   */
+  function readCommand({ signal } = {}) {
     init();
-    return new Promise((resolve) => {
-      tty.resolve = resolve;
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      let onSignal = null;
+      const settle = (value) => {
+        signal?.removeEventListener('abort', onSignal);
+        resolve(value);
+      };
+      onSignal = () => {
+        if (tty.resolve === settle) {
+          tty.resolve = null;
+          input.value = '';
+          typed.textContent = '';
+        }
+        reject(signal.reason);
+      };
+      signal?.addEventListener('abort', onSignal, { once: true });
+      tty.resolve = settle;
       promptLine.hidden = false;
       scroll();
       if (matchMedia('(pointer: fine)').matches) input.focus();
@@ -84,63 +129,5 @@ export function createTerminal({ out, promptLine, scroll, onKeyPress = () => {} 
     if (input) input.blur();
   }
 
-  async function chooseTrust({ cmd, line }) {
-    const options = [
-      { n: '1', id: 'unknown', label: 'trust <unknown>', match: ['1', 'unknown'] },
-      { n: '2', id: 'watcher', label: 'trust <watcher>', match: ['2', 'watcher'] },
-    ];
-    const box = document.createElement('div');
-    box.className = 'choices';
-    out.appendChild(box);
-
-    let tapped = null;
-    const tap = (option) => {
-      if (tapped) return;
-      tapped = option;
-      abort();
-    };
-    options.forEach((option) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'choice';
-      button.dataset.id = option.id;
-      button.textContent = `[${option.n}] ${option.label}`;
-      button.addEventListener('click', () => tap(option));
-      box.appendChild(button);
-    });
-
-    const lock = (option) => {
-      box.querySelectorAll('.choice').forEach((element) => {
-        element.classList.add('locked');
-        element.classList.toggle('picked', element.dataset.id === option.id);
-        element.disabled = true;
-      });
-    };
-    const normalize = (value) => value.trim().toLowerCase()
-      .replace(/^trust\s+/, '').replace(/[<>]/g, '').trim();
-
-    let choice = null;
-    while (!choice) {
-      const raw = tapped ? null : await readCommand();
-      if (tapped) {
-        choice = tapped;
-        close();
-        lock(choice);
-        await cmd(choice.label, 45);
-      } else {
-        const hit = options.find((option) => option.match.includes(normalize(raw)));
-        if (hit) {
-          choice = hit;
-          close();
-          lock(choice);
-        } else if (raw.trim()) {
-          line(`command not found: ${raw.trim()}`, 'warn');
-          line(`try: ${options.map((option) => option.label).join('  |  ')}`, 'dim');
-        }
-      }
-    }
-    return choice.id;
-  }
-
-  return { readCommand, abort, close, chooseTrust };
+  return { readCommand, abort, close };
 }

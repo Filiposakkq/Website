@@ -1,5 +1,6 @@
 {
-  "name": "fsociety00",
+  "name": "fsociety",
   "compatibility_date": "2026-10-01",
+  "previews": {},
   "assets": { "directory": "./public" }
 }
