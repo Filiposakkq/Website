@@ -54,3 +54,10 @@ node tools/contrast.mjs --audit [css-file] [background]  # every hex `color:` in
 Prints the ratio and PASS/FAIL against 4.5:1 (AA, normal text). `--audit` ignores opacity and the real
 background behind each rule, so treat it as a lead generator, not a verdict. Dark colors that are only used
 as text on light hover fills (`#000`) show up as LOW and can be ignored.
+
+## Known flakiness and cost (added 2026-10-13)
+
+- In a **parallel** run two scenarios (`reduced: log role...` and `desktop: trust unknown -> victory`) once timed out (14/16); run alone (`--only=...` or `--serial`) they passed 16/16. If a full run shows 1-2 failures, rerun just those scenarios before concluding anything. Do not "fix" a timeout by deleting an assertion.
+- A full run takes minutes because the story runs in real time. On a limited usage budget: run `node --check` on changed files for wip commits, run the relevant `--only=` scenarios while developing, and the full suite when a sub-step is finished and before the handoff. Save the output to a file and show only the summary (`tail`).
+- The suite does not check that no `AudioContext` exists before the launch click, nor `body.quiet-motion` without the media query (phase 2 adds both).
+

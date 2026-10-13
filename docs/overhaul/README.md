@@ -4,6 +4,7 @@
 
 - Baseline commit these docs were verified against: `8ea680b` ("A lot of editz"), 2026-10-11
 - Source documents (the original request): [`source/code-review.md`](source/code-review.md) and [`source/overhaul-plan.md`](source/overhaul-plan.md)
+- **Documents in this folder (2026-10-13):** [`state-after-phase-1.md`](state-after-phase-1.md) (code as it is now: read before the phase files' older "current state"), [`prompts.md`](prompts.md) (copy-paste prompts: start, resume, review-only, small fix, parallel phase), [`phase-conflicts.md`](phase-conflicts.md) (which phase touches which file, merge order), [`deploy.md`](deploy.md) (Cloudflare Workers, names, `previews`), [`merging.md`](merging.md) (merge procedure, protecting `main`), [`owner-test-checklist.md`](owner-test-checklist.md) (owner only: phone and PC test), and the story canon in [`../story/story-bible.md`](../story/story-bible.md).
 - Scope decision by the owner: the full overhaul plan (sections 1–8) **plus extras 4, 5, 6 and 8 only** (see [Scope](#scope)).
 
 ---
@@ -288,7 +289,7 @@ The owner works in claude.ai chat sessions, not in a local editor. Every session
 - **Catch up with `main` by merging, not rebasing:** `git fetch origin main && git merge origin/main` into your phase branch (a merge commit is fine), resolve conflicts, rerun the smoke test, push. Rebasing would rewrite pushed history, which the Checkpoints rules forbid.
 - **Merge order matters.** Phases 2, 3 and 5 can run in parallel but they may touch the same files (`story.js`, `styles.css`). The owner merges one pull request at a time; the next phase merges `main` into its branch before its final push.
 - **Do not stall on questions.** If the owner is not there to answer, pick the documented default (or the most conservative option), write the decision in the "Decisions and open questions log" below, mention it in the PR description, and keep going. Stop and ask only for things that cannot be undone or would change the story's meaning.
-- **Rollback.** A merged phase that breaks the live site is reverted with the GitHub "Revert" button on its pull request (this creates a new revert PR), or by rolling back to the previous deployment in the Cloudflare dashboard. Phases are small PRs on purpose so a revert is cheap.
+- **Rollback.** A merged phase that breaks the live site is reverted with the GitHub "Revert" button on its pull request (this creates a new revert PR), or by rolling back to the previous deployment in the Cloudflare dashboard. Phases are small PRs on purpose so a revert is cheap. The git tag `pre-overhaul` marks the state before the overhaul (`git checkout pre-overhaul` to inspect or restore from it); see also [`merging.md`](merging.md) and [`deploy.md`](deploy.md).
 - **Spoiler note.** These docs spell out the puzzle key (`ghost` / `shell` / `1337`). The owner switches the repository between private and public, so assume the docs may be public at any time. The key in the page source is the puzzle itself and is already visible to players; before making the repo public, check that the docs still read acceptably (or remove the key from them).
 
 ### Phase size and suggested session splits
