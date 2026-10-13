@@ -33,7 +33,7 @@ Portrait first, then once in landscape.
 - [ ] **Reduced motion:** DevTools, Rendering, "Emulate CSS prefers-reduced-motion: reduce"; the game plays with calmer effects.
 - [ ] **Background tab:** switch tabs for a minute and come back; the trace kept running.
 - [ ] **Console:** no red errors during a full playthrough (the intentional `[sdb9]` whisper is expected).
-- [ ] **DEV button** is visible only on `localhost`, never on the preview or the live site.
+- [ ] **DEV button:** visible on `localhost` and on the preview URL (once phase 7 has merged; before that only on `localhost`), **never on the live sites** (`filiposakkq.dev`, `fsociety.filiposakkq.dev`).
 - [ ] **Performance feel:** the rain and the effects stay smooth on your PC; if you have a slow laptop, test there too.
 
 ## C. Report format

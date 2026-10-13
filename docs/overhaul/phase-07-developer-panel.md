@@ -10,7 +10,7 @@ Read [`README.md`](README.md) first.
 
 ## Goal
 
-A reliable localhost-only test console: jump to any scene with the new cancel-and-restart flow, preview any animation or sound in isolation, and inspect live game state. It must still be impossible to use in production.
+A reliable test console (localhost and Cloudflare preview URLs only): jump to any scene with the new cancel-and-restart flow, preview any animation or sound in isolation, and inspect live game state. It must still be impossible to use in production.
 
 ## Current state (baseline `8ea680b`)
 
@@ -56,7 +56,17 @@ A reliable localhost-only test console: jump to any scene with the new cancel-an
 ### 7.6 Production safety
 
 - [ ] The panel and everything it imports for previews must be inert unless `isLocalDevelopment()`; ideally the heavy preview code is loaded with a dynamic `import()` only on localhost so it is never fetched in production. Add a smoke test that loads the page on a non-local hostname (Playwright `route` rewriting the host, or run the server bound to `127.0.0.2`/a custom `Host` header and test `isLocalDevelopment()` returns false there) and asserts no `DEV` button and no developer modules in the network log.
-- [ ] Keep the label "AVAILABLE ON LOCAL HOST ONLY".
+- [ ] Keep a label such as "LOCAL / PREVIEW ONLY".
+
+### Developer panel hostnames (decided 2026-10-13)
+
+The panel is available on `localhost`, `127.0.0.1`, `[::1]` **and on Cloudflare preview hostnames**, and never on production.
+
+- [ ] Replace the single `isLocalDevelopment()` check with one function (e.g. `isDeveloperHost(hostname)`) that returns true for the local names and for the preview pattern, and false for everything else. Keep the production names `fsociety.filiposakkq.dev` and `filiposakkq.dev` as an explicit deny list that wins over any pattern. Keep the patterns in one constant at the top of the file.
+- [ ] Preview pattern: assumed to be `*.workers.dev` (Cloudflare preview URLs look like `<alias>-<worker>.<account>.workers.dev`). **Unverified: the owner confirms the exact hostname on a real preview and whether the production Workers' own `workers.dev` URLs are enabled** (if they are, the panel would show there too; the owner then disables them or the pattern must be narrower).
+- [ ] The 7.6 smoke test asserts: no `DEV` button and no developer module fetched on the production hostnames and on an unrelated hostname; the button is present on `localhost` and on a hostname matching the preview pattern.
+- [ ] Update the "Do not break" line (`CLAUDE.md`), `owner-test-checklist.md` (DEV button check) and `state-after-phase-1.md` in the same PR.
+- A hostname check is not access control. The panel only jumps scenes (spoilers, no data). If real protection is wanted, put Cloudflare Access on the production Worker; not planned.
 
 ## Out of scope
 

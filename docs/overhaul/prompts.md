@@ -50,7 +50,7 @@ origin/overhaul/phase-N-<slug> detached. Read CLAUDE.md and the phase file's Che
    failing scenario names), bash tools/check-fonts.sh and node tools/contrast.mjs.
 2. Verify the "Do not break" list in CLAUDE.md with evidence (file:line): three-layer Level 01
    key and unlock (do not print the full key), audio only after the launch click,
-   reduced-motion and quiet-motion, localhost-only dev panel, no real IP/location, 11px
+   reduced-motion and quiet-motion, dev panel only on localhost/preview, never production, no real IP/location, 11px
    minimum, only transform/opacity animations, wrangler names and previews block.
 3. Grep for leftovers (removed files/globals), timers or listeners not owned by the session,
    duplicated helpers, and docs that contradict the code.

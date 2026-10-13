@@ -56,7 +56,7 @@ Phase files:
 | 4 | [`phase-04-evidence-board.md`](phase-04-evidence-board.md) | Evidence board becomes a live dashboard + new terminal mechanics + ASCII network map (extra 8) |
 | 5 | [`phase-05-animations.md`](phase-05-animations.md) | GPU-only cinematic animations, trace-reactive effects, mobile performance budget |
 | 6 | [`phase-06-traced-game-over.md`](phase-06-traced-game-over.md) | The "TRACED" game-over sequence |
-| 7 | [`phase-07-developer-panel.md`](phase-07-developer-panel.md) | Fix and extend the localhost developer panel |
+| 7 | [`phase-07-developer-panel.md`](phase-07-developer-panel.md) | Fix and extend the developer panel (localhost + preview, never production) |
 | 8 | [`phase-08-main-site.md`](phase-08-main-site.md) | Main site: tokens, accessibility, performance |
 | 9 | [`phase-09-extras-and-polish.md`](phase-09-extras-and-polish.md) | Mobile quick-actions (extra 4), source viewer (extra 5), final QA, docs |
 
@@ -130,7 +130,7 @@ sites/
         trace.js (71)             # startTrace(): the HUD countdown
         audio.js (544)            # WebAudio engine, a ~300-line switch of procedural sounds, ambient beds
         casefile.js (705)         # evidence board; declarative EVIDENCE array at the top
-        developer-menu.js (127)   # localhost-only DEV panel
+        developer-menu.js (127)   # DEV panel (localhost + preview only)
         source.js (8)             # third part of the puzzle key (see invariants)
         rain.js, session.js, context.js, util.js, choices.js, story-choices.js   # added in phase 1 (rain canvas, abortable story session, GameContext, shared helpers)
 ```
@@ -165,7 +165,7 @@ Player flow in `story.js` `boot()` (find the numbered comments):
 - The hint chain on mobile: the terminal `source map` command lists the files and `cat page/index.html|styles.css|script` reveals each part and marks the evidence as discovered.
 - **Audio only starts after the launch gesture.** Never autoplay.
 - **`prefers-reduced-motion` must keep working**, plus the app's own `body.quiet-motion` class. The `wait()` helper resolves immediately when motion is reduced.
-- **Developer tools are localhost-only** (`isLocalDevelopment()`); nothing in them may run in production.
+- **Developer tools run only on `localhost` and Cloudflare preview hostnames** (`isLocalDevelopment()` today, to be widened in phase 7.6); nothing in them may run on the production hostnames. A hostname check is not security (it only jumps scenes, so the risk is spoilers); real protection would be Cloudflare Access on the production Worker.
 - The game must stay playable **without a server-side component** and without a build step, from a plain static host.
 - The player's real IP/location/identity must **never** be fetched or displayed. Any "LOCATION" or "IP" in a story beat is fictional or redacted (see phase 6).
 - UI language is **English**. (Existing code comments in `story.js` are a mix of Czech and English; keep new comments in English, translating nearby Czech comments is welcome but not required.)
@@ -318,7 +318,7 @@ py -m http.server 8001 --directory sites/fsociety00/public        # Windows
 python3 -m http.server 8000 --directory sites/main/public         # main site
 ```
 
-ES modules need HTTP; `file://` does not work. `localhost` also turns on the `DEV` panel.
+ES modules need HTTP; `file://` does not work. `localhost` also turns on the `DEV` panel (so will Cloudflare preview URLs after phase 7.6).
 
 ### Standard smoke test (every phase must pass before opening a PR)
 
@@ -354,6 +354,10 @@ For CSS/animation work also take screenshots at 390×844 and 1280×800 and look 
 - **Cloudflare.** Each `wrangler.jsonc` needs `"name"` equal to the Worker name (`filiposakkq`, `fsociety`) and an empty `"previews": {}` block (preview builds run `npx wrangler preview`). Never rename either Worker in the config only.
 - **Cloud container.** A "Stop hook: unpushed commit" message is often a stale local `origin/<branch>` record. Check with `git ls-remote --heads origin <branch>` before assuming a push failed.
 
+## Why phase 5 comes before phase 6
+
+Phase 5 builds the effects toolbox (compositor-only glitches, the trace HUD reactions); phase 6 composes the TRACED game over from those effects, the phase 2 sound cues and the phase 3 story engine. Building 6 first would mean building the effects twice. So the order is 5, then 6; both start from the latest `main`.
+
 ## Known issues carried over (phase 1 review, 2026-10-13)
 
 None of these is a regression and none blocks the game; each has a home phase.
@@ -365,12 +369,18 @@ None of these is a regression and none blocks the game; each has a home phase.
 | Smoke does not assert that no `AudioContext` exists before the launch click, and does not test `body.quiet-motion` without the media query | Phase 2 |
 | The DEV `boot` route calls `runStory()` directly, so the ambient-interval cleanup in `startStory`'s `finally` does not run when it ends normally (localhost only) | Phase 7 |
 | `trace.js` falls back to a raw `setInterval` when no session is passed (currently unreachable) | Phase 3 |
+| Skip control (lower right) still covers text on small phones and its idle look is a compromise: rework it (HOLD TO SKIP label, circular hold progress, placed above the prompt, 3 s hold kept, smoke test keeps using a real mouse press) | Phase 3 (skip-hold state is per session) and phase 5 (visuals) |
+| Trace timer: no per-scene policy. The HUD can hit 00:00 before the trust choice with nothing happening, it keeps running during the ghost sequence, and the times (480/120/120/60) are untuned | Phase 3 (`trace` policy in story data, task 3.5) and phase 5 (HUD look, 5.4) |
+| Trace HUD overlaps the ghost panel label on phones (docks to the top right) | Phase 5 |
+| More ways to be traced (noisy commands, honeypot file, unverified `ghost.sh`, watcher lockout) | Idea only: "Phase 10", see `docs/story/README.md`; needs owner canon decisions |
 | Real-device checks not done: screen reader, audible output, 60 fps of the rain on weak phones | Owner, on the preview of each phase |
 
 ## Decisions and open questions log
 
 | Date | Decision / question | Status |
 |---|---|---|
+| 2026-10-13 | Developer panel is available on `localhost` and on Cloudflare preview URLs, never on production. **Open:** the exact preview hostname pattern (assumed `*.workers.dev`, unverified) and whether the production Workers' own `workers.dev` URLs are disabled (otherwise the panel would show there too) | Decided by owner; pattern for the owner to confirm |
+| 2026-10-13 | "hello, friend." was off-screen in the real reveal and the ghost panel was painted under the terminal text; fixed on branch `fix/hello-center-ghost-mobile` (not part of any phase) | Done, owner to merge |
 | 2026-10-11 | Extras 1, 2, 3, 7 are out of scope; extras 4, 5, 6, 8 are in | Decided by owner |
 | 2026-10-12 | The owner uses claude.ai chat sessions (no local editor); tests happen on Cloudflare preview deploys; see "Working in a cloud chat session" | Decided by owner |
 | 2026-10-11 | Delivery: one branch + PR per phase (owner had not yet answered "PR vs straight to main"; PR is the safe default) | Default; confirm with owner |
