@@ -265,6 +265,74 @@ async function lintInPage({ only: filter }) {
     rows.push({ name: 'stopAll silences everything', kind: 'check', category: 'engine', declared: null, peak: null, rms: null, tail: db(late), problems });
   }
 
+  // ---- 4b. stopAll({ beds: false }) stops cues but lets the bed carry on (the session abort path fades it itself)
+  {
+    const ctx = new OfflineAudioContext(1, RATE * 3, RATE);
+    const keeper = createAudioController({ context: ctx, random: mulberry32(9) });
+    keeper.prepare();
+    keeper.setScene('puzzle');
+    keeper.play('shutdown');
+    const cueNodes = keeper.pendingNodes();
+    keeper.stopAll({ beds: false });
+    const out = (await ctx.startRendering()).getChannelData(0);
+    const bed = (() => { let sum = 0; for (let i = Math.floor(2 * RATE); i < Math.floor(2.9 * RATE); i++) sum += out[i] * out[i]; return Math.sqrt(sum / (0.9 * RATE)); })();
+    const problems = [];
+    if (cueNodes < 3) problems.push('the test did not schedule a cue');
+    if (bed < RMS_FLOOR) problems.push('stopAll({ beds: false }) silenced the bed');
+    rows.push({ name: 'stopAll({ beds: false }) keeps the bed', kind: 'check', category: 'engine', declared: null, peak: null, rms: db(bed), tail: null, problems });
+  }
+
+  // ---- 5. trace sound: thresholds, reactive parameters and re-arming (fake audio, no rendering)
+  {
+    const { createTraceSound } = await import('/js/trace-sound.js');
+    const heard = [];
+    const sound = createTraceSound({ play: (name, params) => heard.push({ name, params }) });
+    for (let left = 480; left >= 0; left--) sound(left);
+    const count = (name) => heard.filter((entry) => entry.name === name).length;
+    const problems = [];
+    if (count('trace-tick') !== 480) problems.push(`expected 480 ticks (480 s down to 1 s), got ${count('trace-tick')}`);
+    if (count('trace-warn') !== 1) problems.push(`trace-warn should play once, played ${count('trace-warn')}`);
+    if (count('trace-critical') !== 2) problems.push(`trace-critical should play twice (60 s and 10 s), played ${count('trace-critical')}`);
+    const warnAt = heard.find((entry) => entry.name === 'trace-warn');
+    const firstTick = heard.find((entry) => entry.name === 'trace-tick');
+    if (firstTick?.params?.secondsLeft !== 480) problems.push('trace-tick is not given secondsLeft');
+    if (heard.some((entry) => entry.name === 'trace-tick' && !(entry.params.secondsLeft > 0))) problems.push('a tick played at 0 s');
+    if (!warnAt) problems.push('no trace-warn at all');
+    else if (heard.indexOf(warnAt) !== heard.findIndex((entry) => entry.name === 'trace-tick' && entry.params.secondsLeft === 120) - 1) {
+      problems.push('trace-warn should come right before the 120 s tick');
+    }
+    // A trace set back to a larger value re-arms the thresholds.
+    const again = [];
+    const resound = createTraceSound({ play: (name) => again.push(name) });
+    resound(50); resound(49); resound(300); resound(110); resound(55);
+    if (again.filter((name) => name === 'trace-critical').length !== 2 || again.filter((name) => name === 'trace-warn').length !== 1) {
+      problems.push(`thresholds did not re-arm after a jump up: ${again.join(',')}`);
+    }
+    // The reactive tick gets higher and denser as time drops.
+    const zeroCrossings = async (secondsLeft) => {
+      const ctx = new OfflineAudioContext(1, RATE, RATE);
+      const probeAudio = createAudioController({ context: ctx, random: mulberry32(11) });
+      probeAudio.prepare();
+      probeAudio.play('trace-tick', { secondsLeft });
+      const out = (await ctx.startRendering()).getChannelData(0);
+      let crossings = 0;
+      let last = 0;
+      let peaks = 0;
+      for (let index = 0; index < out.length; index++) {
+        if (out[index] * last < 0) crossings++;
+        if (Math.abs(out[index]) > 1e-4) last = out[index];
+        peaks = Math.max(peaks, Math.abs(out[index]));
+      }
+      return { crossings, peaks, duration: probeAudio.duration('trace-tick', { secondsLeft }) };
+    };
+    const far = await zeroCrossings(400);
+    const near = await zeroCrossings(100);
+    const last = await zeroCrossings(10);
+    if (!(far.peaks < near.peaks && near.peaks < last.peaks)) problems.push('trace-tick does not get louder as time drops');
+    if (!(last.duration > far.duration + 0.3)) problems.push('trace-tick does not double its rate at 30 s and below');
+    rows.push({ name: 'trace sound: thresholds, ticks, re-arm, reactive', kind: 'check', category: 'trace', declared: null, peak: null, rms: null, tail: null, problems });
+  }
+
   console.warn = originalWarn;
   for (const warning of warnings) fail(`console.warn: ${warning}`);
   for (const row of rows) for (const problem of row.problems) fail(`${row.name}: ${problem}`);

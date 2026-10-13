@@ -30,7 +30,7 @@
  * @property {() => Promise<void>} flash
  * @property {(ms?: number) => Promise<void>} staticBurst
  * @property {(rounds?: number) => Promise<void>} corrupt
- * @property {{ play: (cue: string) => void, setScene: (scene: string) => void }} audio
+ * @property {{ play: (cue: string, params?: object) => void, setScene: (scene: string) => void, stopAll: (options?: { beds?: boolean }) => void }} audio
  * @property {object} caseFile
  * @property {TraceApi} trace
  * @property {TerminalApi} terminal

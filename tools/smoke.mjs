@@ -504,7 +504,7 @@ scenarios.push({
 // Test-only probe, installed before any game script runs. It counts AudioContexts and tracks every started
 // source node until it ends, so a scenario can see what is still sounding without the game exposing anything.
 function installAudioProbe() {
-  const probe = { contexts: 0, nodes: new Set() };
+  const probe = { contexts: 0, started: 0, nodes: new Set() };
   window.__audioProbe = probe;
   const Base = window.AudioContext;
   window.AudioContext = class extends Base {
@@ -517,6 +517,7 @@ function installAudioProbe() {
     const start = Type.prototype.start;
     Type.prototype.start = function probedStart(...parameters) {
       const entry = { at: performance.now() };
+      probe.started++;
       probe.nodes.add(entry);
       this.addEventListener('ended', () => probe.nodes.delete(entry), { once: true });
       return start.apply(this, parameters);
@@ -568,6 +569,39 @@ scenarios.push({
     await reachPuzzle(page);
     const stillMedia = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
     if (stillMedia) throw new Error('the media query turned on during the scenario');
+  },
+});
+
+// Typing sounds (extra 6): real keystrokes tick, but never faster than the cue's limit, and keys that are not
+// typing (Shift, arrows, Tab, held-down repeats) do not tick at all.
+scenarios.push({
+  name: 'reduced: typing ticks are rate limited and ignore modifier and navigation keys',
+  contextOptions: REDUCED,
+  async beforeLoad({ page }) { await page.addInitScript(installAudioProbe); },
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sleep(1500); // let the story's own sounds finish
+    const input = page.locator('.tty-input');
+    await input.focus();
+    const started = () => page.evaluate(() => window.__audioProbe.started);
+    const quiet = await started();
+    for (const key of ['Shift', 'Control', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) await page.keyboard.press(key);
+    await page.keyboard.down('a');
+    for (let i = 0; i < 20; i++) await page.keyboard.down('a'); // auto-repeat: event.repeat is true
+    await page.keyboard.up('a');
+    await sleep(200);
+    const afterOne = (await started()) - quiet;
+    if (afterOne > 6) throw new Error(`modifier/navigation keys or key repeat made sound: ${afterOne} nodes for one real keystroke`);
+    if (afterOne < 1) throw new Error('a real keystroke made no sound');
+    await input.fill('');
+    await sleep(500);
+    const before = await started();
+    await page.keyboard.type('abcdefghijklmnopqrstuvwxyz0123', { delay: 0 }); // 30 keys in a few ms
+    await sleep(200);
+    const burst = (await started()) - before;
+    // One key-tick is 2 to 3 source nodes; the limit is 15 per second, so a burst well under 100 ms allows 1 or 2.
+    if (burst > 12) throw new Error(`30 instant keystrokes started ${burst} source nodes: the rate limit is not working`);
+    if (burst < 2) throw new Error('typing a burst made no sound');
   },
 });
 

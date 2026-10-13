@@ -75,8 +75,8 @@ export function createRenderer({ context, destination, noiseBuffer, random = Mat
 
   const spread = (amount) => (random() * 2 - 1) * amount;
 
-  function createGroup(bus) {
-    const group = { bus, nodes: [bus], sources: new Set() };
+  function createGroup(bus, { bed = false } = {}) {
+    const group = { bus, bed, nodes: [bus], sources: new Set() };
     groups.add(group);
     return group;
   }
@@ -269,7 +269,7 @@ export function createRenderer({ context, destination, noiseBuffer, random = Mat
     bus.gain.setValueAtTime(FLOOR, start);
     bus.gain.exponentialRampToValueAtTime(bed.level, start + bed.fadeIn);
     bus.connect(destination);
-    const group = createGroup(bus);
+    const group = createGroup(bus, { bed: true });
     const extra = (scene && bed.scenes[scene]) || { layers: [], pulse: null };
     const pulse = extra.pulse ?? bed.pulse;
     // A bed lives until stop() is called; sources are scheduled far ahead and cut short by stop().
@@ -322,10 +322,14 @@ export function createRenderer({ context, destination, noiseBuffer, random = Mat
     };
   }
 
-  /** Silences everything after a very short fade (a hard cut would click). */
-  function stopAll(fade = 0.03) {
+  /**
+   * Silences every playing and scheduled sound after a very short fade (a hard cut would click).
+   * `beds: false` leaves the ambient bed alone (the caller fades it with its own, longer fade).
+   */
+  function stopAll({ beds = true, fade = 0.03 } = {}) {
     const now = context.currentTime;
     for (const group of groups) {
+      if (group.bed && !beds) continue;
       fadeToSilence(group.bus.gain, now, fade / 6);
       for (const source of group.sources) source.stop(now + fade);
     }

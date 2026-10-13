@@ -227,10 +227,14 @@ export function createAudioController({
     });
   }
 
-  /** Silences everything now (short fade): beds, scheduled and playing cues, and the voice clip. */
-  function stopAll() {
-    if (renderer) renderer.stopAll();
-    activeBed = null;
+  /**
+   * Silences everything now (short fade): scheduled and playing cues and the voice clip, and the ambient bed
+   * unless `beds` is false (then the caller fades the bed itself with `setScene('idle')`).
+   * @param {{ beds?: boolean }} [options]
+   */
+  function stopAll({ beds = true } = {}) {
+    if (renderer) renderer.stopAll({ beds });
+    if (beds) activeBed = null;
     voiceClip.pause();
     voiceClip.currentTime = 0;
   }

@@ -129,8 +129,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 2.2 Patch table + renderer; port all existing cues | done | 25695fc | `js/audio/patches.js`, `js/audio/render.js`, `audio.js` rewritten (62 cues ported as data; names kept). Full smoke 19/19 on this commit |
 | 2.3 Ambient beds + stopBed on the audio clock | done | 25695fc | 4 beds as data, `setScene` keeps all 8 scene names, fades use `setTargetAtTime`, nodes stopped on the audio clock; crossfade click check in the lint. Owner must listen to the beds (unverified by ear) |
 | 2.4 New cues (boot, terminal, story, trace, evidence, hacking, game over) | done | (this commit) | 21 new cues + 2 aliases registered; lint 0 problems (headroom rule added). Not wired, except what 2.5 does: see `audio-cues.md` |
-| 2.5 Typing sounds (extra 6) + reactive trace ticks | todo | | |
-| 2.6 Session cleanup + tools/audio-lint.mjs | todo | | |
+| 2.5 Typing sounds (extra 6) + reactive trace ticks | wip | (this commit) | `key-tick` wired (real keys + auto-typing every 3rd char at 60% level), `trace-sound.js` (tick every second with `secondsLeft`, warn at 120 s, critical at 60 s and 10 s), `trace.js` `onSecond` option, old threshold sounds removed from `level01.js`. Lint + typing smoke pass; full smoke pending on this exact tree |
+| 2.6 Session cleanup + tools/audio-lint.mjs | wip | (this commit) | the session abort hook calls `audio.stopAll({ beds: false })` then `setScene('idle')`; lint exists since 2.2. Full smoke pending |
 | 2.7 Listening checklist in the PR | todo | | |
 
 ## Implementation notes

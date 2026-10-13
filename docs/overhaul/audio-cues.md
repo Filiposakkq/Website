@@ -25,7 +25,7 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `terminal-open` | boot | `story.js` `cmd` (a typed command appears) |
 | `typewriter-start` | terminal | `story.js` `type` (start of each typed line) |
 | `typing` | terminal | no caller found (defined, unused) |
-| `key-tap` | terminal | `story.js` `createTerminal({ onKeyPress })` for real typing; `type`, `cmd`, `say` for auto-typing (every 5th / 3rd / 6th character) |
+| `key-tap` | terminal | no caller since phase 2.5 (replaced by `key-tick`; kept, names are never removed) |
 | `command-submit` | terminal | `story.js` `onKeyPress` when the key is Enter |
 | `list-hit` | terminal | `level01.js` commands `help`, `ls` |
 | `file-read` | terminal | `level01.js` commands `cat`, `evidence`, `view-source` |
@@ -53,10 +53,10 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `ghost-command` | story | `story.js` `finishSequence`, `watcherTakeover` |
 | `ghosted-stamp` | story | `story.js` `redact`, DEV route |
 | `trace-appear` | trace | `story.js` `createTrace` |
-| `trace-tick` | trace | `level01.js` `trace.onTick`, once at 60 s and once at 30 s left (**not** every second today) |
+| `trace-tick` | trace | `trace-sound.js`, called once per second by `trace.js` (`onSecond`, attached in `story.js` `createTrace`) with `{ secondsLeft }` |
 | `trace-status` | trace | `level01.js` command `trace` |
 | `trace-warning` | trace | `story.js` `runStory` (the failed-trace warning in the boot) |
-| `trace-critical` | trace | `level01.js` `trace.onTick`, once at 10 s left |
+| `trace-critical` | trace | `trace-sound.js`: when the trace crosses 60 s and again at 10 s |
 | `trace-expired` | trace | `story.js` `gameOver` (when the reason is a trace expiry) |
 | `static` | glitch | `story.js` `flash`, `glitch`, `staticBurst` |
 | `corrupt` | glitch | `story.js` `corrupt` |
@@ -76,7 +76,7 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 Notes from the audit:
 
 - `typing` and `ghost` have no caller today. They stay (names are never removed).
-- `trace-tick` is not called once per second today. The phase file assumed it was; phase 2.5 adds that (see "Trace" in the sound brief).
+- Before phase 2.5 `trace-tick` was not called once per second: `level01.js` played it once at 60 s and 30 s and `trace-critical` once at 10 s. Phase 2.5 moved this to `trace-sound.js` (every second, reactive).
 - `tty.js` already ignores `event.repeat` and any key that is not a single character, Backspace or Enter, so the `onKeyPress` hook never fires for modifier or navigation keys.
 - Nothing in `casefile.js`, `trace.js`, `tty.js` or `developer-menu.js` calls the audio controller directly.
 
@@ -89,12 +89,12 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `boot-complete` | boot | phase 3 (realistic boot) |
 | `boot-memtest` | boot | phase 3 (rising sweep for the memory counter) |
 | `boot-fail` | boot | phase 3 (the `[FAILED] Failed to start Firewall Service` line) |
-| `key-tick` | terminal | **phase 2** (typing, rate limited to 15 per second) |
+| `key-tick` | terminal | **phase 2, wired**: real keystrokes (`story.js` `onKeyPress`) and auto-typing in `type`, `cmd`, `say` (every 3rd character, `{ gain: 0.6 }`) |
 | `cmd-run`, `cmd-fail` | terminal | phase 3 (Linux commands) |
 | `ghost-appear` | story | phase 3 (story engine) |
 | `trust-choice` | story | phase 3 (story engine, the trust choice) |
 | `trace-start` | trace | phase 3 (trace policy) |
-| `trace-warn` | trace | **phase 2** (crosses 120 s) |
+| `trace-warn` | trace | **phase 2, wired**: `trace-sound.js` when the trace crosses 120 s |
 | `evidence-unlock`, `evidence-decrypt`, `board-open`, `node-select` | evidence | phase 4 |
 | `decrypt-progress` (12 per second max), `packet-intercept`, `relay-connect`, `breach-alert` | hacking | phase 4 |
 | `traced-alert`, `system-takeover`, `session-kill` | game over | phase 6 |

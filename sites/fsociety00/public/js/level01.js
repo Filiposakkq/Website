@@ -109,20 +109,12 @@ export function createLevel01(ctx) {
     let attempts = 3;
     let hints = 0;
     let solved = false;
-    const announcedTraceThresholds = new Set();
 
     trace.onEnd = () => {
       state.over = 'TRACE COMPLETE';
       abortCommand();
     };
-    trace.onTick = (seconds) => {
-      for (const threshold of [60, 30, 10]) {
-        if (seconds > 0 && seconds <= threshold && !announcedTraceThresholds.has(threshold)) {
-          announcedTraceThresholds.add(threshold);
-          audio.play(threshold === 10 ? 'trace-critical' : 'trace-tick');
-        }
-      }
-    };
+    // The trace sound (tick, warn, critical) is attached where the trace is created (story.js, trace-sound.js).
 
     const files = {
       'readme.txt': () => [
