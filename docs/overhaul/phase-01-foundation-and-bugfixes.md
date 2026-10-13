@@ -181,3 +181,9 @@ All rows 1.1-1.10 are `done`. **Last green commit: `5c4f941`** (full `node tools
 - **Results:** smoke 16 scenarios, green (see the state block above for the two load-related reruns); check-fonts OK; contrast audit clean except fill colors.
 - **Known issues / unverified:** audio cannot be heard headless (owner listens in phase 2); `rain.js` visual look and the `shutdown-scan` glow strength are only checked by screenshot (check on the Cloudflare preview); the idle `.skip` hint is now fully opaque (more visible than before); `--dim` text directly over bright rain glyphs can be about 3.2:1 (not changed, see "Step 1.8 notes"); no real screen reader was used; the DEV and CASE FILE buttons are inert while a modal dialog is open (phase 7 can add a shortcut); 26 `.case-*`/`.developer-*` font declarations below 11px remain for phases 4 and 7. The parallel full smoke run can time out in two scenarios on a slow machine; use `--serial --only=...` to confirm.
 - **Next step:** the owner reviews and merges the PR. Then phases 2, 3, 5 and 8 can start (each merges `main` into its branch first).
+
+### Correction after review (2026-10-13)
+
+- 1.8 had left `@media (hover: none) { .skip { opacity: 0.55; } }` in `styles.css`, which re-dimmed the skip control (text and background) on touch devices and undid the contrast fix. Removed. **Unverified on a real phone.**
+- Worker names fixed: `sites/fsociety00/wrangler.jsonc` is now `fsociety`, `sites/main/wrangler.jsonc` is `filiposakkq` (the real Cloudflare Worker names); README, `docs/overhaul/README.md` and `CLAUDE.md` updated. Whether the Cloudflare preview builds now pass is **unverified** until the owner checks them.
+- The full smoke test was **not** re-run after these edits (CSS rule removal and config names only).

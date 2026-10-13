@@ -113,10 +113,10 @@ The repository hosts **two independent static sites**, each deployed as its own 
 README.md                         # user-facing project README (update in phase 9)
 sites/
   main/                           # personal site (filiposakkq.dev)
-    wrangler.jsonc                # name: filiposakkq-dev, assets ./public
+    wrangler.jsonc                # name: filiposakkq (must equal the Cloudflare Worker name), assets ./public
     public/ index.html (182) script.js (222) styles.css (946) favicon.svg
   fsociety00/                     # the terminal game (fsociety00.filiposakkq.dev)
-    wrangler.jsonc                # name: fsociety00, assets ./public
+    wrangler.jsonc                # name: fsociety (must equal the Cloudflare Worker name), assets ./public
     public/
       index.html (70)             # launch screen, #screen/#output/#promptLine, case trigger, shutdown + power panels
       styles.css (2109)           # ALL game CSS, one file
@@ -353,3 +353,4 @@ For CSS/animation work also take screenshots at 390×844 and 1280×800 and look 
 | 2026-10-11 | Review item 12 (`--dim` contrast on fsociety00) is wrong: measured 5.03:1 | Verified |
 | 2026-10-11 | Review items 16 and 19 (main site) appear already fixed in `8ea680b` | Verify in phase 8 |
 | — | Real name of the first character is still unknown to the story. `renameEverywhere('unknown','Mr. Robot')` is the reveal. Other characters must refer to him indirectly before it | Open (story design) |
+| 2026-10-13 | Cloudflare Worker names are `fsociety` (sites/fsociety00) and `filiposakkq` (sites/main); `wrangler.jsonc` `name` must match them or Workers Builds fail. Earlier docs said `fsociety00` / `filiposakkq-dev`, which was wrong | Decided by owner, fixed on `overhaul/phase-1-foundation` |

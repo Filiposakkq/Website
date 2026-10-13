@@ -153,10 +153,6 @@ body::after {
 .skip:disabled { cursor: default; }
 .skip:disabled .skip-label { color: var(--dim); }
 
-@media (hover: none) {
-  .skip { opacity: 0.55; }
-}
-
 /* Native <dialog>s: reset the UA box, and only use display:flex while open (a display set here would
    otherwise defeat the UA rule that hides a closed dialog). */
 dialog.launch, dialog.power-panel {

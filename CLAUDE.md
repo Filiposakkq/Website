@@ -11,6 +11,7 @@ Two static sites (`sites/main`, `sites/fsociety00`), deployed to Cloudflare Work
 
 ## Do not break
 
+- The `name` in each `wrangler.jsonc` must equal the Cloudflare Worker name (`sites/main` = `filiposakkq`, `sites/fsociety00` = `fsociety`). Never rename them.
 - The Level 01 key is split into three layers read from the page (a `<meta>` in `index.html`, a CSS custom property, a console message from `js/source.js`). Keep all three discoverable and keep `unlock` working.
 - Audio starts only after the launch click. `prefers-reduced-motion` and `body.quiet-motion` must keep working. The developer panel is localhost-only.
 - Never fetch or display a player's real IP, location or identity (all such text in the story is fictional or redacted).
