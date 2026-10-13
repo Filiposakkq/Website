@@ -67,6 +67,11 @@ The game currently stacks, at once: full-screen canvas rain, repeating-gradient 
 - [ ] Flash-rate review (≤ 3/s) and reduced-motion alternatives for every new animation (extend the single reduced-motion block)
 - [ ] Remove now-unused keyframes/classes (grep before deleting)
 
+### Skip control rework (added 2026-10-13)
+
+- [ ] Visual rework of the lower-right skip control: label `HOLD TO SKIP`, hold progress shown as a bar that grows with `transform: scaleX` (animate only `transform`/`opacity`, so no conic gradients or `stroke-dashoffset`), a calm idle state **without lowering the text opacity**, minimum 104 x 44 px touch target, font at least 11px. Prefer placing it above the prompt/keyboard on phones so it never covers text. The 3 s hold stays. The skip logic itself is phase 3.
+- [ ] Trace HUD (5.4): also stop it overlapping the ghost panel label on phones; add the "TRACE PENDING" and "TRACE CLOSED" looks that phase 3.5 sets up.
+
 ## Out of scope
 
 The TRACED sequence content (phase 6), audio (phase 2), dev panel animation previews (phase 7; but keep effect names stable so it can preview them).
@@ -84,6 +89,11 @@ The TRACED sequence content (phase 6), audio (phase 2), dev panel animation prev
 
 All table rows are implemented with compositor-only properties, performance numbers are better than the baseline and recorded, `perf-lite` works, and reduced-motion is honored everywhere.
 
+## Carried over from the phase 1 review
+
+- [ ] Phase 1 left **41 of 73 `@keyframes`** animating `filter`, `box-shadow`, `text-shadow`, `clip-path`, `letter-spacing`, colors, `background-position` or `top`, and one transition animating `top`/`left`/`font-size` (only `shutdown-scan` was converted). Convert them to `transform`/`opacity` (or replace with layered pseudo-elements) as part of this phase; count the offenders with a script before and after.
+
+
 ## Checkpoint log
 
 Commit and push after **every row** (see "Checkpoints" in the master README). Update the row (status `todo` / `in progress` / `done` / `wip` / `skipped`, short commit hash, one line of notes) in the same push. Add rows if you split a step. A Claude resuming this phase continues at the first row that is not `done`.
@@ -100,4 +110,4 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 ## Implementation notes
 
-_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here: baseline vs after frame times, what was removed, what the owner must eyeball)_
+_(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here: baseline vs after frame times, what was removed, what the owner must eyeball)_

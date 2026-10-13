@@ -164,6 +164,18 @@ Constraints: realistic commands must **not** become a way to bypass the puzzle (
 - [ ] Dialogue polish pass (typos, rhythm). Keep each character's voice: Unknown is warm and cryptic, Watcher is cold and accusatory. Characters must not use a fixed real name for the first character before the identity reveal
 - [ ] Update `docs/overhaul/audio-cues.md` with the cues the story data uses
 
+### 3.5 Trace policy per scene and the skip control (added 2026-10-13)
+
+Why: the HUD can reach 00:00 before the trust choice with nothing happening; during the ghost sequence it keeps running although the story says the trace is being closed; the times are guesses.
+
+- [ ] Every scene or node in the story data declares `trace: 'running' | 'frozen' | 'lethal'`. `running` counts down; `frozen` holds the HUD and cannot expire; `lethal` is the only state that can end the game with TRACED.
+- [ ] Before the trust choice the trace cannot kill the player: either `frozen`, or it floors at a low value (e.g. 00:10) and the HUD shows it as "TRACE PENDING". After the trust choice and after the unlock it is `lethal` (this is what `level01.js` and `promptGhost` do today with `state.over` and `onEnd`).
+- [ ] The first `ghost.sh` step "CLOSE TRACE REQUEST" ends the danger: from that line on the trace is `frozen` and the HUD reads "TRACE CLOSED" (hardcode it in the data so no timer can fire during the ghost sequence). It has to make sense in the story: the script closes the request first, so nothing can locate the player afterwards.
+- [ ] Tune the times (480 / 120 / 120 / 60, `hint` = 30 s) in the data after phone tests by the owner; keep them as named constants in the story data, not literals in code.
+- [ ] Remove the raw `setInterval` fallback in `trace.js` (Known issues).
+- [ ] Skip control: the hold state (3 s) lives in the session, the skip logic moves with the engine; keep the 3 s hold and keep the smoke test pressing with a real mouse. Visuals are phase 5 (see its task "Skip control rework").
+- Story reasons to be traced beyond the clock (noisy commands, honeypot file, unverified `ghost.sh`, watcher lockout) are **not** in this phase; see "Phase 10" in `docs/story/README.md`.
+
 ## Out of scope
 
 Visual effects redesign (phase 5), new evidence mechanics and commands `scan/intercept/decrypt` (phase 4), the TRACED sequence (phase 6), dev panel (phase 7).
@@ -199,4 +211,4 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 ## Implementation notes
 
-_(if you stop early, put a **Stopped at** block first: state, half-edited files, failing tests, next command. Then append here)_
+_(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_

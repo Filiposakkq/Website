@@ -4,6 +4,7 @@
 
 - Baseline commit these docs were verified against: `8ea680b` ("A lot of editz"), 2026-10-11
 - Source documents (the original request): [`source/code-review.md`](source/code-review.md) and [`source/overhaul-plan.md`](source/overhaul-plan.md)
+- **Documents in this folder (2026-10-13):** [`state-after-phase-1.md`](state-after-phase-1.md) (code as it is now: read before the phase files' older "current state"), [`prompts.md`](prompts.md) (copy-paste prompts: start, resume, review-only, small fix, parallel phase), [`phase-conflicts.md`](phase-conflicts.md) (which phase touches which file, merge order), [`deploy.md`](deploy.md) (Cloudflare Workers, names, `previews`), [`merging.md`](merging.md) (merge procedure, protecting `main`), [`owner-test-checklist.md`](owner-test-checklist.md) (owner only: phone and PC test), and the story canon in [`../story/story-bible.md`](../story/story-bible.md).
 - Scope decision by the owner: the full overhaul plan (sections 1–8) **plus extras 4, 5, 6 and 8 only** (see [Scope](#scope)).
 
 ---
@@ -13,7 +14,7 @@
 Copy this prompt, change the phase number and slug:
 
 ```text
-The project is the GitHub repository Filiposakkq/fsociety00-dat. Attach it through
+The project is the GitHub repository Filiposakkq/Website. Attach it through
 your GitHub connection and clone it first (see "Working in a cloud chat session" in
 the README; if you cannot access the repo, stop and tell me, do not recreate files).
 Read docs/overhaul/README.md completely, then docs/overhaul/phase-0N-<slug>.md.
@@ -32,14 +33,14 @@ Do not push to main.
 ### Resuming a phase another Claude started (it ran out of usage)
 
 ```text
-The project is the GitHub repository Filiposakkq/fsociety00-dat. Attach it through
+The project is the GitHub repository Filiposakkq/Website. Attach it through
 your GitHub connection and clone it first (see "Working in a cloud chat session" in
 the README; if you cannot access the repo, stop and tell me).
 Read docs/overhaul/README.md completely (especially "Checkpoints" and "Resuming a
 phase"), then docs/overhaul/phase-0N-<slug>.md. Another Claude started this phase and
 stopped (usage limit). Resume it: fetch the remote, check out the existing branch
 overhaul/phase-N-<slug> from origin, read the phase file's Checkpoint log and the
-"Stopped at" block in its Implementation notes, run git log, git status and the smoke
+"Resume point" block in its Implementation notes (treat it as a hint, the code and tests win), run git log, git status and the smoke
 test to see the real state, then continue at the first unfinished step. Do not redo
 finished steps (verify them quickly instead). Commit and push after every sub-step.
 Do not push to main and do not merge.
@@ -55,7 +56,7 @@ Phase files:
 | 4 | [`phase-04-evidence-board.md`](phase-04-evidence-board.md) | Evidence board becomes a live dashboard + new terminal mechanics + ASCII network map (extra 8) |
 | 5 | [`phase-05-animations.md`](phase-05-animations.md) | GPU-only cinematic animations, trace-reactive effects, mobile performance budget |
 | 6 | [`phase-06-traced-game-over.md`](phase-06-traced-game-over.md) | The "TRACED" game-over sequence |
-| 7 | [`phase-07-developer-panel.md`](phase-07-developer-panel.md) | Fix and extend the localhost developer panel |
+| 7 | [`phase-07-developer-panel.md`](phase-07-developer-panel.md) | Fix and extend the developer panel (localhost + preview, never production) |
 | 8 | [`phase-08-main-site.md`](phase-08-main-site.md) | Main site: tokens, accessibility, performance |
 | 9 | [`phase-09-extras-and-polish.md`](phase-09-extras-and-polish.md) | Mobile quick-actions (extra 4), source viewer (extra 5), final QA, docs |
 
@@ -67,7 +68,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 
 | # | Phase | Status | Depends on | Branch | PR / commit | Notes |
 |---|---|---|---|---|---|---|
-| 1 | Foundation & bug fixes | in review | — | `overhaul/phase-1-foundation` | PR to `main` (see GitHub) | all 12 rows done, smoke green, see the phase file's handoff report |
+| 1 | Foundation & bug fixes | merged | — | `overhaul/phase-1-foundation` | PR #4, squash commit `841cad0` | all rows done, smoke 16/16, owner tested the preview on phone and PC; review findings carried over, see "Known issues carried over" |
 | 2 | Audio | todo | 1 | `overhaul/phase-2-audio` | | |
 | 3 | Story & boot | todo | 1 | `overhaul/phase-3-story` | | |
 | 4 | Evidence board | todo | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | | |
@@ -112,10 +113,10 @@ The repository hosts **two independent static sites**, each deployed as its own 
 ```text
 README.md                         # user-facing project README (update in phase 9)
 sites/
-  main/                           # personal site (filiposakkq.dev)
+  main/                           # personal site (filiposakkq.dev, Worker `filiposakkq`)
     wrangler.jsonc                # name: filiposakkq (must equal the Cloudflare Worker name), assets ./public
     public/ index.html (182) script.js (222) styles.css (946) favicon.svg
-  fsociety00/                     # the terminal game (fsociety00.filiposakkq.dev)
+  fsociety00/                     # the terminal game (fsociety.filiposakkq.dev, Worker `fsociety`)
     wrangler.jsonc                # name: fsociety (must equal the Cloudflare Worker name), assets ./public
     public/
       index.html (70)             # launch screen, #screen/#output/#promptLine, case trigger, shutdown + power panels
@@ -129,7 +130,7 @@ sites/
         trace.js (71)             # startTrace(): the HUD countdown
         audio.js (544)            # WebAudio engine, a ~300-line switch of procedural sounds, ambient beds
         casefile.js (705)         # evidence board; declarative EVIDENCE array at the top
-        developer-menu.js (127)   # localhost-only DEV panel
+        developer-menu.js (127)   # DEV panel (localhost + preview only)
         source.js (8)             # third part of the puzzle key (see invariants)
         rain.js, session.js, context.js, util.js, choices.js, story-choices.js   # added in phase 1 (rain canvas, abortable story session, GameContext, shared helpers)
 ```
@@ -164,7 +165,7 @@ Player flow in `story.js` `boot()` (find the numbered comments):
 - The hint chain on mobile: the terminal `source map` command lists the files and `cat page/index.html|styles.css|script` reveals each part and marks the evidence as discovered.
 - **Audio only starts after the launch gesture.** Never autoplay.
 - **`prefers-reduced-motion` must keep working**, plus the app's own `body.quiet-motion` class. The `wait()` helper resolves immediately when motion is reduced.
-- **Developer tools are localhost-only** (`isLocalDevelopment()`); nothing in them may run in production.
+- **Developer tools run only on `localhost` and Cloudflare preview hostnames** (`isLocalDevelopment()` today, to be widened in phase 7.6); nothing in them may run on the production hostnames. A hostname check is not security (it only jumps scenes, so the risk is spoilers); real protection would be Cloudflare Access on the production Worker.
 - The game must stay playable **without a server-side component** and without a build step, from a plain static host.
 - The player's real IP/location/identity must **never** be fetched or displayed. Any "LOCATION" or "IP" in a story beat is fictional or redacted (see phase 6).
 - UI language is **English**. (Existing code comments in `story.js` are a mix of Czech and English; keep new comments in English, translating nearby Czech comments is welcome but not required.)
@@ -259,14 +260,14 @@ Sessions end without warning: a usage limit, a closed tab, or a cloud container 
 2. **Commit and push after every numbered sub-step** (1.1, 1.2, …) once it is done and passed its quick check (run the smoke test when the step touches gameplay). In phases without numbering, use the rows of the phase file's Checkpoint log. If one step is big (for example phase 1's session/cancellation work), commit and push after each coherent piece instead of at the end of the step. Never wait until the whole phase is finished.
 3. **Commit message format:** `phase N.x: short imperative summary` (for example `phase 1.1: add smoke test tooling`). Include the attribution lines your environment requires.
 4. **After each push, update the phase file's Checkpoint log row** (status, short commit hash, one line of notes) and include that edit in the same or the next commit and push.
-5. **When you might be about to run out** (a long session, tool errors, a usage warning, or you simply must stop): do not start a new step. Make the tree consistent, then commit **everything**, including unfinished work, as `wip(phase N.x): …`, and push. WIP commits may be incomplete or failing, but the commit message and the notes must say so. Then add a **"Stopped at"** block at the top of the phase file's Implementation notes: exact state, what is done and what is not, which files are half edited, which test is failing and why, and the next command to run.
+5. **When you might be about to run out** (a long session, tool errors, a usage warning, or you simply must stop): do not start a new step. Make the tree consistent, then commit **everything**, including unfinished work, as `wip(phase N.x): …`, and push. WIP commits may be incomplete or failing, but the commit message and the notes must say so. Then update the **"Resume point"** block at the top of the phase file's Implementation notes (mark the previous one `(historical)`): exact state, what is done and what is not, which files are half edited, which test is failing and why, and the next command to run.
 6. **Never** push to `main`, force-push, or rewrite already pushed history (no rebase or squash of pushed commits). The next Claude relies on the commit list.
 7. Do not leave work only in the working tree. If you cannot push (no access), say so clearly in your last message and list the changed files.
 
 ### Resuming a phase
 
 1. Fetch **all** remote branches with an explicit refspec (a plain `git fetch` in a shallow cloud clone often only knows `main`): `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`. If `origin/overhaul/phase-N-<slug>` exists, check it out: `git checkout -B overhaul/phase-N-<slug> origin/overhaul/phase-N-<slug>`. If it does not exist, nothing was pushed: start the phase fresh from the latest `main`. If more than one branch exists for the same phase, stop and ask the owner which to use.
-2. Read the phase file: the **Checkpoint log**, then the **Implementation notes** (especially a "Stopped at" block). Run `git log --oneline origin/main..HEAD` and `git status` (it must be clean; if not, someone left uncommitted work, inspect it before touching anything).
+2. Read the phase file: the **Checkpoint log**, then the **Implementation notes** (especially the "Resume point" block, which may be stale). Run `git log --oneline origin/main..HEAD` and `git status` (it must be clean; if not, someone left uncommitted work, inspect it before touching anything).
 3. Run the smoke test and any tool the phase added to see the **real** state. The log can be stale, so trust the code and the tests over the notes.
 4. Continue at the first row that is not `done`. Verify the last `done` row quickly instead of redoing it.
 5. If the previous branch is badly broken, say so and either fix forward on the same branch or ask the owner; do not delete it.
@@ -275,7 +276,7 @@ Sessions end without warning: a usage limit, a closed tab, or a cloud container 
 
 The owner works in claude.ai chat sessions, not in a local editor. Every session starts in a **fresh, ephemeral Linux container**: only what is pushed to GitHub survives. Read this before touching git.
 
-1. **Get the repo.** Attach `Filiposakkq/fsociety00-dat` through the GitHub connection your session offers (an "add repo" style tool) and clone it **once**: `git clone --depth 1 https://github.com/Filiposakkq/fsociety00-dat /home/claude/fsociety00-dat` (the git proxy allows about 2 concurrent git operations; on an HTTP 429 wait 10 s and retry once, never in a loop). Give the clone a generous timeout. If you cannot access the repository, **stop and tell the owner** (the Claude GitHub app must be installed on the repo and the GitHub connection linked); never recreate the project from memory or from the docs.
+1. **Get the repo.** Attach `Filiposakkq/Website` through the GitHub connection your session offers (an "add repo" style tool) and clone it **once**: `git clone --depth 1 https://github.com/Filiposakkq/Website /home/claude/fsociety00-dat` (the git proxy allows about 2 concurrent git operations; on an HTTP 429 wait 10 s and retry once, never in a loop). Give the clone a generous timeout. If you cannot access the repository, **stop and tell the owner** (the Claude GitHub app must be installed on the repo and the GitHub connection linked); never recreate the project from memory or from the docs.
 2. **The clone is shallow and single-branch.** `git fetch --all` or `git checkout origin/<branch>` may not see other branches. Use `git fetch origin '+refs/heads/*:refs/remotes/origin/*'` (add `--depth=50` when you need history). To start work: `git checkout -b overhaul/phase-N-<slug>` then `git push -u origin overhaul/phase-N-<slug>`.
 3. **After pushing a new branch the remote-tracking ref may be missing**, which makes git (and any stop hook checking for "unpushed commits") report that the branch has no remote even though the push worked. Check the truth with `git ls-remote --heads origin <branch>` (the hash must equal `git rev-parse HEAD`), then repair locally: `git fetch origin +refs/heads/<branch>:refs/remotes/origin/<branch>` and `git config branch.<branch>.remote origin && git config branch.<branch>.merge refs/heads/<branch>`.
 4. **Commit identity:** if git has no `user.name`/`user.email`, use `git -c user.name="Claude" -c user.email="noreply@anthropic.com" commit …`, and add any attribution lines your environment asks for.
@@ -288,8 +289,8 @@ The owner works in claude.ai chat sessions, not in a local editor. Every session
 - **Catch up with `main` by merging, not rebasing:** `git fetch origin main && git merge origin/main` into your phase branch (a merge commit is fine), resolve conflicts, rerun the smoke test, push. Rebasing would rewrite pushed history, which the Checkpoints rules forbid.
 - **Merge order matters.** Phases 2, 3 and 5 can run in parallel but they may touch the same files (`story.js`, `styles.css`). The owner merges one pull request at a time; the next phase merges `main` into its branch before its final push.
 - **Do not stall on questions.** If the owner is not there to answer, pick the documented default (or the most conservative option), write the decision in the "Decisions and open questions log" below, mention it in the PR description, and keep going. Stop and ask only for things that cannot be undone or would change the story's meaning.
-- **Rollback.** A merged phase that breaks the live site is reverted with the GitHub "Revert" button on its pull request (this creates a new revert PR), or by rolling back to the previous deployment in the Cloudflare dashboard. Phases are small PRs on purpose so a revert is cheap.
-- **Spoiler note.** These docs spell out the puzzle key (`ghost` / `shell` / `1337`). That is fine while the repository is private. If the repo is ever made public, remove the key from the docs (the key in the page source is the puzzle itself and is already visible to players).
+- **Rollback.** A merged phase that breaks the live site is reverted with the GitHub "Revert" button on its pull request (this creates a new revert PR), or by rolling back to the previous deployment in the Cloudflare dashboard. Phases are small PRs on purpose so a revert is cheap. The git tag `pre-overhaul` marks the state before the overhaul (`git checkout pre-overhaul` to inspect or restore from it); see also [`merging.md`](merging.md) and [`deploy.md`](deploy.md).
+- **Spoiler note.** These docs spell out the puzzle key (`ghost` / `shell` / `1337`). The owner switches the repository between private and public, so assume the docs may be public at any time. The key in the page source is the puzzle itself and is already visible to players; before making the repo public, check that the docs still read acceptably (or remove the key from them).
 
 ### Phase size and suggested session splits
 
@@ -317,7 +318,7 @@ py -m http.server 8001 --directory sites/fsociety00/public        # Windows
 python3 -m http.server 8000 --directory sites/main/public         # main site
 ```
 
-ES modules need HTTP; `file://` does not work. `localhost` also turns on the `DEV` panel.
+ES modules need HTTP; `file://` does not work. `localhost` also turns on the `DEV` panel (so will Cloudflare preview URLs after phase 7.6).
 
 ### Standard smoke test (every phase must pass before opening a PR)
 
@@ -343,10 +344,43 @@ For CSS/animation work also take screenshots at 390×844 and 1280×800 and look 
 - [ ] Tracker table and the phase file's implementation notes updated.
 - [ ] Pull request opened with: what changed, how it was tested, screenshots if visual, anything the owner must check by hand (audio, feel).
 
+## Rules learned in phase 1
+
+- **Source of truth.** The Checkpoint log, `git log` and a fresh `node tools/smoke.mjs` run are the truth. A "Resume point" (formerly "Stopped at") or "State at handoff" block is only a hint and goes stale (a Claude cannot know when its limit ends). A Claude that resumes **re-derives the state from the code and tests first**, then rewrites that block and marks the old one `(historical)`.
+- **Commits.** Commit and push after every sub-step and after every coherent chunk inside a large sub-step. Use `wip(phase-N.M): ...` for unfinished chunks. A wip commit must not break the game; if it must, write "broken until X" in the row's notes.
+- **Verification budget.** Before a wip push run `node --check` on the changed JS files. Run the full `node tools/smoke.mjs` when a sub-step is finished and before the handoff, save its output to a file and show only the summary. Record `last green commit: <hash>` after each full run. A syntax check is not a functional test.
+- **Documentation in the same commit.** When code, tooling, config or workflow changes, update every document that describes it in the same commit (README, phase file, checkpoint log, `CLAUDE.md`). Write "unverified" next to anything that was not verified. A task is done only when code, tests and docs agree.
+- **Review-only pass.** Before a phase PR is merged, a different Claude (or the owner) runs a review-only pass: run the tools, check the "Do not break" list in `CLAUDE.md`, grep for leftovers (`fx.js`, `setRain`), timers outside the session, stale docs; report problems ranked, change nothing.
+- **Cloudflare.** Each `wrangler.jsonc` needs `"name"` equal to the Worker name (`filiposakkq`, `fsociety`) and an empty `"previews": {}` block (preview builds run `npx wrangler preview`). Never rename either Worker in the config only.
+- **Cloud container.** A "Stop hook: unpushed commit" message is often a stale local `origin/<branch>` record. Check with `git ls-remote --heads origin <branch>` before assuming a push failed.
+
+## Why phase 5 comes before phase 6
+
+Phase 5 builds the effects toolbox (compositor-only glitches, the trace HUD reactions); phase 6 composes the TRACED game over from those effects, the phase 2 sound cues and the phase 3 story engine. Building 6 first would mean building the effects twice. So the order is 5, then 6; both start from the latest `main`.
+
+## Known issues carried over (phase 1 review, 2026-10-13)
+
+None of these is a regression and none blocks the game; each has a home phase.
+
+| Issue | Home |
+|---|---|
+| 41 of 73 `@keyframes` animate `filter`, `box-shadow`, `text-shadow`, `clip-path`, `letter-spacing`, colors, `background-position`, `top`; one transition animates `top`, `left`, `font-size` (rule: only `transform`/`opacity`) | Phase 5 |
+| 26 font-size declarations below 11px in `.case-*` (player-facing on phones) and `.developer-*` (`tools/check-fonts.sh --all` lists them) | Phase 4 (`.case-*`), phase 7 (`.developer-*`) |
+| Smoke does not assert that no `AudioContext` exists before the launch click, and does not test `body.quiet-motion` without the media query | Phase 2 |
+| The DEV `boot` route calls `runStory()` directly, so the ambient-interval cleanup in `startStory`'s `finally` does not run when it ends normally (localhost only) | Phase 7 |
+| `trace.js` falls back to a raw `setInterval` when no session is passed (currently unreachable) | Phase 3 |
+| Skip control (lower right) still covers text on small phones and its idle look is a compromise: rework it (HOLD TO SKIP label, circular hold progress, placed above the prompt, 3 s hold kept, smoke test keeps using a real mouse press) | Phase 3 (skip-hold state is per session) and phase 5 (visuals) |
+| Trace timer: no per-scene policy. The HUD can hit 00:00 before the trust choice with nothing happening, it keeps running during the ghost sequence, and the times (480/120/120/60) are untuned | Phase 3 (`trace` policy in story data, task 3.5) and phase 5 (HUD look, 5.4) |
+| Trace HUD overlaps the ghost panel label on phones (docks to the top right) | Phase 5 |
+| More ways to be traced (noisy commands, honeypot file, unverified `ghost.sh`, watcher lockout) | Idea only: "Phase 10", see `docs/story/README.md`; needs owner canon decisions |
+| Real-device checks not done: screen reader, audible output, 60 fps of the rain on weak phones | Owner, on the preview of each phase |
+
 ## Decisions and open questions log
 
 | Date | Decision / question | Status |
 |---|---|---|
+| 2026-10-13 | Developer panel is available on `localhost` and on Cloudflare preview URLs, never on production. **Open:** the exact preview hostname pattern (assumed `*.workers.dev`, unverified) and whether the production Workers' own `workers.dev` URLs are disabled (otherwise the panel would show there too) | Decided by owner; pattern for the owner to confirm |
+| 2026-10-13 | "hello, friend." was off-screen in the real reveal and the ghost panel was painted under the terminal text; fixed on branch `fix/hello-center-ghost-mobile` (not part of any phase) | Done, owner to merge |
 | 2026-10-11 | Extras 1, 2, 3, 7 are out of scope; extras 4, 5, 6, 8 are in | Decided by owner |
 | 2026-10-12 | The owner uses claude.ai chat sessions (no local editor); tests happen on Cloudflare preview deploys; see "Working in a cloud chat session" | Decided by owner |
 | 2026-10-11 | Delivery: one branch + PR per phase (owner had not yet answered "PR vs straight to main"; PR is the safe default) | Default; confirm with owner |
@@ -355,3 +389,8 @@ For CSS/animation work also take screenshots at 390×844 and 1280×800 and look 
 | — | Real name of the first character is still unknown to the story. `renameEverywhere('unknown','Mr. Robot')` is the reveal. Other characters must refer to him indirectly before it | Open (story design) |
 | 2026-10-13 | Cloudflare Worker names are `fsociety` (sites/fsociety00) and `filiposakkq` (sites/main); `wrangler.jsonc` `name` must match them or Workers Builds fail. Earlier docs said `fsociety00` / `filiposakkq-dev`, which was wrong | Decided by owner, fixed on `overhaul/phase-1-foundation` |
 | 2026-10-13 | Cloudflare preview builds failed with "Your Wrangler configuration is missing a `previews` block" (they run `npx wrangler preview`). Added `"previews": {}` to both `wrangler.jsonc`. Cloudflare's docs do not say whether this changes `wrangler deploy` (production); the block is empty so it should not | Fixed on `overhaul/phase-1-foundation`; owner to confirm the preview and later the production build |
+| 2026-10-13 | The repository was renamed to `Filiposakkq/Website` (the old name still redirects for git, but the `gh` API through the cloud proxy does not follow the redirect) | Done by owner |
+| 2026-10-13 | Hostnames: Worker `fsociety` serves `fsociety.filiposakkq.dev`, Worker `filiposakkq` serves `filiposakkq.dev`. The project card link `https://fsociety.filiposakkq.dev/` is therefore correct | Decided by owner |
+| 2026-10-13 | The owner tests every phase on a phone and on desktop on the Cloudflare preview before merging; PRs are merged with "Squash and merge" | Decided by owner |
+| 2026-10-13 | The owner switches the repo between private and public; no rule about secrets in chat is added to the docs | Decided by owner |
+| 2026-10-13 | Skip control made smaller and with a more transparent background (not a lower text opacity, which fails 4.5:1) because it covered text on phones | Done in the post-phase-1 docs PR |

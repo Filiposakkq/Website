@@ -120,10 +120,10 @@ body::after {
   bottom: max(12px, env(safe-area-inset-bottom));
   display: grid;
   gap: 5px;
-  min-width: 132px;
-  padding: 7px 9px;
+  min-width: 104px;
+  padding: 5px 8px;
   border: 1px solid rgba(26, 143, 58, 0.3);
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(0, 0, 0, 0.5);
   color: var(--dim);
   opacity: 1;
   font: inherit;

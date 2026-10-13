@@ -117,7 +117,7 @@ New sounds (phase 2), data-driven story (phase 3), case board layout/fonts (phas
 
 - [ ] `node tools/smoke.mjs` passes: desktop, mobile viewport, reduced motion, trust 1 and 2, victory, game over + reboot, abort at four moments.
 - [ ] `tools/check-fonts.sh` passes (excluding `.case-*`/`.developer-*`).
-- [ ] No `window.setRain`, `window.syncRainMotion`, or `fx.js` references remain (`grep -rn "setRain\|syncRainMotion\|fx.js" sites/fsociety00`).
+- [ ] No `window.setRain`, `window.syncRainMotion`, or `fx.js` references remain (`grep -rn "setRain\|syncRainMotion\|fx.js" sites/fsociety00`). A local `const setRain` in `story.js` and a comment in `rain.js` still match the grep and are fine.
 - [ ] Keyboard: Tab order works; typing in the terminal still works.
 - [ ] A screen reader (or the accessibility tree via Playwright `page.accessibility.snapshot()`) shows the log and dialogs; typing animation does not spam the live region.
 - [ ] Screenshots at 390×844: logo padding (item 1) and the shutdown scan.
@@ -132,7 +132,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 1.1 Test and lint tooling (smoke, fonts, contrast) | done | `a51b589` | smoke 6/6 on the unmodified baseline; abort, expiry, 3rd-hint and missing-key scenarios added later (10 in total, all green at `7032663`) |
+| 1.1 Test and lint tooling (smoke, fonts, contrast) | done | `a51b589` | smoke 6/6 on the unmodified baseline; abort, expiry, 3rd-hint and missing-key scenarios added later (16 scenarios in total after the whole phase, all green at `c108716`) |
 | 1.2 Shared utilities (util.js, choices.js) | done | `055c0ea` | `util.js` (`rand`, `pad2`, `formatClock`, `scrambleText`) replaces the copies in story/trace/level01/casefile; `renderChoices` used by `promptGhost`; `grep padStart(2` and the junk charset only hit `util.js`. Desktop real-time victory smoke passes |
 | 1.3a session.js module | done | `eda836d` | `session.js`: abortable `sleep`/`wait`, tracked timers/intervals/frames, `onAbort`, `pending()`, `swallowAbort` |
 | 1.3b Convert story helpers to the session | done | `eda836d` | story helpers sleep through the module-level `session`; `boot()` is `runStory()`, wrapped by `startStory()` which only swallows aborts; logo/ambient timers, trace, Elliot echo, hello flight register with the session; skip state is a per-session `run` object |
@@ -147,7 +147,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 ## Implementation notes
 
-### State at handoff (phase 1 complete, waiting for owner review)
+### State at handoff (historical: phase 1 is merged, see the master README tracker)
 
 All rows 1.1-1.10 are `done`. **Last green commit: `5c4f941`** (full `node tools/smoke.mjs`: 14 of 16 in the parallel run; the other two, `reduced: log role...` and `desktop: trust unknown -> victory`, failed only under the 16-way parallel load and both passed when re-run alone with `--serial`). A later commit hardens the Escape check in `tools/smoke.mjs` (waits for the power panel to open first); that scenario passes alone. `tools/check-fonts.sh`: OK (skips 26 `.case-*`/`.developer-*` declarations for phases 4 and 7). `node tools/contrast.mjs --audit`: only `#000` and `#001707` (button fill colors) are listed below 4.5:1.
 
@@ -187,3 +187,7 @@ All rows 1.1-1.10 are `done`. **Last green commit: `5c4f941`** (full `node tools
 - 1.8 had left `@media (hover: none) { .skip { opacity: 0.55; } }` in `styles.css`, which re-dimmed the skip control (text and background) on touch devices and undid the contrast fix. Removed. **Unverified on a real phone.**
 - Worker names fixed: `sites/fsociety00/wrangler.jsonc` is now `fsociety`, `sites/main/wrangler.jsonc` is `filiposakkq` (the real Cloudflare Worker names); README, `docs/overhaul/README.md` and `CLAUDE.md` updated. Whether the Cloudflare preview builds now pass is **unverified** until the owner checks them.
 - The full smoke test was **not** re-run after these edits (CSS rule removal and config names only).
+
+### Merged (2026-10-13)
+
+Merged as PR #4 (squash commit `841cad0` on `main`) after: a review-only pass (smoke 16/16 at `c108716`, "Do not break" list verified, no critical findings), the Cloudflare preview fix (`previews: {}`, Worker names), and the owner's test of the preview on phone and PC. The findings that were not fixed are listed in the master README under "Known issues carried over". One owner observation, handled in the post-phase-1 docs PR: the skip control sometimes covered text on phones, so it was made smaller with a more transparent background.
