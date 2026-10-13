@@ -34,7 +34,7 @@ npx wrangler deploy --config sites/main/wrangler.jsonc
 npx wrangler deploy --config sites/fsociety00/wrangler.jsonc
 ```
 
-The `name` field in each `wrangler.jsonc` must be identical to the Worker's name in the Cloudflare dashboard, otherwise Workers Builds fail: `sites/main` is the Worker `filiposakkq` and `sites/fsociety00` is the Worker `fsociety`. Do not rename either without renaming the Worker in the dashboard (a rename creates a new Worker with a new URL).
+The `name` field in each `wrangler.jsonc` must be identical to the Worker's name in the Cloudflare dashboard, otherwise Workers Builds fail: `sites/main` is the Worker `filiposakkq` and `sites/fsociety00` is the Worker `fsociety`. Do not rename either without renaming the Worker in the dashboard (a rename creates a new Worker with a new URL). Each config also needs an (empty) `"previews": {}` block: Cloudflare's preview builds run `npx wrangler preview`, which fails without it.
 
 In Cloudflare, attach the main Worker to `filiposakkq.dev` and the fsociety00 Worker to `fsociety00.filiposakkq.dev`. Future projects can follow the same pattern: add a folder under `sites/`, give it its own static asset root and Wrangler config, and deploy it to its own hostname.
 
