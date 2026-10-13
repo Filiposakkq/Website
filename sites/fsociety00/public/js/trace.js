@@ -66,7 +66,9 @@ export function startTrace(secs = 480, { session = null, onSecond = null } = {})
       return;
     }
     render();
-    if (onSecond) onSecond(secs);
+    if (onSecond) {
+      try { onSecond(secs); } catch (error) { console.error('The trace sound failed.', error); }
+    }
     if (api.onTick) api.onTick(secs);
   }
 

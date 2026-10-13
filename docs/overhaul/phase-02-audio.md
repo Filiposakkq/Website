@@ -125,10 +125,10 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 2.1 Audit cues + audio-cues.md | done | (this commit) | all 62 existing cues + scenes mapped to callers; found `trace-tick` is not per-second today, `typing`/`ghost` unused |
+| 2.1 Audit cues + audio-cues.md | done | e68daf6 | all 62 existing cues + scenes mapped to callers; found `trace-tick` is not per-second today, `typing`/`ghost` unused |
 | 2.2 Patch table + renderer; port all existing cues | done | 25695fc | `js/audio/patches.js`, `js/audio/render.js`, `audio.js` rewritten (62 cues ported as data; names kept). Full smoke 19/19 on this commit |
 | 2.3 Ambient beds + stopBed on the audio clock | done | 25695fc | 4 beds as data, `setScene` keeps all 8 scene names, fades use `setTargetAtTime`, nodes stopped on the audio clock; crossfade click check in the lint. Owner must listen to the beds (unverified by ear) |
-| 2.4 New cues (boot, terminal, story, trace, evidence, hacking, game over) | done | (this commit) | 21 new cues + 2 aliases registered; lint 0 problems (headroom rule added). Not wired, except what 2.5 does: see `audio-cues.md` |
+| 2.4 New cues (boot, terminal, story, trace, evidence, hacking, game over) | done | e9b34e3 | 21 new cues + 2 aliases registered; lint 0 problems (headroom rule added). Not wired, except what 2.5 does: see `audio-cues.md` |
 | 2.5 Typing sounds (extra 6) + reactive trace ticks | done | ee885d4 | `key-tick` wired (real keys + auto-typing every 3rd char at 60% level), `trace-sound.js` (tick every second with `secondsLeft`, warn at 120 s, critical at 60 s and 10 s), `trace.js` `onSecond`; old threshold sounds removed from `level01.js`. Full smoke 20/20 |
 | 2.6 Session cleanup + tools/audio-lint.mjs | done | ee885d4 | abort hook: `audio.stopAll({ beds: false })` then `setScene('idle')`; `pendingNodes()` for tests (no global); lint: 108 rows, 0 problems. Full smoke 20/20 |
 | 2.7 Listening checklist in the PR | todo | | |

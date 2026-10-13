@@ -77,7 +77,7 @@ Notes from the audit:
 
 - `typing` and `ghost` have no caller today. They stay (names are never removed).
 - Before phase 2.5 `trace-tick` was not called once per second: `level01.js` played it once at 60 s and 30 s and `trace-critical` once at 10 s. Phase 2.5 moved this to `trace-sound.js` (every second, reactive).
-- `tty.js` already ignores `event.repeat` and any key that is not a single character, Backspace or Enter, so the `onKeyPress` hook never fires for modifier or navigation keys.
+- `tty.js` fires the `onKeyPress` hook only for a single character, Backspace or Enter, never for `event.repeat` and never with Ctrl, Cmd or Alt held (shortcuts; added in phase 2 after the review), so modifier, navigation and shortcut keys are silent.
 - Nothing in `casefile.js`, `trace.js`, `tty.js` or `developer-menu.js` calls the audio controller directly.
 
 ## New cues added in phase 2 (registered, wired later unless noted)

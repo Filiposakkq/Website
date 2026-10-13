@@ -14,12 +14,16 @@ export function createTraceSound(audio) {
   return (secondsLeft) => {
     if (!(secondsLeft > 0)) return; // the expiry sound belongs to the game over
     const now = secondsLeft <= 60 ? 2 : secondsLeft <= 120 ? 1 : 0;
-    if (now > level) audio.play(now === 2 ? 'trace-critical' : 'trace-warn');
+    let alarmed = false; // one alarm per tick: do not stack the crossing sound and the final countdown
+    if (now > level) {
+      audio.play(now === 2 ? 'trace-critical' : 'trace-warn');
+      alarmed = now === 2;
+    }
     level = now;
     if (secondsLeft > 10) finalSounded = false;
     else if (!finalSounded) {
       finalSounded = true;
-      audio.play('trace-critical');
+      if (!alarmed) audio.play('trace-critical');
     }
     audio.play('trace-tick', { secondsLeft });
   };

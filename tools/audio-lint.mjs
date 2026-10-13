@@ -8,7 +8,8 @@
 //   - no exception, no unknown-cue warning, no NaN/Infinity in the samples
 //   - not silent (RMS above a floor)
 //   - at least 9 dB under full scale (so nothing relies on the output limiter)
-//   - peak at or below the output ceiling (-1 dBFS) and never above 1.0
+//   - peak at or below -1 dBFS (the output limiter tops out at about -2.3 to -2.9 dBFS, so this cannot fail by itself;
+//     the headroom rule above is the real gate, and a separate check drives the limiter with an absurd gain)
 //   - silent after the cue's declared duration (it does not play longer than `audio.duration()` says)
 //   - beds: audible while running, silent after setScene('idle'), no click when crossfading between scenes
 //   - rate-limited cues admit at most `rate` plays per second
@@ -282,6 +283,56 @@ async function lintInPage({ only: filter }) {
     rows.push({ name: 'stopAll({ beds: false }) keeps the bed', kind: 'check', category: 'engine', declared: null, peak: null, rms: db(bed), tail: null, problems });
   }
 
+  // ---- 4c. the output limiter: an absurdly loud cue must still stay under -1 dBFS
+  {
+    const ctx = new OfflineAudioContext(1, RATE, RATE);
+    const loud = createAudioController({ context: ctx, random: mulberry32(13) });
+    loud.prepare();
+    loud.play('shutdown', { gain: 200 });
+    loud.play('intrusion', { gain: 200 });
+    const out = (await ctx.startRendering()).getChannelData(0);
+    let peak = 0;
+    for (const value of out) peak = Math.max(peak, Math.abs(value));
+    const problems = [];
+    if (peak > CEILING) problems.push(`limiter let ${db(peak).toFixed(2)} dBFS through`);
+    if (peak < 0.3) problems.push(`limiter test is not loud enough to prove anything (${db(peak).toFixed(1)} dBFS)`);
+    rows.push({ name: 'output limiter holds at 200x gain', kind: 'check', category: 'engine', declared: null, peak: db(peak), rms: null, tail: null, problems });
+  }
+
+  // ---- 4d. trace.js onSecond: runs on live ticks only, survives set(), stops on halt() (real time, about 5 s)
+  {
+    const { startTrace } = await import('/js/trace.js');
+    const seen = [];
+    const finals = [];
+    const trace = startTrace(2, { onSecond: (secs) => seen.push(Math.round(secs)) });
+    trace.onTick = (secs) => { if (secs === 0) finals.push(0); };
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    const problems = [];
+    if (seen.join() !== '1') problems.push(`onSecond should see only 1 s before expiry, saw [${seen}]`);
+    if (finals.length !== 1) problems.push('the final tick at 0 did not reach onTick');
+    seen.length = 0;
+    trace.set(3);
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    if (seen.length !== 1 || seen[0] !== 2) problems.push(`onSecond after set(3) should see 2, saw [${seen}]`);
+    trace.halt(true);
+    seen.length = 0;
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    if (seen.length) problems.push(`onSecond kept running after halt: [${seen}]`);
+    // A throwing sound must not stop the countdown.
+    const errors = [];
+    const originalError = console.error;
+    console.error = (...parts) => { errors.push(parts.join(' ')); };
+    const survivor = startTrace(3, { onSecond: () => { throw new Error('boom'); } });
+    let ticks = 0;
+    survivor.onTick = () => { ticks++; };
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    survivor.halt(true);
+    console.error = originalError;
+    if (ticks < 1) problems.push('a throwing onSecond stopped onTick');
+    if (!errors.some((text) => text.includes('trace sound failed'))) problems.push('a throwing onSecond was swallowed silently');
+    rows.push({ name: 'trace.js onSecond: live ticks, set, halt, errors', kind: 'check', category: 'trace', declared: null, peak: null, rms: null, tail: null, problems });
+  }
+
   // ---- 5. trace sound: thresholds, reactive parameters and re-arming (fake audio, no rendering)
   {
     const { createTraceSound } = await import('/js/trace-sound.js');
@@ -301,6 +352,11 @@ async function lintInPage({ only: filter }) {
     else if (heard.indexOf(warnAt) !== heard.findIndex((entry) => entry.name === 'trace-tick' && entry.params.secondsLeft === 120) - 1) {
       problems.push('trace-warn should come right before the 120 s tick');
     }
+    // Setting the trace straight into the last 10 s must sound one alarm, not two stacked ones.
+    const jumped = [];
+    const jump = createTraceSound({ play: (name) => jumped.push(name) });
+    jump(300); jump(8);
+    if (jumped.filter((name) => name === 'trace-critical').length !== 1) problems.push(`a jump into the last 10 s stacked alarms: ${jumped.join(',')}`);
     // A trace set back to a larger value re-arms the thresholds.
     const again = [];
     const resound = createTraceSound({ play: (name) => again.push(name) });
@@ -319,8 +375,10 @@ async function lintInPage({ only: filter }) {
       let last = 0;
       let peaks = 0;
       for (let index = 0; index < out.length; index++) {
-        if (out[index] * last < 0) crossings++;
-        if (Math.abs(out[index]) > 1e-4) last = out[index];
+        if (Math.abs(out[index]) > 1e-4) { // ignore the near-silent tail
+          if (out[index] * last < 0) crossings++;
+          last = out[index];
+        }
         peaks = Math.max(peaks, Math.abs(out[index]));
       }
       return { crossings, peaks, duration: probeAudio.duration('trace-tick', { secondsLeft }) };
@@ -329,6 +387,7 @@ async function lintInPage({ only: filter }) {
     const near = await zeroCrossings(100);
     const last = await zeroCrossings(10);
     if (!(far.peaks < near.peaks && near.peaks < last.peaks)) problems.push('trace-tick does not get louder as time drops');
+    if (!(near.crossings > far.crossings * 1.3)) problems.push(`trace-tick does not rise in pitch as time drops (zero crossings ${far.crossings} at 400 s, ${near.crossings} at 100 s)`);
     if (!(last.duration > far.duration + 0.3)) problems.push('trace-tick does not double its rate at 30 s and below');
     rows.push({ name: 'trace sound: thresholds, ticks, re-arm, reactive', kind: 'check', category: 'trace', declared: null, peak: null, rms: null, tail: null, problems });
   }

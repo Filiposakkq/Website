@@ -3,8 +3,10 @@ import { createRenderer, patchDuration } from './audio/render.js';
 
 const HELLO_CLIP_URL = CUES['hello-friend'].patch.url;
 const MASTER_GAIN = 0.52;
-/** Output ceiling: the soft clip at the end of the master chain keeps every sample below this (about -1 dBFS). */
+/** Shape of the soft clip at the end of the master chain (unity gain near zero, rounds off towards the top). */
 const CEILING = 0.89;
+/** The loudest sample the chain can output: the curve's value at full-scale input, about 0.72 (-2.9 dBFS). */
+export const OUTPUT_PEAK = CEILING * Math.tanh(1 / CEILING);
 
 /**
  * The game's audio controller: `{ unlock, setScene, play, list, duration, stopAll, dispose, pendingNodes, prepare }`.
@@ -52,7 +54,7 @@ export function createAudioController({
     compressor.release.value = 0.24;
     master.gain.value = MASTER_GAIN;
 
-    // Last stage: a soft clip. Input beyond +-1 is clamped to the curve's end, so nothing can leave above CEILING.
+    // Last stage: a soft clip. Input beyond +-1 is clamped to the curve's end, so nothing can leave above OUTPUT_PEAK.
     const limiter = context.createWaveShaper();
     const curve = new Float32Array(2049);
     for (let index = 0; index < curve.length; index++) {
@@ -125,6 +127,7 @@ export function createAudioController({
     }
     voiceClip.currentTime = 0;
     void voiceClip.play().catch((error) => {
+      if (error?.name === 'AbortError') return; // stopAll() paused the clip while it was starting: expected
       console.error('The hello friend voice clip could not be played.', error);
     });
   }
@@ -235,8 +238,10 @@ export function createAudioController({
   function stopAll({ beds = true } = {}) {
     if (renderer) renderer.stopAll({ beds });
     if (beds) activeBed = null;
-    voiceClip.pause();
-    voiceClip.currentTime = 0;
+    if (voiceReady) {
+      voiceClip.pause();
+      voiceClip.currentTime = 0;
+    }
   }
 
   /** `stopAll()` and forget the scene. The controller can be used again afterwards. */

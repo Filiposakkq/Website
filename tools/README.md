@@ -43,11 +43,14 @@ node tools/audio-lint.mjs --json          # machine-readable
 
 Loads `js/audio.js` in headless Chromium and renders everything through an `OfflineAudioContext`
 (seeded random, so a run is repeatable). Checks, per cue (and per sample parameter set of a reactive cue):
-no exception, no `console.warn` (unknown cue), no NaN/Infinity, not silent (RMS floor), peak at or below the
--1 dBFS output ceiling, and silence after the duration `audio.duration()` declares. For beds: audible while
+no exception, no `console.warn` (unknown cue), no NaN/Infinity, not silent (RMS floor), a peak at least 9 dB
+under full scale (the real loudness gate: nothing may rely on the output limiter), and silence after the duration
+`audio.duration()` declares. The master chain's soft clip tops out near -2.3 to -2.9 dBFS, so the "-1 dBFS" check cannot fail
+by itself; a separate row drives two cues at 200x gain to prove the limiter holds. For beds: audible while
 running, silent after `setScene('idle')` (nodes stopped on the audio clock), no click when crossfading
 through every scene. Also: rate-limited cues admit at most `rate` plays per second, and `stopAll()` leaves no
-pending source node and no sound. Exit code 1 on any problem. The voice clip is a file and is skipped.
+pending source node and no sound, `trace-sound.js` thresholds and `trace.js` `onSecond` (about 5 s of real time).
+Exit code 1 on any problem. The voice clip is a file and is skipped.
 It judges numbers, not taste: the owner still has to listen (listening checklist in the phase 2 PR).
 
 ## `check-fonts.sh` — minimum font size

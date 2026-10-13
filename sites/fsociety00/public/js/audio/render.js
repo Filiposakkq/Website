@@ -25,11 +25,10 @@ export function envelope(param, start, peak, duration, attack = 0.035) {
   const attackEnd = start + rise;
   const end = start + length;
   param.setValueAtTime(FLOOR, start);
-  param.exponentialRampToValueAtTime(Math.max(FLOOR * 2, peak), attackEnd);
+  param.exponentialRampToValueAtTime(Number.isFinite(peak) ? Math.max(FLOOR * 2, peak) : FLOOR * 2, attackEnd);
   param.exponentialRampToValueAtTime(FLOOR, end);
   return { attackEnd, end };
 }
-
 
 /**
  * Fades a gain param to silence from whatever value it has at `now`. Uses setTargetAtTime, which starts from
@@ -179,7 +178,7 @@ export function createRenderer({ context, destination, noiseBuffer, random = Mat
     carrier.type = patch.wave;
     carrier.frequency.setValueAtTime(patch.freq, start);
     modulator.frequency.setValueAtTime(patch.freq * patch.ratio, start);
-    modGain.gain.setValueAtTime(patch.freq * patch.index, start);
+    modGain.gain.setValueAtTime(Math.max(1, patch.freq * patch.index), start);
     if (sweep) {
       carrier.frequency.exponentialRampToValueAtTime(Math.max(1, patch.freqEnd), start + duration);
       modulator.frequency.exponentialRampToValueAtTime(Math.max(1, patch.freqEnd * patch.ratio), start + duration);
