@@ -39,7 +39,7 @@ Read docs/overhaul/README.md completely (especially "Checkpoints" and "Resuming 
 phase"), then docs/overhaul/phase-0N-<slug>.md. Another Claude started this phase and
 stopped (usage limit). Resume it: fetch the remote, check out the existing branch
 overhaul/phase-N-<slug> from origin, read the phase file's Checkpoint log and the
-"Stopped at" block in its Implementation notes, run git log, git status and the smoke
+"Resume point" block in its Implementation notes (treat it as a hint, the code and tests win), run git log, git status and the smoke
 test to see the real state, then continue at the first unfinished step. Do not redo
 finished steps (verify them quickly instead). Commit and push after every sub-step.
 Do not push to main and do not merge.
@@ -259,14 +259,14 @@ Sessions end without warning: a usage limit, a closed tab, or a cloud container 
 2. **Commit and push after every numbered sub-step** (1.1, 1.2, …) once it is done and passed its quick check (run the smoke test when the step touches gameplay). In phases without numbering, use the rows of the phase file's Checkpoint log. If one step is big (for example phase 1's session/cancellation work), commit and push after each coherent piece instead of at the end of the step. Never wait until the whole phase is finished.
 3. **Commit message format:** `phase N.x: short imperative summary` (for example `phase 1.1: add smoke test tooling`). Include the attribution lines your environment requires.
 4. **After each push, update the phase file's Checkpoint log row** (status, short commit hash, one line of notes) and include that edit in the same or the next commit and push.
-5. **When you might be about to run out** (a long session, tool errors, a usage warning, or you simply must stop): do not start a new step. Make the tree consistent, then commit **everything**, including unfinished work, as `wip(phase N.x): …`, and push. WIP commits may be incomplete or failing, but the commit message and the notes must say so. Then add a **"Stopped at"** block at the top of the phase file's Implementation notes: exact state, what is done and what is not, which files are half edited, which test is failing and why, and the next command to run.
+5. **When you might be about to run out** (a long session, tool errors, a usage warning, or you simply must stop): do not start a new step. Make the tree consistent, then commit **everything**, including unfinished work, as `wip(phase N.x): …`, and push. WIP commits may be incomplete or failing, but the commit message and the notes must say so. Then update the **"Resume point"** block at the top of the phase file's Implementation notes (mark the previous one `(historical)`): exact state, what is done and what is not, which files are half edited, which test is failing and why, and the next command to run.
 6. **Never** push to `main`, force-push, or rewrite already pushed history (no rebase or squash of pushed commits). The next Claude relies on the commit list.
 7. Do not leave work only in the working tree. If you cannot push (no access), say so clearly in your last message and list the changed files.
 
 ### Resuming a phase
 
 1. Fetch **all** remote branches with an explicit refspec (a plain `git fetch` in a shallow cloud clone often only knows `main`): `git fetch origin '+refs/heads/*:refs/remotes/origin/*'`. If `origin/overhaul/phase-N-<slug>` exists, check it out: `git checkout -B overhaul/phase-N-<slug> origin/overhaul/phase-N-<slug>`. If it does not exist, nothing was pushed: start the phase fresh from the latest `main`. If more than one branch exists for the same phase, stop and ask the owner which to use.
-2. Read the phase file: the **Checkpoint log**, then the **Implementation notes** (especially a "Stopped at" block). Run `git log --oneline origin/main..HEAD` and `git status` (it must be clean; if not, someone left uncommitted work, inspect it before touching anything).
+2. Read the phase file: the **Checkpoint log**, then the **Implementation notes** (especially the "Resume point" block, which may be stale). Run `git log --oneline origin/main..HEAD` and `git status` (it must be clean; if not, someone left uncommitted work, inspect it before touching anything).
 3. Run the smoke test and any tool the phase added to see the **real** state. The log can be stale, so trust the code and the tests over the notes.
 4. Continue at the first row that is not `done`. Verify the last `done` row quickly instead of redoing it.
 5. If the previous branch is badly broken, say so and either fix forward on the same branch or ask the owner; do not delete it.
@@ -345,7 +345,7 @@ For CSS/animation work also take screenshots at 390×844 and 1280×800 and look 
 
 ## Rules learned in phase 1
 
-- **Source of truth.** The Checkpoint log, `git log` and a fresh `node tools/smoke.mjs` run are the truth. A "Stopped at" or "State at handoff" block is only a hint and goes stale (a Claude cannot know when its limit ends). A Claude that resumes **re-derives the state from the code and tests first**, then rewrites that block and marks the old one `(historical)`.
+- **Source of truth.** The Checkpoint log, `git log` and a fresh `node tools/smoke.mjs` run are the truth. A "Resume point" (formerly "Stopped at") or "State at handoff" block is only a hint and goes stale (a Claude cannot know when its limit ends). A Claude that resumes **re-derives the state from the code and tests first**, then rewrites that block and marks the old one `(historical)`.
 - **Commits.** Commit and push after every sub-step and after every coherent chunk inside a large sub-step. Use `wip(phase-N.M): ...` for unfinished chunks. A wip commit must not break the game; if it must, write "broken until X" in the row's notes.
 - **Verification budget.** Before a wip push run `node --check` on the changed JS files. Run the full `node tools/smoke.mjs` when a sub-step is finished and before the handoff, save its output to a file and show only the summary. Record `last green commit: <hash>` after each full run. A syntax check is not a functional test.
 - **Documentation in the same commit.** When code, tooling, config or workflow changes, update every document that describes it in the same commit (README, phase file, checkpoint log, `CLAUDE.md`). Write "unverified" next to anything that was not verified. A task is done only when code, tests and docs agree.
