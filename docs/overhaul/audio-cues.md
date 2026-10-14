@@ -39,38 +39,38 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `transmission` | story | `story-data/intro.js` |
 | `incoming-call` | story | `output.js` `typingFor` |
 | `mail-arrive` | story | `story-data/intro.js` |
-| `logo` | story | `story.js` `logo` |
+| `logo` | story | `logo.js` |
 | `puzzle-start` | story | `story-data/intro.js` |
-| `hello-move` | story | `story.js` `moveHelloIntoChat` |
-| `hello-friend` | story | `story.js` `playIdentityReveal`: **plays the mp3 clip, not a synth**; needs `unlock()` first |
-| `identity` | story | `story.js` `playIdentityReveal` |
-| `identity-hit` | story | `story.js` `playIdentityReveal` |
+| `hello-move` | story | `reveal.js` `moveHelloIntoChat` (via `story-data/ending.js`) |
+| `hello-friend` | story | `story-data/ending.js` (sfx node): **plays the mp3 clip, not a synth**; needs `unlock()` first |
+| `identity` | story | `story-data/ending.js` |
+| `identity-hit` | story | `story-data/ending.js` |
 | `elliot-echo` | story | `level01.js` `showElliotEcho`, and `unlock elliot` |
 | `ghost` | story | no caller found (defined, unused) |
 | `ghost-transition` | story | `story-data/ghost.js` |
 | `ghost-step` | story | `ghost.js` `setStep` |
 | `ghost-scan` | story | `story-data/ghost.js`, `story.js` DEV route `ghosted` |
 | `ghost-command` | story | `story-data/ghost.js` (twice: `close_trace`, `disconnect_peer`) |
-| `ghosted-stamp` | story | `story.js` `redact`, DEV route |
+| `ghosted-stamp` | story | `story-data/ending.js` (sfx node), `story.js` DEV route |
 | `trace-appear` | trace | `story.js` `createTrace` (the intro's `trace start` node) |
 | `trace-tick` | trace | `trace-sound.js`, called once per second by `trace.js` (`onSecond`, attached in `story.js` `createTrace`) with `{ secondsLeft }` |
 | `trace-status` | trace | `level01.js` command `trace` |
 | `trace-warning` | trace | `story-data/boot.js` (the warnings after the partition scan) |
 | `trace-critical` | trace | `trace-sound.js`: when the trace crosses 60 s and again at 10 s |
-| `trace-expired` | trace | `story.js` `gameOver` (when the reason is a trace expiry) |
-| `static` | glitch | `story.js` `flash`, `glitch`, `staticBurst` |
-| `corrupt` | glitch | `story.js` `corrupt` |
-| `signal` | glitch | `story-data/ghost.js`, `story.js` `watcherTakeover` |
-| `glitch-rgb` | glitch | `story.js` `gfx('rgb')`, DEV route |
-| `glitch-slice` | glitch | `story.js` `gfx('slice')` |
-| `glitch-roll` | glitch | `story.js` `gfx('roll')` |
-| `glitch-invert` | glitch | `story.js` `gfx('invert')` |
-| `glitch-zoom` | glitch | `story.js` `gfx('zoom')` |
-| `intrusion` | game over | `story-data/ghost.js`, `story.js` `watcherTakeover` |
-| `disconnect` | game over | `story.js` `watcherTakeover` and the end of the intrusion stages in `runStory` |
-| `shutdown` | game over | `story.js` `gameOver` |
-| `shutdown-stage` | game over | `story.js` `gameOver` (each phase except the last) |
-| `power-cut` | game over | `story.js` `gameOver` (last phase) |
+| `trace-expired` | trace | `endings.js` `gameOver` (when the reason is a trace expiry) |
+| `static` | glitch | `fx-screen.js` `flash`, `glitch`, `staticBurst` |
+| `corrupt` | glitch | `fx-screen.js` `corrupt` |
+| `signal` | glitch | `story-data/ghost.js`, `endings.js` `watcherTakeover` |
+| `glitch-rgb` | glitch | `fx-screen.js` `gfx('rgb')`, DEV route |
+| `glitch-slice` | glitch | `fx-screen.js` `gfx('slice')` |
+| `glitch-roll` | glitch | `fx-screen.js` `gfx('roll')` |
+| `glitch-invert` | glitch | `fx-screen.js` `gfx('invert')` |
+| `glitch-zoom` | glitch | `fx-screen.js` `gfx('zoom')` |
+| `intrusion` | game over | `story-data/ghost.js`, `endings.js` `watcherTakeover` |
+| `disconnect` | game over | `endings.js` `watcherTakeover` (last intrusion stage) and `story-data/intro.js` |
+| `shutdown` | game over | `endings.js` `gameOver` |
+| `shutdown-stage` | game over | `endings.js` `gameOver` (each phase except the last) |
+| `power-cut` | game over | `endings.js` `gameOver` (last phase) |
 | `reboot` | game over | `story.js` `resetGame` |
 
 Notes from the audit:
@@ -107,11 +107,11 @@ Aliases (different name, same sound; `audio.list()` marks them `kind: 'alias'`):
 |---|---|
 | `idle` | `armSession`, `resetGame` (silence, no bed) |
 | `boot` | `launchStory`, `resetGame`, DEV route |
-| `story` | `runStory`, `playIdentityReveal` (end), DEV route |
+| `story` | `story-data/ending.js`, DEV route |
 | `puzzle` | `runStory`, `finishSequence`, `watcherTakeover`, DEV route |
 | `ghost` | `runGhost`, DEV route |
-| `reveal` | `playIdentityReveal` |
-| `shutdown` | `gameOver` |
+| `reveal` | `story-data/ending.js` |
+| `shutdown` | `endings.js` `gameOver` |
 | `intrusion` | `watcherTakeover` |
 
 Beds (data in `BEDS`, also accepted by name in `setScene`): `ambient-boot` (scene `boot`), `ambient-story` (scenes `story`, `reveal`, `ghost`, as three flavours of one bed), `ambient-puzzle` (scene `puzzle`), `ambient-traced` (scenes `shutdown`, `intrusion`).

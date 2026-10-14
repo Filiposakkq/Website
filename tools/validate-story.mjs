@@ -53,7 +53,7 @@ function createRecordingHost({ picks = {}, onRun = null } = {}) {
   const cues = new Set();
   const note = (entry) => log.push(entry);
   const host = {
-    line: (text = '') => note(`line:${text}`),
+    line: (text = '') => { note(`line:${text}`); return { fake: 'element' }; },
     type: async (text) => note(`type:${text}`),
     say: async (text, options) => {
       note(`say:${options.who}:${typeof text === 'string' ? text : text.map((part) => part.t).join('')}`);
@@ -75,6 +75,7 @@ function createRecordingHost({ picks = {}, onRun = null } = {}) {
     corrupt: async () => note('corrupt'),
     blackout: async () => note('blackout'),
     setRain: (opacity) => note(`rain:${opacity}`),
+    screenClass: (name, on) => note(`class:${name}:${on}`),
     logo: async (words) => note(`logo:${words.join(' ')}`),
     wipe: async () => note('wipe'),
     trace: (action) => note(`trace:${action.do}${action.secs !== undefined ? `:${action.secs}` : ''}${action.mode ? `:${action.mode}` : ''}`),

@@ -5,6 +5,7 @@ import { rand } from '../util.js';
 
 const withStyle = (node, style) => (style ? { ...node, style } : node);
 
+/** `extra`: `{ ref: 'name' }` keeps the printed element for later `run` nodes (flow.refs.name). */
 export const line = (text, style, extra = {}) => ({ ...withStyle({ type: 'line', text }, style), ...extra });
 export const blank = () => ({ type: 'blank' });
 export const type = (text, style, speed) => ({ ...withStyle({ type: 'type', text }, style), ...(speed ? { speed } : {}) });
@@ -30,6 +31,8 @@ export const burst = (ms) => ({ type: 'static', ...(ms ? { ms } : {}) });
 export const corrupt = (rounds) => ({ type: 'corrupt', ...(rounds ? { rounds } : {}) });
 export const blackout = (ms) => ({ type: 'blackout', ...(ms ? { ms } : {}) });
 export const rain = (opacity, immediate = false) => ({ type: 'rain', opacity, ...(immediate ? { immediate } : {}) });
+/** Adds (on) or removes a class of the screen element, e.g. `ghosted-hit`. */
+export const screenClass = (name, on = true) => ({ type: 'class', name, ...(on ? {} : { on }) });
 export const logo = (...words) => ({ type: 'logo', words });
 export const wipe = () => ({ type: 'wipe' });
 /** Trace actions: start { secs, mode }, dock, boost { rate }, slow, set { secs }, mode { mode }, close. */

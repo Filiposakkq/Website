@@ -204,7 +204,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 3.4 Intro + transmission migrated | done | ae37c3c | `story-data/intro.js`; transcript = baseline byte for byte (smoke 19/20 in one parallel run, the typing-ticks scenario is the known flaky one, passes alone) |
 | 3.5 Trust choice + branches migrated | done | ae37c3c | `story-data/routes.js`, generic `chooseOption`; trace policy (Design 3.5): `trace.js` modes + `close()`, `TRACE` constants, `trust-choice` and `trace-start` cues wired; smoke 20/20 incl. new TRACE CLOSED assertion; audio-lint 0 problems |
 | 3.6 Ghost route migrated | done | (this commit) | `story-data/ghost.js` (unlock to the end of the script) + `js/ghost.js` (prompt and panel); transcript = baseline; smoke 20/20 |
-| 3.7 Identity reveal + endings migrated | todo | | |
+| 3.7 Identity reveal + endings migrated | done | (this commit) | `story-data/ending.js` + `endings.js` (game over / takeover text), modules `fx-screen.js` `logo.js` `endings.js` `reveal.js`; story.js 1010 -> ~480 lines; transcript = 3.6 (0 differing lines); smoke 20/20; validate-story ok |
 | 3.8 Command registry (migrate all existing commands) | todo | | |
 | 3.9 Realistic Linux commands | todo | | |
 | 3.10 story.js cleanup (< ~400 lines) + dialogue polish + audio-cues.md | todo | | |
@@ -213,7 +213,12 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
 
-### Resume point (2026-10-14, session 1, after 3.6)
+### Resume point (2026-10-14, session 1, after 3.7)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.7 (full smoke 20/20 on a snapshot, `validate-story` passes, transcript diff vs 3.6 = 0 lines; audio-lint `trace` row flaked once under load and passed alone).
+- Next: 3.8 command registry (`js/commands.js`, migrate every `level01.js` command; then `host.legacy.level` goes), 3.9 Linux commands, 3.10 cleanup (story.js under ~400 lines, currently ~480), dialogue polish, `CHANGELOG.md`, handoff report, PR.
+
+### Resume point (2026-10-14, session 1, after 3.6) (historical)
 
 - Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.6 (full smoke 20/20 on a snapshot, `node tools/validate-story.mjs` passes, transcript diff vs the baseline = boot text only).
 - Engine segments: `boot`, `intro`, `choice` (trust choice, routes, trace reset, then the Level 01 shell as a legacy `run` node that ends the run on game over), `ending` (unlock, watcher, ghost prompt and script as nodes, then `legacyEnding` in `story.js`).

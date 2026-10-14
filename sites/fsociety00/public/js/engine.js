@@ -20,7 +20,7 @@
 const spec = (req = [], opt = []) => ({ req, opt });
 
 export const NODE_SPECS = {
-  line: spec(['text'], ['style', 'silent']),
+  line: spec(['text'], ['style', 'silent', 'ref']),
   blank: spec(),
   type: spec(['text'], ['style', 'speed', 'silent']),
   say: spec(['who', 'text'], ['speed', 'typoAt', 'cls', 'floating', 'ref']),
@@ -40,6 +40,7 @@ export const NODE_SPECS = {
   corrupt: spec([], ['rounds']),
   blackout: spec([], ['ms']),
   rain: spec(['opacity'], ['immediate']),
+  class: spec(['name'], ['on']),
   logo: spec(['words']),
   wipe: spec(),
   trace: spec(['do'], ['secs', 'rate', 'mode']),
@@ -223,6 +224,7 @@ export function validateStory(story, known = {}) {
  * @property {(rounds?: number) => Promise<void>} corrupt
  * @property {(ms?: number) => Promise<void>} blackout
  * @property {(opacity: number, immediate?: boolean) => void} setRain
+ * @property {(name: string, on: boolean) => void} screenClass   adds or removes a class on the screen element
  * @property {(words: string[]) => Promise<void>} logo
  * @property {() => Promise<void>} wipe
  * @property {(action: object) => void} trace
@@ -274,7 +276,10 @@ export function createEngine({ story, host, session, pace, events = {}, executeR
   }
 
   const EXEC = {
-    line: (n) => host.line(val(n.text), val(n.style) ?? '', { silent: Boolean(n.silent) }),
+    line: (n) => {
+      const element = host.line(val(n.text), val(n.style) ?? '', { silent: Boolean(n.silent) });
+      if (n.ref) refs[n.ref] = element;
+    },
     blank: () => host.line(),
     type: (n) => host.type(val(n.text), val(n.style) ?? '', val(n.speed) ?? 35, { silent: Boolean(n.silent) }),
     say: async (n) => {
@@ -299,6 +304,7 @@ export function createEngine({ story, host, session, pace, events = {}, executeR
     corrupt: (n) => host.corrupt(val(n.rounds)),
     blackout: (n) => host.blackout(val(n.ms)),
     rain: (n) => host.setRain(val(n.opacity), Boolean(n.immediate)),
+    class: (n) => host.screenClass(val(n.name), n.on !== false),
     logo: (n) => host.logo(val(n.words)),
     wipe: () => host.wipe(),
     trace: (n) => host.trace(resolveFields(n, ['do', 'secs', 'rate', 'mode'])),
