@@ -1,6 +1,6 @@
 # Architecture and rules
 
-Valid after: phase 2 (PR #7), `main` `2a9abad`, verified 2026-10-14. Verify claims with `grep`, not line numbers.
+Valid after: phase 3.1 (branch `overhaul/phase-3-story`; rest as phase 2, `main` `2a9abad`), verified 2026-10-14. Verify claims with `grep`, not line numbers.
 
 ## Core ideas
 
@@ -12,7 +12,9 @@ Valid after: phase 2 (PR #7), `main` `2a9abad`, verified 2026-10-14. Verify clai
 
 | File | Role |
 |---|---|
-| `session.js` | Session: `sleep`, `wait`, `setTimeout`, `setInterval`, frames, `onAbort`, `throwIfAborted`, `pending()`, `currentSession()`, `swallowAbort` |
+| `session.js` | Session: `sleep`, `wait`, `flush()` (ends every pending sleep now, used by a skip), `setTimeout`, `setInterval`, frames, `onAbort`, `throwIfAborted`, `pending()`, `currentSession()`, `swallowAbort` |
+| `pace.js` | `createPace({ session, motionReduced })`: `wait(ms)` collapses when skipping or when motion is reduced, `sleep(ms)`, `setFast(bool)`, `isSkipping()`. One per session |
+| `engine.js` | The narrative engine: `createEngine`, `compileStory`, `validateStory`, `NODE_SPECS`. No DOM, importable in Node. See `story.md` |
 | `context.js` | `createGameContext(parts)`, typedef and `REQUIRED` list |
 | `util.js` | `SCRAMBLE_CHARSET`, `rand`, `randomChar`, `pad2`, `formatClock`, `scrambleText` |
 | `choices.js` | `renderChoices({ container, options, onPick, className })` |

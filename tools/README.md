@@ -33,6 +33,20 @@ Notes:
 - Audio cannot be heard in headless runs. The smoke only checks that nothing throws, that no `AudioContext` exists before the launch click, and that a reboot leaves no source node running (a test-only probe installed with `addInitScript`; the game exposes no global). Levels and tails are in `audio-lint.mjs`.
 - A full run takes a few minutes because the story runs in real time (scenarios run in parallel).
 
+## `validate-story.mjs` — story data and engine check (phase 3)
+
+```sh
+node tools/validate-story.mjs            # self-test, then validate and dry-run the story data
+node tools/validate-story.mjs --verbose  # also list the cues and labels the story uses
+```
+
+Needs no browser and no server (about a second). Step 1 runs small fixture stories through the engine and checks
+that it reports every kind of mistake (unknown node type or field, missing label, bad cue, choice without a target ...)
+and that branches, choices, `end` and the skip rules behave. Step 2 loads `js/story-data/index.js`, validates it
+against the real registries (`js/audio/patches.js` cues and scenes, the case file API in `js/casefile.js`, the glitch
+names) and walks the story with a recording host once per combination of choices. `run` nodes (bespoke visual beats)
+are not called in a dry run, so it proves the node graph, not what the screen looks like. Exit code 1 on any problem.
+
 ## `transcript.mjs` — playthrough text recorder and differ (phase 3)
 
 ```sh

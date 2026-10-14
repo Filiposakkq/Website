@@ -198,7 +198,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 3.1 Engine + node types + tools/validate-story.mjs | todo | | |
+| 3.1 Engine + node types + tools/validate-story.mjs | done | (hash in the next row's commit) | `js/engine.js`, `js/pace.js`, `session.flush()`, `tools/validate-story.mjs` (self-test only; no story data yet). Engine is not driving the game before 3.3 |
 | 3.2 Skip logic as segment fast-forward | todo | | |
 | 3.3 Realistic boot data (incl. the sdb9 hook) | todo | | |
 | 3.4 Intro + transmission migrated | todo | | |
@@ -213,7 +213,14 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
 
-### Resume point (2026-10-14, session 1 start)
+### Resume point (2026-10-14, session 1, after 3.1)
+
+- Branch `overhaul/phase-3-story` from `main` `33c7b94`. `last green commit`: none recorded on this branch yet (baseline `main` 33c7b94: 18/20 smoke scenarios in a parallel run, the 2 that failed passed when run alone, see the baseline note below).
+- Done: 3.1 (engine, pace, `session.flush()`, validator). `node tools/validate-story.mjs` passes its self-test.
+- In progress: nothing half edited. Next step: 3.2 + 3.3 together in practice, because the skip control only means something once the boot runs through the engine: create `js/story-data/` (dsl, voices, constants, boot, index), `js/output.js` (line, type, say, bar, klog, svc ... moved out of `story.js`), `js/skip-control.js`, and make `story.js` run the `boot` segment through the engine first, then the old `runStory` for the rest until 3.4 to 3.7 migrate it.
+- Tools to hand: `node tools/transcript.mjs --out=<dir>` (baseline recordings of `main` 33c7b94 were made into the session scratchpad and are not committed; record them again from a checkout of `33c7b94`), `node tools/validate-story.mjs`, `node tools/smoke.mjs`.
+
+### Resume point (2026-10-14, session 1 start) (historical)
 
 - Branch `overhaul/phase-3-story`, created from `main` `33c7b94`. Head commit: see `git log`.
 - `last green commit`: none yet (no smoke run on this branch).
@@ -221,3 +228,9 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
 - Nothing broken, nothing half edited. No code has been changed yet.
 - Next: re-verify the "Current state" section of this file against the code, then start 3.1 (engine, node types, `tools/validate-story.mjs`).
 
+
+### 3.1 notes (2026-10-14)
+
+- **Baseline smoke on `main` 33c7b94 (before any change):** 18/20 in the parallel run; `reduced: typing ticks are rate limited...` (30 instant keystrokes started 14 click nodes) and `desktop: trust unknown -> victory` (90 s timeout waiting for the trust choice) failed under load and both passed when rerun alone (5 s and 158 s). This is the known flakiness in `tools/README.md`. Judge later runs against it: rerun failures alone before concluding anything.
+- **Engine design decisions.** Segments carry the skip policy (`skippable: 'boot' | 'intro'`, `announce`); a skip is `pace.setFast(true)` plus `session.flush()` (new, wakes every pending sleep without aborting), so a skip takes effect at once instead of after the current wait. `sfx`, `gfx`, `flash`, `static`, `corrupt` and `wait` nodes are dropped while skipping; text, `scene`, `trace`, `state`, `case` and `run` nodes still run. The next segment ends the fast-forward. Branches compile to jumps, so there is one flat program and a real pointer for `engine.getState()`.
+- **Validator.** `tools/validate-story.mjs` checks node fields strictly (a misspelled field is an error) and dry-runs every combination of choices with a recording host; `run` nodes are not called in a dry run.
