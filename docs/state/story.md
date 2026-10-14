@@ -1,6 +1,6 @@
 # Story, level and evidence code
 
-Platí po: fáze 2 (PR #7), `main` `2a9abad`, ověřeno 2026-10-14. The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
+Valid after: phase 2 (PR #7), `main` `2a9abad`, verified 2026-10-14. The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
 
 | File | Role |
 |---|---|

@@ -13,7 +13,7 @@ These files describe the code **as it is on `main` now**, split by area so that 
 ## Rules for keeping them true
 
 1. **Every phase PR updates the files it affects, in the same commit as the code** (CLAUDE.md rule 7). Reviewers check this ("docs sync" in the PR template).
-2. Each file starts with a line "Platí po: ... commit ..." (valid after). Update it when you re-verify or change the file. Mark anything not verified as "unverified".
+2. Each file starts with a line "Valid after: ... commit ...". Update it when you re-verify or change the file. Mark anything not verified as "unverified".
 3. Describe **what is, not what was**: no "after phase N" sections. History belongs in the phase file, the CHANGELOG and git.
 4. Never trust line numbers or line counts for long; find code with `grep`.
 5. Spoilers: these files may name story mechanics but never print the Level 01 key.

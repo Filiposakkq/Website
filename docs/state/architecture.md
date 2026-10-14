@@ -1,6 +1,6 @@
 # Architecture and rules
 
-Platí po: fáze 2 (PR #7), `main` `2a9abad`, ověřeno 2026-10-14. Verify claims with `grep`, not line numbers.
+Valid after: phase 2 (PR #7), `main` `2a9abad`, verified 2026-10-14. Verify claims with `grep`, not line numbers.
 
 ## Core ideas
 

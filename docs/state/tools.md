@@ -1,6 +1,6 @@
 # Tools and tests
 
-Platí po: fáze 2 (PR #7), `main` `2a9abad`, ověřeno 2026-10-14. Details, options and cost notes: [`../../tools/README.md`](../../tools/README.md).
+Valid after: phase 2 (PR #7), `main` `2a9abad`, verified 2026-10-14. Details, options and cost notes: [`../../tools/README.md`](../../tools/README.md).
 
 - `node tools/smoke.mjs` (20 scenarios, ~3 min in parallel): both trust routes, abort at every stage, trace expiry, reduced and quiet motion, audio cues and no AudioContext before the click, developer routes. Two scenarios were flaky once in a parallel run (see tools/README.md). It cannot judge looks or sound.
 - `node tools/audio-lint.mjs`: renders every cue and bed offline, checks NaN, silence, peak, headroom, crossfade clicks, trace-sound logic.

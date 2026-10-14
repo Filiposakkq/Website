@@ -1,6 +1,6 @@
 # UI, CSS and the developer panel
 
-Platí po: fáze 2 (PR #7), `main` `2a9abad`, ověřeno 2026-10-14.
+Valid after: phase 2 (PR #7), `main` `2a9abad`, verified 2026-10-14.
 
 | File | Role |
 |---|---|
