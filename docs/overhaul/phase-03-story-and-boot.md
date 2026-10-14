@@ -207,7 +207,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 3.7 Identity reveal + endings migrated | done | (this commit) | `story-data/ending.js` + `endings.js` (game over / takeover text), modules `fx-screen.js` `logo.js` `endings.js` `reveal.js`; story.js 1010 -> ~480 lines; transcript = 3.6 (0 differing lines); smoke 20/20; validate-story ok |
 | 3.8 Command registry (migrate all existing commands) | done | (this commit) | `commands.js` + `story-data/level01.js`; `level01.js` registers every command; `help` generated; new smoke scenario `registry commands, flavor commands and clear` |
 | 3.9 Realistic Linux commands | done | (this commit) | `system-commands.js` + `story-data/system.js`; validate-story checks (doc-range IPs only, ghost.sh PID 1337, eth0:1, :4444 redacted, no key text); transcript diff = help + new commands only; smoke 21/21 |
-| 3.10 story.js cleanup (< ~400 lines) + dialogue polish + audio-cues.md | todo | | |
+| 3.10 story.js cleanup (< ~400 lines) + dialogue polish + audio-cues.md | in progress | (this commit) | story.js 299 lines (`modals.js`, `power-ui.js`, `dev-routes.js`; `host.legacy` removed); smoke 21/21; transcript = 3.8; dialogue polish, CHANGELOG and handoff still to do |
 
 ## Implementation notes
 

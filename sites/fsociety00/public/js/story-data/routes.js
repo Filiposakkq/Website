@@ -81,7 +81,7 @@ const traceReset = [
   wait(600),
   blank(),
   label('level'),
-  run(async (host, flow) => { if (!(await host.legacy.level(flow.state.trusted))) flow.end(); }, 'legacy: the Level 01 shell (3.8); ends the run on game over'),
+  run(async (host, flow) => { if (!(await host.runLevel(flow.state.trusted))) flow.end(); }, 'the Level 01 shell (commands.js registry); ends the run on game over'),
 ];
 
 export const routes = [

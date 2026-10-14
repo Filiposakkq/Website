@@ -3,7 +3,7 @@
 // Segment policy: the boot can be skipped with the hold control, the intro (the transmission up to the trust
 // question) can be skipped to the choice, the rest cannot.
 //
-// MIGRATION (phase 3): the Level 01 shell (3.8) still runs as a `run` node that calls the old code (`host.legacy`).
+// The Level 01 shell (the puzzle prompt) is a `run` node in routes.js that calls `host.runLevel`.
 
 import { boot } from './boot.js';
 import { intro } from './intro.js';
