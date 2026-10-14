@@ -1,6 +1,6 @@
 # Tools and tests
 
-Valid after: phase 3.1 (branch `overhaul/phase-3-story`; smoke as of `main` `2a9abad`), verified 2026-10-14. Details, options and cost notes: [`../../tools/README.md`](../../tools/README.md).
+Valid after: phase 3.5 (branch `overhaul/phase-3-story`; smoke as of `main` `2a9abad`), verified 2026-10-14. Details, options and cost notes: [`../../tools/README.md`](../../tools/README.md).
 
 - `node tools/smoke.mjs` (20 scenarios; it expects the boot header `FSOC-BIOS v3.1.4`, ~3 min in parallel): both trust routes, abort at every stage, trace expiry, reduced and quiet motion, audio cues and no AudioContext before the click, developer routes. Two scenarios were flaky once in a parallel run (see tools/README.md). It cannot judge looks or sound.
 - `node tools/transcript.mjs --out=<dir>` / `--diff=<a>,<b>`: records the terminal text of four scripted playthroughs (reduced motion) and compares two recordings; used to prove a refactor kept the story text.

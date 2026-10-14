@@ -302,9 +302,11 @@ async function lintInPage({ only: filter }) {
   // ---- 4d. trace.js onSecond: runs on live ticks only, survives set(), stops on halt() (real time, about 5 s)
   {
     const { startTrace } = await import('/js/trace.js');
+    const { createSession } = await import('/js/session.js');
+    const session = createSession(); // startTrace needs one since phase 3; the lint never aborts it
     const seen = [];
     const finals = [];
-    const trace = startTrace(2, { onSecond: (secs) => seen.push(Math.round(secs)) });
+    const trace = startTrace(2, { session, mode: 'lethal', onSecond: (secs) => seen.push(Math.round(secs)) });
     trace.onTick = (secs) => { if (secs === 0) finals.push(0); };
     await new Promise((resolve) => setTimeout(resolve, 2500));
     const problems = [];
@@ -322,7 +324,7 @@ async function lintInPage({ only: filter }) {
     const errors = [];
     const originalError = console.error;
     console.error = (...parts) => { errors.push(parts.join(' ')); };
-    const survivor = startTrace(3, { onSecond: () => { throw new Error('boom'); } });
+    const survivor = startTrace(3, { session, mode: 'lethal', onSecond: () => { throw new Error('boom'); } });
     let ticks = 0;
     survivor.onTick = () => { ticks++; };
     await new Promise((resolve) => setTimeout(resolve, 1300));
@@ -330,6 +332,36 @@ async function lintInPage({ only: filter }) {
     console.error = originalError;
     if (ticks < 1) problems.push('a throwing onSecond stopped onTick');
     if (!errors.some((text) => text.includes('trace sound failed'))) problems.push('a throwing onSecond was swallowed silently');
+    // Trace modes (phase 3.5): running holds at the floor (TRACE PENDING, cannot expire), lethal goes on to zero,
+    // frozen holds, close() reads TRACE CLOSED.
+    {
+      const label = () => document.querySelector('#hud .lbl').textContent;
+      const mode = startTrace(11, { session });
+      let ended = false;
+      mode.onEnd = () => { ended = true; };
+      await new Promise((resolve) => setTimeout(resolve, 2300));
+      if (mode.left() !== 10) problems.push(`a running trace should hold at 10 s, is at ${mode.left()}`);
+      if (label() !== 'TRACE PENDING') problems.push(`a running trace at the floor should read TRACE PENDING, reads ${label()}`);
+      if (ended) problems.push('a running trace expired');
+      mode.setMode('frozen');
+      const held = mode.left();
+      await new Promise((resolve) => setTimeout(resolve, 1300));
+      if (mode.left() !== held) problems.push('a frozen trace kept counting');
+      mode.setMode('lethal');
+      mode.set(2);
+      await new Promise((resolve) => setTimeout(resolve, 2300));
+      if (!ended) problems.push('a lethal trace did not expire');
+      mode.halt(true); // removes its HUD, so the next label() reads the closing trace
+      const closing = startTrace(30, { session, mode: 'lethal' });
+      closing.close();
+      if (label() !== 'TRACE CLOSED' || closing.isRunning()) problems.push('close() should stop the clock and read TRACE CLOSED');
+      closing.setMode('lethal');
+      if (closing.isRunning()) problems.push('a closed trace was restarted by setMode');
+      closing.halt(true);
+      let threw = false;
+      try { startTrace(5); } catch { threw = true; }
+      if (!threw) problems.push('startTrace without a session should throw');
+    }
     rows.push({ name: 'trace.js onSecond: live ticks, set, halt, errors', kind: 'check', category: 'trace', declared: null, peak: null, rms: null, tail: null, problems });
   }
 

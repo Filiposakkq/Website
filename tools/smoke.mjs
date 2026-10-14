@@ -179,6 +179,9 @@ async function winGame(page) {
   await ghost.waitFor({ timeout: 90000 });
   await ghost.click();
   await waitOutput(page, 'this is where the signal ends.', 240000);
+  // The ghost script closed the trace request (phase 3.5): the HUD says so and the clock is stopped.
+  const closed = await page.evaluate(() => document.querySelector('#hud .lbl')?.textContent);
+  if (closed !== 'TRACE CLOSED') throw new Error(`after ghost.sh the HUD should read TRACE CLOSED, reads ${closed}`);
   // Victory is an exit path too: the logo's ambient jitter and every other timer must be gone.
   await sleep(500);
   const pending = await page.evaluate(async () => (await import('/js/session.js')).currentSession().pending());

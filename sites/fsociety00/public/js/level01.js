@@ -1,6 +1,7 @@
 import { sourcePartThree, whisperSourcePart } from './source.js';
 import { formatClock } from './util.js';
 import { isAbortError } from './session.js';
+import { TRACE } from './story-data/constants.js';
 
 export const level01Hints = [
   'three parts. inspect the page layers: markup, styles, and script.',
@@ -174,7 +175,7 @@ export function createLevel01(ctx) {
           line('  ls             list files');
           line('  cat <file>     read a file');
           line('  unlock <key>   try a key on sdb9');
-          line('  hint           ask for help (-30s)');
+          line(`  hint           ask for help (-${TRACE.hintCost}s)`);
           line('  trace          show monitoring status');
           line('  board          review the evidence and decision log');
           line('  source map     inspect source clues (mobile-friendly)');
@@ -289,8 +290,8 @@ export function createLevel01(ctx) {
             line('no more hints.', 'dim');
             break;
           }
-          trace.set(Math.max(5, trace.left() - 30));
-          line('[trace -30s]', 'warn');
+          trace.set(Math.max(5, trace.left() - TRACE.hintCost));
+          line(`[trace -${TRACE.hintCost}s]`, 'warn');
           await say(level01Hints[hints++], { speed: 35 });
           if (hints === level01Hints.length) {
             revealSourcePart();

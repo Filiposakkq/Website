@@ -14,16 +14,16 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `boot-memory` | boot | no caller since phase 3.3 (the boot plays `boot-memtest` instead; kept, names are never removed) |
 | `boot-prompt` | boot | `story-data/boot.js` (BIOS) |
 | `boot-checkpoint` | boot | `story-data/boot.js` (BIOS) |
-| `kernel-tick` | boot | `story.js` `klog` (every 3rd kernel line) |
+| `kernel-tick` | boot | `output.js` `klog` (every 3rd kernel line) |
 | `kernel-start` | boot | `story-data/boot.js` (GRUB to kernel) |
-| `service` | boot | `story.js` `svc` (start of a service line) |
+| `service` | boot | `output.js` `svc` (start of a service line) |
 | `service-ready` | boot | `output.js` `svc` (state `OK`) |
-| `drive-seek` | boot | `story.js` `runStory` |
+| `drive-seek` | boot | `story-data/boot.js` |
 | `relay-hop` | boot | no caller since phase 3.3 (the new boot has no relay hops; kept) |
 | `network-lock` | boot | no caller since phase 3.3 (kept) |
 | `disk-unseal` | boot | no caller since phase 3.3 (kept) |
-| `terminal-open` | boot | `story.js` `cmd` (a typed command appears) |
-| `typewriter-start` | terminal | `story.js` `type` (start of each typed line) |
+| `terminal-open` | boot | `output.js` `cmd` (a typed command appears) |
+| `typewriter-start` | terminal | `output.js` `type` (start of each typed line) |
 | `typing` | terminal | no caller found (defined, unused) |
 | `key-tap` | terminal | no caller since phase 2.5 (replaced by `key-tick`; kept, names are never removed) |
 | `command-submit` | terminal | `story.js` `onKeyPress` when the key is Enter |
@@ -32,15 +32,15 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `hint` | terminal | `level01.js` command `hint` |
 | `success` | terminal | `level01.js` `unlock` (correct key); `story.js` `setStep` (last ghost step) |
 | `failure` | terminal | `level01.js` `unlock` (wrong key); `output.js` `svc` plays `boot-fail` instead since phase 3.3 |
-| `progress-start` | terminal | `story.js` `bar` |
-| `progress-tick` | terminal | `story.js` `bar` (every 4th step) |
-| `progress-complete` | terminal | `story.js` `bar` |
-| `message` | story | `story.js` `say` |
-| `transmission` | story | `story.js` `runStory` |
-| `incoming-call` | story | `story.js` `typingFor` |
-| `mail-arrive` | story | `story.js` `runStory` |
+| `progress-start` | terminal | `output.js` `bar` |
+| `progress-tick` | terminal | `output.js` `bar` (every 4th step) |
+| `progress-complete` | terminal | `output.js` `bar` |
+| `message` | story | `output.js` `say` |
+| `transmission` | story | `story-data/intro.js` |
+| `incoming-call` | story | `output.js` `typingFor` |
+| `mail-arrive` | story | `story-data/intro.js` |
 | `logo` | story | `story.js` `logo` |
-| `puzzle-start` | story | `story.js` `runStory` |
+| `puzzle-start` | story | `story-data/intro.js` |
 | `hello-move` | story | `story.js` `moveHelloIntoChat` |
 | `hello-friend` | story | `story.js` `playIdentityReveal`: **plays the mp3 clip, not a synth**; needs `unlock()` first |
 | `identity` | story | `story.js` `playIdentityReveal` |
@@ -52,10 +52,10 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `ghost-scan` | story | `story.js` `finishSequence`, DEV route |
 | `ghost-command` | story | `story.js` `finishSequence`, `watcherTakeover` |
 | `ghosted-stamp` | story | `story.js` `redact`, DEV route |
-| `trace-appear` | trace | `story.js` `createTrace` |
+| `trace-appear` | trace | `story.js` `createTrace` (the intro's `trace start` node) |
 | `trace-tick` | trace | `trace-sound.js`, called once per second by `trace.js` (`onSecond`, attached in `story.js` `createTrace`) with `{ secondsLeft }` |
 | `trace-status` | trace | `level01.js` command `trace` |
-| `trace-warning` | trace | `story.js` `runStory` (the failed-trace warning in the boot) |
+| `trace-warning` | trace | `story-data/boot.js` (the warnings after the partition scan) |
 | `trace-critical` | trace | `trace-sound.js`: when the trace crosses 60 s and again at 10 s |
 | `trace-expired` | trace | `story.js` `gameOver` (when the reason is a trace expiry) |
 | `static` | glitch | `story.js` `flash`, `glitch`, `staticBurst` |
@@ -92,8 +92,8 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `key-tick` | terminal | **phase 2, wired**: real keystrokes (`story.js` `onKeyPress`) and auto-typing in `type`, `cmd`, `say` (every 3rd character, `{ gain: 0.6 }`) |
 | `cmd-run`, `cmd-fail` | terminal | phase 3 (Linux commands) |
 | `ghost-appear` | story | phase 3 (story engine) |
-| `trust-choice` | story | phase 3 (story engine, the trust choice) |
-| `trace-start` | trace | phase 3 (trace policy) |
+| `trust-choice` | story | **phase 3.5, wired**: `story-data/routes.js`, right after the player picks |
+| `trace-start` | trace | **phase 3.5, wired**: `story.js` engine host, when the trace turns `lethal` (after the trust choice) |
 | `trace-warn` | trace | **phase 2, wired**: `trace-sound.js` when the trace crosses 120 s |
 | `evidence-unlock`, `evidence-decrypt`, `board-open`, `node-select` | evidence | phase 4 |
 | `decrypt-progress` (12 per second max), `packet-intercept`, `relay-connect`, `breach-alert` | hacking | phase 4 |

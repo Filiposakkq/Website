@@ -67,7 +67,6 @@ function startServer() {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close() })));
 }
 
-let bootRows = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const waitOutput = (page, text, timeout = 60000) => page.waitForFunction(
   (needle) => document.getElementById('output').textContent.includes(needle), text, { timeout });
@@ -124,21 +123,25 @@ async function shellTour(page, commands) {
 const COMMON = ['help', 'ls', 'cat readme.txt', 'cat notes.txt', 'cat sdb9.lock', 'cat', 'cat nothing.txt',
   'source', 'source map', 'view-source', 'cat page/index.html', 'cat page/styles.css', 'trace', 'board', 'frobnicate'];
 
+// Reduced motion wipes the screen right after some lines, so capture the rows from inside the page the moment a
+// marker line appears, then wait for it.
+async function captureWhen(page, marker) {
+  await page.evaluate((needle) => {
+    const output = document.getElementById('output');
+    new MutationObserver(() => {
+      if (window.__rows || !output.textContent.includes(needle)) return;
+      window.__rows = [...output.children].map((el) => el.textContent.replace(/\u00a0/g, ' ').trimEnd());
+    }).observe(output, { childList: true, subtree: true, characterData: true });
+  }, marker);
+  await page.click('#initialize');
+  await page.waitForFunction(() => window.__rows, null, { timeout: 90000 });
+  return page.evaluate(() => window.__rows);
+}
+
 const scenarios = {
   // The BIOS is wiped from the screen by the story, so the end-of-run dumps never contain it.
-  async boot(page) {
-    // Reduced motion wipes the screen right after the last boot line, so capture it from inside the page.
-    await page.evaluate(() => {
-      const output = document.getElementById('output');
-      new MutationObserver(() => {
-        if (window.__bootRows || !output.textContent.includes('trace request failed.')) return;
-        window.__bootRows = [...output.children].map((el) => el.textContent.replace(/\u00a0/g, ' ').trimEnd());
-      }).observe(output, { childList: true, subtree: true, characterData: true });
-    });
-    await page.click('#initialize');
-    await page.waitForFunction(() => window.__bootRows, null, { timeout: 60000 });
-    bootRows = await page.evaluate(() => window.__bootRows);
-  },
+  boot: (page) => captureWhen(page, 'trace request failed.'),
+  transmission: (page) => captureWhen(page, 'wiping session...'),
   async 'unknown-victory'(page) {
     await boot(page, 'unknown', 'click');
     await shellTour(page, [...COMMON, 'cat inbox/001.msg', 'cat watcher/session.log', 'verify', 'verify relay', 'abort',
@@ -187,9 +190,9 @@ await Promise.all(Object.entries(scenarios).map(async ([name, run]) => {
   page.on('console', (msg) => { if (msg.type() === 'error' && !/hello friend voice clip/i.test(msg.text())) problems.push(`console.error: ${msg.text()}`); });
   try {
     await page.goto(server.url);
-    await run(page);
+    const captured = await run(page); // a scenario may return rows it captured itself
     await sleep(500);
-    const text = name === 'boot' ? `${bootRows.map(normalize).join('\n')}\n` : await dump(page);
+    const text = captured ? `${captured.map(normalize).join('\n')}\n` : await dump(page);
     await writeFile(path.join(outDir, `${name}.txt`), text);
     console.log(`ok    ${name}${problems.length ? `  (${problems.length} problem(s): ${problems[0]})` : ''}`);
   } catch (error) {

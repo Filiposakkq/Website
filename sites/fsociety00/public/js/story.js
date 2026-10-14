@@ -14,9 +14,10 @@ import { createCaseFile } from './casefile.js';
 import { rand, pad2, scrambleText } from './util.js';
 import { renderChoices } from './choices.js';
 import { createRain } from './rain.js';
-import { chooseTrust } from './story-choices.js';
+import { chooseOption } from './story-choices.js';
 import { story as storyData } from './story-data/index.js';
 import { VOICES } from './story-data/voices.js';
+import { TRACE } from './story-data/constants.js';
 
 const out = document.getElementById('output');
 const screen = document.getElementById('screen');
@@ -53,10 +54,12 @@ const caseFile = createCaseFile({
   trigger: document.getElementById('caseTrigger'),
   getTraceLeft: () => activeTrace?.left() ?? null,
 });
-const createTrace = (seconds) => {
+// `mode` is the trace policy (trace.js): the story data starts it `running` (it cannot expire) and turns it
+// `lethal` after the trust choice. Code that jumps straight into the puzzle asks for `lethal`.
+const createTrace = (seconds, mode = 'running') => {
   activeTrace?.halt(true);
   audio.play('trace-appear');
-  activeTrace = startTrace(seconds, { session, onSecond: createTraceSound(audio) });
+  activeTrace = startTrace(seconds, { session, mode, onSecond: createTraceSound(audio) });
   return activeTrace;
 };
 document.body.classList.toggle('quiet-motion', motionPreference.matches);
@@ -475,8 +478,8 @@ async function watcherTakeover(trace) {
   overlay.appendChild(frame);
   document.body.appendChild(overlay);
   screen.classList.add('intrusion');
-  trace.set(60);
-  trace.boost(8);
+  trace.set(TRACE.takeover);
+  trace.boost(TRACE.takeoverRate);
 
   const feed = frame.querySelector('.breach-feed');
   const progress = frame.querySelector('.breach-track span');
@@ -739,7 +742,7 @@ async function runGhost(trace) {
   audio.play('ghost-command');
   await cmd('close_trace --session relay', 40, 300);
   line('monitor: trace request closed');
-  trace.kill();
+  trace.close();
   audio.play('signal');
   setStep(1);
   await flash();
@@ -922,7 +925,7 @@ async function revealName(trace, trusted) {
   line('[ALERT] watcher remote session still active (pts/1)', 'warn');
   line('[ALERT] trace request ETA 02:00', 'warn');
   trace.slow();
-  trace.set(120);
+  trace.set(TRACE.afterUnlock);
   await gfx('rgb');
   await wait(800);
   await say('he is still on the line.', { speed: 45 });
@@ -1018,256 +1021,10 @@ function branchDialogueForWatcher(investigation) {
     : 'you chose the watcher. his channel stayed open until the script closed it.';
 }
 
-// MIGRATION (phase 3): the boot is story data (story-data/boot.js). The intro and the rest still live in these two
-// functions until steps 3.4 to 3.7 turn them into nodes. The engine calls them through `host.legacy`.
-async function legacyIntro() {
-  await flash();
-  await staticBurst(500);
-  await gfx('roll');
-  await blackout(1500);
-  setRain(0.22);
-  audio.setScene('story');
-
-  // 9) příběh
-  await wait(900);
-  line('*** INCOMING TRANSMISSION ***', 'warn');
-  audio.play('transmission');
-  await wait(700);
-  line('source: unknown', 'dim');
-  await wait(500);
-  line('direct line open.', 'dim');
-  await wait(1800);
-  line();
-
-  const story = [];
-  await typingFor(2600);
-
-  const hello = await say("you're right on time.", { cls: 'big', speed: 150 });
-  story.push(hello);
-  await wait(1500);
-  await glitchHello(hello);
-  await wait(1400);
-
-  await typingFor(1800);
-  story.push(await say('i\'ve been waiting for you.', { speed: 80 }));
-  await wait(1800);
-  story.push(await say('you shouldn\'t be here.', { speed: 75, typoAt: 4 }));
-  await wait(1300);
-  story.push(await say('but you are.', { cls: 'warn', speed: 100 }));
-  await wait(1700);
-  story.push(await say('there is something hidden in this system.', { speed: 55 }));
-  await wait(1100);
-  story.push(await say('find it before they do.', { speed: 55 }));
-  await wait(1500);
-  story.push(await say('they are already looking for you.', { cls: 'warn', speed: 70 }));
-  await gfx('invert');
-  await corrupt(8);
-  await wait(1200);
-  line();
-  line('*** unknown disconnected ***', 'warn');
-  await wait(1000);
-  line('wiping session...', 'dim');
-  await wait(900);
-  await wipe([...out.children]); // smaže celou obrazovku, ne jen část
-  await wait(400);
-  await flash();
-  await blackout(1600);
-
-  await logo(['FSOCIETY']);
-  await gfx('zoom');
-  line('//  access level: GUEST  //', 'dim');
-  await wait(900);
-  line();
-
-  // pokračování
-  await svc('Opening guest session.');
-  await svc('Checking inbox...', 'OK', 900);
-  line();
-  line('1 unread message', '');
-  audio.play('mail-arrive');
-  await wait(600);
-  line('from:    unknown', 'dim');
-  await wait(300);
-  line('subject: sdb9', 'dim');
-  await wait(1000);
-  line();
-  await cmd('cat ~/inbox/001.msg');
-  line();
-  await type('the partition is not empty.', '', 35);
-  await wait(1000);
-  await type('it is locked.', '', 35);
-  await wait(1200);
-  await type('the key is not in this system.', '', 35);
-  await wait(1000);
-  await type('it is hidden in the page itself.', 'warn', 40);
-  await wait(1200);
-  await type('look closer.', 'warn', 90);
-  await wait(1200);
-  line();
-
-  // zadání první úrovně
-  line('=== LEVEL 01 :: THE KEY ===');
-  audio.play('puzzle-start');
-  await gfx('rgb');
-  await wait(500);
-  line('target:    /dev/sdb9', 'dim');
-  await wait(250);
-  line('status:    LOCKED', 'warn');
-  await wait(250);
-  line('attempts:  3', 'dim');
-  await wait(250);
-  line('key:       ????????', 'dim');
-  await wait(1100);
-  line();
-  await typingFor(2200);
-  await say('you have 8 minutes.', { speed: 80 });
-  await wait(1300);
-  await say('make them count.', { cls: 'warn', speed: 110 });
-  await wait(1100);
-  line();
-  // odpočet se ukáže uprostřed obrazovky, chvíli tam visí a pak se přesune do rohu
-  const trace = createTrace(480);
-  audio.setScene('puzzle');
-  await wait(2800);
-  await gfx('rgb');
-  await wait(600);
-  trace.dock();
-  await wait(1500);
-
-  // pokračování: přerušená zpráva, poplach, ztráta spojení
-  await typingFor(2000);
-  audio.play('disconnect');
-  await say('listen carefully.', { speed: 80 });
-  await wait(1300);
-  await say('sdb9 holds a list.', { speed: 70 });
-  await wait(1200);
-  await say('everyone they have erased.', { speed: 70 });
-  await wait(1400);
-  await say('and the key to open it is-', { speed: 95 });
-  await gfx('rgb');
-  await staticBurst(600);
-  line();
-  line('*** connection lost ***', 'warn');
-  await wait(1200);
-  line('[ALERT] IDS: unexpected outbound session observed', 'warn');
-  await wait(500);
-  line(`[ALERT] ${ip()} flagged`, 'warn');
-  await wait(500);
-  line('[ALERT] trace rate doubled', 'warn');
-  trace.boost();
-  await corrupt(6);
-  await gfx('roll');
-  await wait(900);
-  line();
-  line('reconnecting...', 'dim');
-  await wait(1800);
-  line('reconnect failed.', 'warn');
-  await wait(1200);
-  line();
-  await type('you are on your own now.', '', 45);
-  await wait(1000);
-  await type('hint: not everything is visible.', 'dim', 35);
-  await wait(500);
-  await type('hint: inspect everything.', 'dim', 35);
-  await wait(1200);
-  line();
-
-  // otočka: na linku se vlomí někdo jiný
-  await wait(1200);
-  line('*** new connection: watcher ***', 'warn');
-  await staticBurst(350);
-  await wait(900);
-  const W = { name: 'watcher', nameCls: 'warn', cls: 'warn' };
-  await typingFor(1500, 'watcher', 'warn');
-  await say('i see you.', { ...W, speed: 60 });
-  await wait(1100);
-  await say([{ t: '<unknown>', cls: 'ok' }, { t: ' has been lying to you.' }], { ...W, speed: 45 });
-  await wait(1000);
-  await say('there is no key.', { ...W, speed: 70 });
-  await wait(1200);
-  await say('there is only the trace.', { ...W, speed: 70 });
-  await gfx('slice');
-  trace.boost(3);
-  line('[ALERT] second remote login detected: watcher', 'warn');
-  await wait(900);
-  line('*** unknown reconnected ***', 'dim');
-  await staticBurst(300);
-  await wait(600);
-  await say('don\'t listen to him.', { speed: 55, typoAt: 3 });
-  await wait(900);
-  await say('he wants you to stop looking.', { speed: 55 });
-  await wait(1000);
-  await say('keep going.', { cls: 'warn', speed: 90 });
-  await wait(900);
-  await say('the answer is in the page.', { speed: 70 });
-  await gfx('rgb');
-  await corrupt(6);
-  await wait(1000);
-  line();
-  await type('who do you trust?', 'dim', 60);
-  await wait(1200);
-  line();
-}
-
-async function legacyRest() {
-  const W = { name: 'watcher', nameCls: 'warn', cls: 'warn' };
-  const trace = activeTrace; // created by the intro
-  let trusted = null; // who the player chose: 'unknown' | 'watcher'
-
-  // výběr: klepnutí na možnost, nebo napsat příkaz přímo do terminálu
-  trusted = await chooseTrust({ out, line, cmd, terminal: sessionTerminal });
-  caseFile.chooseTrust(trusted);
-  line();
-  await wait(700);
-
-  if (trusted === 'unknown') {
-    await say('good.', { speed: 90 });
-    await wait(900);
-    await say('i wasn\'t sure you would.', { speed: 60 });
-    await wait(900);
-    await say('i can\'t tell you my name yet.', { speed: 60 });
-    await wait(900);
-    await say('they listen for it.', { speed: 70 });
-    await wait(1000);
-    line('[ALERT] watcher: connection hostile', 'warn');
-    await gfx('slice');
-    await typingFor(1200, 'watcher', 'warn');
-    await say('he can\'t say it because he does not trust you.', { ...W, speed: 45 });
-    await wait(900);
-    await say('ignore him.', { speed: 55 });
-  } else {
-    await say('smart.', { ...W, speed: 80 });
-    await wait(900);
-    await say([{ t: '<unknown>', cls: 'ok' }, { t: ' wants you inside sdb9.' }], { ...W, speed: 55 });
-    await wait(1000);
-    await say('ask yourself why.', { ...W, speed: 70 });
-    await wait(1100);
-    await say('type abort. close the session before it logs you.', { ...W, speed: 50 });
-    await wait(900);
-    await gfx('rgb');
-    await staticBurst(500);
-    line('*** unknown reconnected ***', 'dim');
-    await wait(700);
-    await say('don\'t-', { speed: 120 });
-    await gfx('slice');
-    await say('he is lying. read the readme.', { speed: 45 });
-  }
-
-  await wait(1200);
-  line();
-  line('[ALERT] monitoring interval recalculated', 'warn');
-  await wait(600);
-  trace.slow();
-  trace.set(120);
-  line('ETA RESET: 02:00', 'dim');
-  await wait(900);
-  await typingFor(1500);
-  await say('two minutes. no extensions.', { cls: 'warn', speed: 70 });
-  await wait(900);
-  await say('type help.', { speed: 90 });
-  await wait(600);
-  line();
-
+// MIGRATION (phase 3): the boot and the intro are story data (story-data/). The rest still lives in legacyRest()
+// until steps 3.5 to 3.7 turn it into nodes. The engine calls it through `host.legacy`.
+async function legacyLevel(trusted) {
+  const trace = activeTrace; // created by the intro, made lethal by the trust choice
   const opened = await level01()(trace, trusted);
   if (!opened) return;
   await revealName(trace, trusted);
@@ -1298,18 +1055,24 @@ const engineHost = {
   wipe: () => wipe([...out.children]),
   trace: (action) => {
     switch (action.do) {
-      case 'start': createTrace(action.secs); break;
+      case 'start': createTrace(action.secs, action.mode ?? 'running'); break;
       case 'dock': activeTrace?.dock(); break;
       case 'boost': activeTrace?.boost(action.rate); break;
       case 'slow': activeTrace?.slow(); break;
       case 'set': activeTrace?.set(action.secs); break;
+      case 'mode':
+        activeTrace?.setMode(action.mode);
+        if (action.mode === 'lethal') audio.play('trace-start');
+        break;
+      case 'close': activeTrace?.close(); break;
       default: throw new Error(`trace action "${action.do}" is not implemented yet`);
     }
   },
-  choose: async () => { throw new Error('no choice nodes exist yet'); },
+  choose: (node) => chooseOption({ out, line, cmd, terminal: sessionTerminal }, node.options),
   get caseFile() { return caseFile; },
   // MIGRATION: removed step by step in 3.4 to 3.7.
-  legacy: { intro: () => legacyIntro(), rest: () => legacyRest() },
+  glitchHello: (element) => glitchHello(element),
+  legacy: { level: (trusted) => legacyLevel(trusted) },
 };
 
 function buildContext() {
@@ -1387,13 +1150,13 @@ async function runDeveloperRoute(route) {
   } else if (route === 'puzzle' || route === 'puzzle-watcher') {
     audio.setScene('puzzle');
     line(`LOCAL TEST ROUTE // LEVEL 01 // ${trusted.toUpperCase()}`, 'dim');
-    const trace = createTrace(120);
+    const trace = createTrace(TRACE.afterTrust, 'lethal');
     trace.dock();
     const opened = await level01()(trace, trusted);
     if (opened) await revealName(trace, trusted);
   } else if (route === 'ending') {
     audio.setScene('ghost');
-    const trace = createTrace(120);
+    const trace = createTrace(TRACE.afterTrust, 'lethal');
     trace.dock();
     await revealName(trace, trusted);
   } else if (route === 'identity') {
@@ -1431,7 +1194,7 @@ async function runDeveloperRoute(route) {
     }
   } else if (route === 'takeover') {
     audio.setScene('puzzle');
-    const trace = createTrace(60);
+    const trace = createTrace(TRACE.takeover, 'lethal');
     trace.dock();
     await watcherTakeover(trace);
     trace.halt(true);
