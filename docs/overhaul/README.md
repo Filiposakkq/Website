@@ -70,7 +70,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 |---|---|---|---|---|---|---|
 | 1 | Foundation & bug fixes | merged | — | `overhaul/phase-1-foundation` | PR #4, squash commit `841cad0` | all rows done, smoke 16/16, owner tested the preview on phone and PC; review findings carried over, see "Known issues carried over" |
 | 2 | Audio | merged | 1 | `overhaul/phase-02-audio` | PR #7, squash commit `b0ea8ee` | all rows done, smoke 20/20, audio-lint 0 problems; **not yet listened to**: owner checklist "Phase 2 only" |
-| 3 | Story & boot | in progress | 1 | `overhaul/phase-3-story` | | started 2026-10-14 from `main` `33c7b94` |
+| 3 | Story & boot | in review | 1 | `overhaul/phase-3-story` | PR: see the phase file handoff | all rows 3.1–3.10 done, smoke 21/21, validate-story ok; **not heard/seen**: new boot sounds and length (~38 s est.), phone layout of the new boot; see the handoff report |
 | 4 | Evidence board | todo | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | | |
 | 5 | Animations | todo | 1 (3 recommended) | `overhaul/phase-5-animations` | | |
 | 6 | TRACED game over | todo | 1, 2, 3, 5 | `overhaul/phase-6-traced` | | |
@@ -195,7 +195,7 @@ Numbering follows `source/code-review.md`. "Verified" notes record what was foun
 | 2 | Trace timer never stops | 1 | **Confirmed.** `trace.js` never clears the interval when `secs` hits 0 (see Phase 1 for the `set()` re-arm subtlety) |
 | 3 | Web Audio envelope scheduling | 1 (minimal), 2 (replaced) | **Confirmed.** `envelope()` in `audio.js` still ramps to `start + 0.035` regardless of `duration` |
 | 4 | Async reentrancy / no cancellation | 1 | **Confirmed.** `resetGame()` and `runDeveloperRoute()` both call `void boot()` without cancelling the previous run |
-| 5 | `story.js` is a 1.6k-line monolith | 3 | **Confirmed** (1658 lines) |
+| 5 | `story.js` is a 1.6k-line monolith | 3 | **Fixed in phase 3** (about 300 lines); remove this row when the PR is merged |
 | 6 | `createLevel01` takes 13 loose parameters | 1 (introduce context), 3 (use it) | **Confirmed** (13 destructured params) |
 | 7 | Narrative logic in `tty.js` (`chooseTrust`) | 1 | **Confirmed** |
 | 8 | `window.setRain` / `syncRainMotion` globals | 1 | **Confirmed.** 12 lines in `story.js` reference `setRain` |

@@ -1,6 +1,6 @@
 # Story, level and evidence code
 
-Valid after: phase 3.6 (branch `overhaul/phase-3-story`; the rest of this file is as of phase 2, `main` `2a9abad`), verified 2026-10-14. The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
+Valid after: phase 3.10 (handoff) (branch `overhaul/phase-3-story`; the rest of this file is as of phase 2, `main` `2a9abad`), verified 2026-10-14. The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
 
 | File | Role |
 |---|---|

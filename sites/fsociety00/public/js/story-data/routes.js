@@ -35,7 +35,7 @@ const unknownRoute = [
   line('[ALERT] watcher: connection hostile', 'warn'),
   gfx('slice'),
   typing(1200, 'watcher'),
-  say('watcher', "he can't say it because he does not trust you.", { speed: 45 }),
+  say('watcher', "he cannot say it. he does not trust you.", { speed: 45 }),
   wait(900),
   say('unknown', 'ignore him.', { speed: 55 }),
   goto('trace-reset'),
