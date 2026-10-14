@@ -30,7 +30,7 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `list-hit` | terminal | `level01.js` commands `help`, `ls` |
 | `file-read` | terminal | `level01.js` commands `cat`, `evidence`, `view-source` |
 | `hint` | terminal | `level01.js` command `hint` |
-| `success` | terminal | `level01.js` `unlock` (correct key); `story.js` `setStep` (last ghost step) |
+| `success` | terminal | `level01.js` `unlock` (correct key); `ghost.js` `setStep` (last ghost step) |
 | `failure` | terminal | `level01.js` `unlock` (wrong key); `output.js` `svc` plays `boot-fail` instead since phase 3.3 |
 | `progress-start` | terminal | `output.js` `bar` |
 | `progress-tick` | terminal | `output.js` `bar` (every 4th step) |
@@ -47,10 +47,10 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `identity-hit` | story | `story.js` `playIdentityReveal` |
 | `elliot-echo` | story | `level01.js` `showElliotEcho`, and `unlock elliot` |
 | `ghost` | story | no caller found (defined, unused) |
-| `ghost-transition` | story | `story.js` `runGhost` |
-| `ghost-step` | story | `story.js` `setStep` |
-| `ghost-scan` | story | `story.js` `finishSequence`, DEV route |
-| `ghost-command` | story | `story.js` `finishSequence`, `watcherTakeover` |
+| `ghost-transition` | story | `story-data/ghost.js` |
+| `ghost-step` | story | `ghost.js` `setStep` |
+| `ghost-scan` | story | `story-data/ghost.js`, `story.js` DEV route `ghosted` |
+| `ghost-command` | story | `story-data/ghost.js` (twice: `close_trace`, `disconnect_peer`) |
 | `ghosted-stamp` | story | `story.js` `redact`, DEV route |
 | `trace-appear` | trace | `story.js` `createTrace` (the intro's `trace start` node) |
 | `trace-tick` | trace | `trace-sound.js`, called once per second by `trace.js` (`onSecond`, attached in `story.js` `createTrace`) with `{ secondsLeft }` |
@@ -60,13 +60,13 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `trace-expired` | trace | `story.js` `gameOver` (when the reason is a trace expiry) |
 | `static` | glitch | `story.js` `flash`, `glitch`, `staticBurst` |
 | `corrupt` | glitch | `story.js` `corrupt` |
-| `signal` | glitch | `story.js` `finishSequence`, `watcherTakeover` |
+| `signal` | glitch | `story-data/ghost.js`, `story.js` `watcherTakeover` |
 | `glitch-rgb` | glitch | `story.js` `gfx('rgb')`, DEV route |
 | `glitch-slice` | glitch | `story.js` `gfx('slice')` |
 | `glitch-roll` | glitch | `story.js` `gfx('roll')` |
 | `glitch-invert` | glitch | `story.js` `gfx('invert')` |
 | `glitch-zoom` | glitch | `story.js` `gfx('zoom')` |
-| `intrusion` | game over | `story.js` `finishSequence`, `watcherTakeover` |
+| `intrusion` | game over | `story-data/ghost.js`, `story.js` `watcherTakeover` |
 | `disconnect` | game over | `story.js` `watcherTakeover` and the end of the intrusion stages in `runStory` |
 | `shutdown` | game over | `story.js` `gameOver` |
 | `shutdown-stage` | game over | `story.js` `gameOver` (each phase except the last) |
@@ -91,7 +91,7 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `boot-fail` | boot | **phase 3.3, wired**: `output.js` `svc` when a service line is `FAILED` (the firewall) |
 | `key-tick` | terminal | **phase 2, wired**: real keystrokes (`story.js` `onKeyPress`) and auto-typing in `type`, `cmd`, `say` (every 3rd character, `{ gain: 0.6 }`) |
 | `cmd-run`, `cmd-fail` | terminal | phase 3 (Linux commands) |
-| `ghost-appear` | story | phase 3 (story engine) |
+| `ghost-appear` | story | **phase 3.6, wired**: `story-data/ghost.js` when the ghost panel opens |
 | `trust-choice` | story | **phase 3.5, wired**: `story-data/routes.js`, right after the player picks |
 | `trace-start` | trace | **phase 3.5, wired**: `story.js` engine host, when the trace turns `lethal` (after the trust choice) |
 | `trace-warn` | trace | **phase 2, wired**: `trace-sound.js` when the trace crosses 120 s |

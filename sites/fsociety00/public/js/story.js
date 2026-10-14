@@ -6,6 +6,7 @@ import { createPace } from './pace.js';
 import { createEngine } from './engine.js';
 import { createOutput } from './output.js';
 import { createSkipControl } from './skip-control.js';
+import { createGhost } from './ghost.js';
 import { createGameContext } from './context.js';
 import { createTerminal } from './tty.js';
 import { installDeveloperMenu } from './developer-menu.js';
@@ -593,213 +594,6 @@ async function renameEverywhere(from, to, { restoreRain = 0.22 } = {}) {
   setRain(restoreRain);
 }
 
-// po odemčení sdb9 hráč spustí ghost.sh (napsat, nebo klepnout). Čas běží dál.
-async function promptGhost(trace) {
-  const state = { over: null };
-  trace.onEnd = () => { state.over = 'TRACE COMPLETE'; ttyAbort(); };
-
-  let tapped = false;
-  const choices = renderChoices({
-    container: out,
-    options: [{ key: '1', label: './ghost.sh' }],
-    onPick: () => {
-      if (tapped) return;
-      tapped = true;
-      ttyAbort();
-    },
-  });
-
-  const runs = ['1', './ghost.sh', 'ghost.sh', 'sh ghost.sh', 'sh ./ghost.sh', 'bash ghost.sh',
-    'bash ./ghost.sh', 'run ghost.sh', 'ghost'];
-  let ok = false;
-  while (!ok && !state.over) {
-    const raw = tapped ? null : await readCommand();
-    if (tapped) {
-      // klepnutí: příkaz se "napíše" do terminálu sám
-      closePrompt();
-      choices.lock();
-      await cmd('./ghost.sh', 40);
-      caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the branch prompt.');
-      ok = true;
-    } else if (raw === null) {
-      break;
-    } else {
-      const c = raw.trim().toLowerCase();
-      if (runs.includes(c)) {
-        closePrompt();
-        choices.lock();
-        caseFile.decide('ghost-run', 'CONTAINMENT SCRIPT EXECUTED', 'The cleanup script was launched from the terminal.');
-        ok = true;
-      } else if (c === 'ls') {
-        line('erased.list   ghost.sh');
-      } else if (c === 'cat ghost.sh' || c === 'cat ./ghost.sh') {
-        caseFile.inspectGhostScript();
-        line('#!/bin/sh', 'dim');
-        line('# ghost :: by the one who cannot say his name', 'dim');
-        line('close_trace');
-        line('disconnect_peer watcher');
-        line('invalidate_guest_session');
-        line('[inspection] three cleanup actions; no key material requested.', 'ok');
-      } else if (c) {
-        line(`command not found: ${raw.trim()}`, 'warn');
-        line('run ghost.sh', 'dim');
-      }
-    }
-  }
-  trace.onEnd = null;
-  if (state.over) {
-    await gameOver(trace, state.over);
-    return false;
-  }
-  return true;
-}
-
-// ghost.sh closes the active trace request and remote guest session in this fictional system.
-async function runGhost(trace) {
-  audio.setScene('ghost');
-  audio.play('ghost-transition');
-  const W = { name: 'watcher', nameCls: 'warn', cls: 'warn' };
-  const sequence = document.createElement('div');
-  sequence.className = 'ghost-sequence';
-  sequence.setAttribute('role', 'status');
-  sequence.setAttribute('aria-live', 'polite');
-  const panel = document.createElement('div');
-  panel.className = 'ghost-panel';
-  const label = document.createElement('div');
-  label.className = 'ghost-label';
-  label.textContent = 'FSOCIETY // CONTAINMENT ROUTINE';
-  const title = document.createElement('div');
-  title.className = 'ghost-title';
-  title.textContent = 'GHOST';
-  const subtitle = document.createElement('div');
-  subtitle.className = 'ghost-subtitle';
-  subtitle.textContent = 'LOCAL SESSION CLEANUP';
-  const steps = ['CLOSE TRACE REQUEST', 'END REMOTE SESSION', 'REVOKE GUEST TOKEN', 'CLOSE LOCAL SHELL'];
-  const list = document.createElement('div');
-  list.className = 'ghost-steps';
-  const stepRows = steps.map((text, index) => {
-    const row = document.createElement('div');
-    row.className = 'ghost-step';
-    const number = document.createElement('span');
-    number.className = 'ghost-step-number';
-    number.textContent = `0${index + 1}`;
-    const name = document.createElement('span');
-    name.className = 'ghost-step-name';
-    name.textContent = text;
-    const state = document.createElement('span');
-    state.className = 'ghost-step-state';
-    state.textContent = 'WAIT';
-    row.append(number, name, state);
-    list.appendChild(row);
-    return { row, state };
-  });
-  const progress = document.createElement('div');
-  progress.className = 'ghost-progress';
-  progress.appendChild(document.createElement('span'));
-  panel.append(label, title, subtitle, list, progress);
-  sequence.appendChild(panel);
-  document.body.appendChild(sequence);
-
-  let lastAudioStep = -1;
-  const setStep = (active) => {
-    if (active !== lastAudioStep) {
-      audio.play(active === steps.length ? 'success' : 'ghost-step');
-      lastAudioStep = active;
-    }
-    stepRows.forEach(({ row, state }, index) => {
-      const status = index < active ? 'DONE' : index === active ? 'ACTIVE' : 'WAIT';
-      row.dataset.state = status.toLowerCase();
-      state.textContent = status;
-    });
-    sequence.style.setProperty('--ghost-progress', String(active / steps.length));
-  };
-  const finishSequence = async () => {
-    setStep(steps.length);
-    sequence.classList.add('complete');
-    await wait(700);
-    sequence.remove();
-  };
-
-  setStep(0);
-  line('[ghost] script started', 'dim');
-  await wait(600);
-  line('[ghost] checking active sessions...', 'dim');
-  await wait(800);
-  line('  SESSION   USER      STATE', 'dim');
-  line('  pts/0     guest     ACTIVE');
-  line('  pts/1     watcher   ACTIVE', 'warn');
-  line('  relay     monitor   TRACING', 'warn');
-  audio.play('ghost-scan');
-  await wait(1300);
-  setStep(0);
-  await bar('[ghost] refreshing relay route', 1800);
-  await wait(500);
-
-  // Close the trace request before ending the remote operator's session.
-  setStep(0);
-  line('[ghost] closing trace request', 'dim');
-  await wait(400);
-  audio.play('ghost-command');
-  await cmd('close_trace --session relay', 40, 300);
-  line('monitor: trace request closed');
-  trace.close();
-  audio.play('signal');
-  setStep(1);
-  await flash();
-  await staticBurst(300);
-  line('=== TRACE REQUEST CLOSED ===');
-  await wait(1200);
-
-  // The watcher remains connected until its session is explicitly closed.
-  line();
-  line('[ghost] closing remote session: pts/1', 'dim');
-  await wait(500);
-  await typingFor(900, 'watcher', 'warn');
-  line('DIRECT CHANNEL // SESSION KEY VERIFIED', 'secure-channel');
-  await say('i opened a private line. listen before he cuts it.', {
-    ...W,
-    cls: 'secure-message',
-    speed: 38,
-  });
-  await wait(700);
-  await say('he is not trying to save you. he needs you to open it.', {
-    ...W,
-    cls: 'secure-message',
-    speed: 38,
-  });
-  await wait(600);
-  await say('when it opens, the list has your name too.', {
-    ...W,
-    cls: 'secure-message',
-    speed: 38,
-  });
-  await wait(500);
-  await say('wait. you do not understand what he-', { ...W, speed: 35 });
-  setStep(1);
-  audio.play('ghost-command');
-  await cmd('disconnect_peer watcher', 40, 300);
-  audio.play('intrusion');
-  line('watcher: remote session closed', 'warn');
-  setStep(2);
-  await gfx('slice');
-  await staticBurst(500);
-  line(`[ghost] peer address ${ip()} added to the local deny list`, 'dim');
-  await wait(300);
-  line('[ghost] guest session token invalidated', 'dim');
-  line('*** watcher disconnected ***', 'warn');
-  setStep(3);
-  await gfx('roll');
-  await wait(900);
-
-  // End the local guest shell after the remote session is closed.
-  line();
-  await bar('[ghost] closing guest shell', 1200);
-  line('[ghost] done. you are a ghost.');
-  await finishSequence();
-  audio.setScene('puzzle');
-  await wait(700);
-}
-
 // After sdb9 is unlocked, ghost.sh closes the trace request and the watcher's
 // remote session before the erased-user list and unknown's identity are revealed.
 async function playIdentityReveal(trusted) {
@@ -899,53 +693,9 @@ async function moveHelloIntoChat(hello) {
   flightLayer.remove();
 }
 
-async function revealName(trace, trusted) {
+// MIGRATION (phase 3.7): the rest of the ending (the erased list, the GHOSTED stamp, the assessment and the reveal).
+async function legacyEnding(trusted) {
   const W = { name: 'watcher', nameCls: 'warn', cls: 'warn' };
-  await bar('unlocking /dev/sdb9', 2200);
-  await svc('Mounted /dev/sdb9.');
-  await flash();
-  await staticBurst(400);
-  line();
-  line('/dev/sdb9: 2 files', 'dim');
-  line('owner: unknown', 'dim');
-  await wait(1000);
-  await cmd('ls /mnt/sdb9');
-  line('erased.list   ghost.sh');
-  await wait(1200);
-  line();
-
-  // watcher je pořád ve session (vložil se dřív) a snaží se zabránit
-  line('*** watcher: session still active ***', 'warn');
-  await staticBurst(400);
-  await typingFor(1100, 'watcher', 'warn');
-  await say('close it.', { ...W, speed: 60 });
-  await wait(700);
-  await say('you do not know what is in there.', { ...W, speed: 40 });
-  await wait(600);
-  line('[ALERT] watcher remote session still active (pts/1)', 'warn');
-  line('[ALERT] trace request ETA 02:00', 'warn');
-  trace.slow();
-  trace.set(TRACE.afterUnlock);
-  await gfx('rgb');
-  await wait(800);
-  await say('he is still on the line.', { speed: 45 });
-  await wait(700);
-  await say('he had a session here before you arrived.', { speed: 45 });
-  await wait(700);
-  await say('there is a script on sdb9. ghost.sh.', { speed: 45 });
-  await wait(700);
-  await staticBurst(180);
-  await say('run it.', { cls: 'urgent-command', speed: 115 });
-  await wait(240);
-  await say('NOW.', { cls: 'urgent-command', speed: 155 });
-  await wait(500);
-  line();
-
-  if (!(await promptGhost(trace))) return;
-  line();
-  await runGhost(trace);
-  line();
-
   await cmd('cat /mnt/sdb9/erased.list');
   const redact = () => '█'.repeat(rand(5, 11));
   for (let i = 1; i <= 9; i++) {
@@ -1023,11 +773,10 @@ function branchDialogueForWatcher(investigation) {
 
 // MIGRATION (phase 3): the boot and the intro are story data (story-data/). The rest still lives in legacyRest()
 // until steps 3.5 to 3.7 turn it into nodes. The engine calls it through `host.legacy`.
-async function legacyLevel(trusted) {
-  const trace = activeTrace; // created by the intro, made lethal by the trust choice
-  const opened = await level01()(trace, trusted);
-  if (!opened) return;
-  await revealName(trace, trusted);
+// MIGRATION (phase 3.8): Level 01's shell still lives in level01.js. Resolves true when sdb9 was unlocked, false
+// when the game is over (trace, lock-out, abort).
+function legacyLevel(trusted) {
+  return level01()(activeTrace, trusted);
 }
 
 // What the narrative engine can do on screen. Everything visible goes through here (engine.js never touches the DOM).
@@ -1072,7 +821,8 @@ const engineHost = {
   get caseFile() { return caseFile; },
   // MIGRATION: removed step by step in 3.4 to 3.7.
   glitchHello: (element) => glitchHello(element),
-  legacy: { level: (trusted) => legacyLevel(trusted) },
+  get ghost() { return ghost(); },
+  legacy: { level: (trusted) => legacyLevel(trusted), ending: (trusted) => legacyEnding(trusted) },
 };
 
 function buildContext() {
@@ -1110,6 +860,17 @@ function level01() {
     levelShell = createLevel01(buildContext());
   }
   return levelShell;
+}
+
+// The ghost route's prompt and panel, also built once per session.
+let ghostSession = null;
+let ghostShell = null;
+function ghost() {
+  if (ghostSession !== session) {
+    ghostSession = session;
+    ghostShell = createGhost(buildContext());
+  }
+  return ghostShell;
 }
 
 // Runs the story in the current session. An abort (reboot, developer jump) is the only error
@@ -1152,13 +913,13 @@ async function runDeveloperRoute(route) {
     line(`LOCAL TEST ROUTE // LEVEL 01 // ${trusted.toUpperCase()}`, 'dim');
     const trace = createTrace(TRACE.afterTrust, 'lethal');
     trace.dock();
-    const opened = await level01()(trace, trusted);
-    if (opened) await revealName(trace, trusted);
+    const opened = await legacyLevel(trusted);
+    if (opened) await engine.run({ from: 'unlock', state: { trusted } });
   } else if (route === 'ending') {
     audio.setScene('ghost');
     const trace = createTrace(TRACE.afterTrust, 'lethal');
     trace.dock();
-    await revealName(trace, trusted);
+    await engine.run({ from: 'unlock', state: { trusted } });
   } else if (route === 'identity') {
     await playIdentityReveal(trusted);
   } else if (route === 'logo') {

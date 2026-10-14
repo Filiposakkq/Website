@@ -1,6 +1,6 @@
 # Architecture and rules
 
-Valid after: phase 3.5 (branch `overhaul/phase-3-story`; rest as phase 2, `main` `2a9abad`), verified 2026-10-14. Verify claims with `grep`, not line numbers.
+Valid after: phase 3.6 (branch `overhaul/phase-3-story`; rest as phase 2, `main` `2a9abad`), verified 2026-10-14. Verify claims with `grep`, not line numbers.
 
 ## Core ideas
 

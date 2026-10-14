@@ -203,7 +203,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 3.3 Realistic boot data (incl. the sdb9 hook) | done | 61b98cd | `story-data/boot.js` runs through the engine; `output.js` extracted; smoke 20/20 (updated the BIOS header string in `tools/smoke.mjs`); transcript diff vs baseline = boot text only |
 | 3.4 Intro + transmission migrated | done | ae37c3c | `story-data/intro.js`; transcript = baseline byte for byte (smoke 19/20 in one parallel run, the typing-ticks scenario is the known flaky one, passes alone) |
 | 3.5 Trust choice + branches migrated | done | ae37c3c | `story-data/routes.js`, generic `chooseOption`; trace policy (Design 3.5): `trace.js` modes + `close()`, `TRACE` constants, `trust-choice` and `trace-start` cues wired; smoke 20/20 incl. new TRACE CLOSED assertion; audio-lint 0 problems |
-| 3.6 Ghost route migrated | todo | | |
+| 3.6 Ghost route migrated | done | (this commit) | `story-data/ghost.js` (unlock to the end of the script) + `js/ghost.js` (prompt and panel); transcript = baseline; smoke 20/20 |
 | 3.7 Identity reveal + endings migrated | todo | | |
 | 3.8 Command registry (migrate all existing commands) | todo | | |
 | 3.9 Realistic Linux commands | todo | | |
@@ -213,7 +213,14 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
 
-### Resume point (2026-10-14, session 1, after 3.5)
+### Resume point (2026-10-14, session 1, after 3.6)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.6 (full smoke 20/20 on a snapshot, `node tools/validate-story.mjs` passes, transcript diff vs the baseline = boot text only).
+- Engine segments: `boot`, `intro`, `choice` (trust choice, routes, trace reset, then the Level 01 shell as a legacy `run` node that ends the run on game over), `ending` (unlock, watcher, ghost prompt and script as nodes, then `legacyEnding` in `story.js`).
+- Next: 3.7. `legacyEnding` (erased list, GHOSTED stamp, assessment, then `playIdentityReveal`) into `story-data/ending.js`; the bespoke beats (`renameEverywhere`, `moveHelloIntoChat`, the GHOSTED row swap) stay functions called by `run` nodes, ideally moved to a module (`js/fx-reveal.js`) so `story.js` shrinks. `gameOver` / `watcherTakeover` / endings text (`TRACE COMPLETE`, `LOCKED OUT`, `SESSION COMPROMISED`, `DEVELOPER SHUTDOWN TEST`) also move to data/module there. Then 3.8 command registry, 3.9 Linux commands, 3.10 cleanup (story.js under ~400 lines), dialogue polish, `CHANGELOG.md`, handoff report.
+- Nothing half edited. Baseline for transcript diffs: `main` 33c7b94.
+
+### Resume point (2026-10-14, session 1, after 3.5) (historical)
 
 - Branch `overhaul/phase-3-story`. `last green commit`: `ae37c3c` (full `node tools/smoke.mjs` 20/20 on a snapshot of it, `node tools/audio-lint.mjs` 0 problems, `node tools/validate-story.mjs` passes, `node tools/transcript.mjs --diff` vs the baseline shows the boot text only).
 - Engine segments: `boot` (nodes), `intro` (nodes), `choice` (nodes: trust choice, both routes, trace reset, then one `run` node calling `legacyLevel` in `story.js`).
