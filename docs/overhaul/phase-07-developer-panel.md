@@ -65,7 +65,7 @@ The panel is available on `localhost`, `127.0.0.1`, `[::1]` **and on Cloudflare 
 - [ ] Replace the single `isLocalDevelopment()` check with one function (e.g. `isDeveloperHost(hostname)`) that returns true for the local names and for the preview pattern, and false for everything else. Keep the production names `fsociety.filiposakkq.dev` and `filiposakkq.dev` as an explicit deny list that wins over any pattern. Keep the patterns in one constant at the top of the file.
 - [ ] Preview pattern: assumed to be `*.workers.dev` (Cloudflare preview URLs look like `<alias>-<worker>.<account>.workers.dev`). **Unverified: the owner confirms the exact hostname on a real preview and whether the production Workers' own `workers.dev` URLs are enabled** (if they are, the panel would show there too; the owner then disables them or the pattern must be narrower).
 - [ ] The 7.6 smoke test asserts: no `DEV` button and no developer module fetched on the production hostnames and on an unrelated hostname; the button is present on `localhost` and on a hostname matching the preview pattern.
-- [ ] Update the "Do not break" line (`CLAUDE.md`), `owner-test-checklist.md` (DEV button check) and `state-after-phase-1.md` in the same PR.
+- [ ] Update the "Do not break" line (`CLAUDE.md`), `owner-test-checklist.md` (DEV button check) and `docs/state/ui-and-css.md` in the same PR.
 - A hostname check is not access control. The panel only jumps scenes (spoilers, no data). If real protection is wanted, put Cloudflare Access on the production Worker; not planned.
 
 ## Out of scope

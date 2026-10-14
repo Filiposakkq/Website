@@ -8,7 +8,7 @@ Copy-paste prompts for giving work to a Claude chat. Replace `N`, `<slug>` and t
 The project is the GitHub repository Filiposakkq/Website. Attach it through your GitHub
 connection and clone it first (see "Working in a cloud chat session" in
 docs/overhaul/README.md; if you cannot access the repo, stop and tell me).
-Read CLAUDE.md, docs/overhaul/README.md completely, docs/overhaul/state-after-phase-1.md
+Read CLAUDE.md, docs/overhaul/README.md completely, docs/state/README.md (then only the docs/state files for your areas)
 (the older "current state" sections in the phase files are stale, verify against the code),
 then docs/overhaul/phase-0N-<slug>.md. Do phase N and nothing else.
 Work only on branch overhaul/phase-N-<slug> created from the latest main. Never push to main,

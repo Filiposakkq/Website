@@ -17,6 +17,7 @@
 - [ ] No new console errors, no new `window.*` globals, no font size under 11px
 - [ ] Every document that describes changed code, tooling or config was updated in the same commits; anything not verified is marked "unverified"
 - [ ] "Known issues carried over" in `docs/overhaul/README.md` updated (new issues added, fixed ones removed)
+- [ ] The affected files in `docs/state/` are updated and their "Valid after" line is current (docs sync)
 - [ ] The phase file's "Resume point" block is rewritten (or marked `(historical)`) and the handoff report is written
 - [ ] `CHANGELOG.md` has a line for this phase
 
