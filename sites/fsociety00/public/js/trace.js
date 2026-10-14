@@ -6,11 +6,13 @@ import { formatClock } from './util.js';
  * The interval only runs while the trace is live: it stops when the timer expires and when the trace
  * is halted or killed. `set()` re-arms an expired (but not halted) trace by starting a fresh interval.
  * Pass the story `session` so the interval is cleared, and the HUD removed, when the session aborts.
+ * `onSecond(secsLeft)` is a second, permanent hook (the sound) that runs on every live tick; `api.onTick` stays
+ * free for the level code to replace. It is not called for the final tick at 0.
  *
  * @param {number} [secs]
- * @param {{ session?: ReturnType<typeof import('./session.js').createSession> | null }} [options]
+ * @param {{ session?: ReturnType<typeof import('./session.js').createSession> | null, onSecond?: ((secs: number) => void) | null }} [options]
  */
-export function startTrace(secs = 480, { session = null } = {}) {
+export function startTrace(secs = 480, { session = null, onSecond = null } = {}) {
   const el = document.createElement('div');
   el.id = 'hud';
   el.className = 'center';
@@ -64,6 +66,9 @@ export function startTrace(secs = 480, { session = null } = {}) {
       return;
     }
     render();
+    if (onSecond) {
+      try { onSecond(secs); } catch (error) { console.error('The trace sound failed.', error); }
+    }
     if (api.onTick) api.onTick(secs);
   }
 

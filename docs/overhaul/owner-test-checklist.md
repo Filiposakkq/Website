@@ -36,6 +36,21 @@ Portrait first, then once in landscape.
 - [ ] **DEV button:** visible on `localhost` and on the preview URL (once phase 7 has merged; before that only on `localhost`), **never on the live sites** (`filiposakkq.dev`, `fsociety.filiposakkq.dev`).
 - [ ] **Performance feel:** the rain and the effects stay smooth on your PC; if you have a slow laptop, test there too.
 
+## Phase 2 only: the audio listening checklist
+
+Agents cannot hear. Use headphones first, then the phone speaker, and play boot, intro, trust choice, puzzle, victory, and once the failure path (let the trace run out). Put "heard it, fine" or what sounded wrong in the PR.
+
+- [ ] Boot beeps, drive seek and the memory sound like old PC hardware, not like a game
+- [ ] Typing clicks are subtle, and there is no machine-gun effect when you type fast or hold a key
+- [ ] Auto-typed story text ticks softly and not on every letter
+- [ ] The trace tick gets higher and faster as time drops (first noticeable around 2 minutes, doubles at 30 seconds); the critical state is unmistakable but not painful
+- [ ] "hello, friend." plays at the right moment and the bed does not mask it
+- [ ] The beds change smoothly between scenes: boot, story, ghost, puzzle, shutdown. No clicks or pops
+- [ ] Nothing is louder than the voice clip, and nothing clips or distorts by accident (the intended glitch and alarm sounds are meant to be harsh)
+- [ ] After REBOOT there is no leftover sound
+- [ ] No sound at all before the first click on the launch screen
+- [ ] New cues that nothing plays yet (boot-fail, trust-choice, traced-alert, system-takeover, ...) are listed in `docs/overhaul/audio-cues.md`; phase 7's sound preview panel will let you hear them
+
 ## C. Report format
 
 For each problem: device and OS, browser and version, the steps, what you expected, what happened, screenshot or screen recording. Put it in the PR as a comment or give it to the Claude that fixes it with prompt 4 in `prompts.md`.

@@ -44,7 +44,8 @@ export function createTerminal({ out, promptLine, scroll, onKeyPress = () => {} 
       scroll();
     });
     input.addEventListener('keydown', (event) => {
-      if (!event.repeat && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter')) {
+      const shortcut = event.ctrlKey || event.metaKey || event.altKey; // Ctrl+C, Cmd+V ... are not typing
+      if (!event.repeat && !shortcut && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter')) {
         onKeyPress(event.key);
       }
       if (event.key !== 'Enter') return;

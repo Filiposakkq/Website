@@ -457,26 +457,29 @@ scenarios.push({
   },
 });
 
-// Audio lint: play every synthesized cue (and every ambient bed) in an OfflineAudioContext, then render.
-// Catches throwing cues, unknown cue names and NaN samples. (Voice clip excluded: it is a file, not a synth.)
+// Audio smoke: play every registered synth cue (and every scene) in an OfflineAudioContext, then render.
+// Catches throwing cues, unknown cue names (console.warn fails any scenario) and NaN samples. The deep checks
+// (levels, tails, crossfades, rate limits, stopAll) live in tools/audio-lint.mjs.
+// The voice clip is a file, not a synth, so the registry marks it `synth: false`.
 scenarios.push({
   name: 'reduced: every audio cue renders offline without errors',
   contextOptions: REDUCED,
   async run({ page }) {
     const result = await page.evaluate(async () => {
-      const source = await (await fetch('/js/audio.js')).text();
-      const cues = [...new Set([...source.matchAll(/case '([a-z0-9-]+)':/g)].map((m) => m[1]))]
-        .filter((name) => name !== 'hello-friend');
       const { createAudioController } = await import('/js/audio.js');
       const failures = [];
       const rate = 22050;
       const offline = new OfflineAudioContext(1, rate * 6, rate);
       const audio = createAudioController({ context: offline });
       audio.prepare();
-      for (const cue of cues) {
-        try { audio.play(cue); } catch (error) { failures.push(`${cue}: ${error.message}`); }
+      const registry = audio.list();
+      const cues = registry.filter((entry) => entry.kind !== 'bed' && entry.synth);
+      for (const entry of cues) {
+        for (const params of entry.samples?.length ? entry.samples : [{}]) {
+          try { audio.play(entry.name, params); } catch (error) { failures.push(`${entry.name}: ${error.message}`); }
+        }
       }
-      for (const scene of ['boot', 'story', 'puzzle', 'ghost', 'reveal', 'shutdown', 'idle']) {
+      for (const scene of ['boot', 'story', 'puzzle', 'ghost', 'reveal', 'shutdown', 'intrusion', 'idle']) {
         try { audio.setScene(scene); } catch (error) { failures.push(`scene ${scene}: ${error.message}`); }
       }
       const buffer = await offline.startRendering();
@@ -487,12 +490,141 @@ scenarios.push({
         if (!Number.isFinite(value)) bad++;
         else peak = Math.max(peak, Math.abs(value));
       }
-      return { count: cues.length, failures, bad, peak };
+      return { count: cues.length, beds: registry.filter((entry) => entry.kind === 'bed').length, failures, bad, peak };
     });
-    if (result.count < 50) throw new Error(`expected 50+ cues, found ${result.count} (did the regex stop matching?)`);
+    if (result.count < 60) throw new Error(`expected 60+ synth cues in audio.list(), found ${result.count}`);
+    if (result.beds < 4) throw new Error(`expected 4 ambient beds in audio.list(), found ${result.beds}`);
     if (result.failures.length) throw new Error(`cues failed: ${result.failures.join('; ')}`);
     if (result.bad) throw new Error(`${result.bad} non-finite samples in the rendered audio`);
     if (result.peak === 0) throw new Error('rendered audio is silent');
+    if (result.peak > 0.89) throw new Error(`rendered audio peaks at ${result.peak.toFixed(3)}, over the -1 dBFS ceiling`);
+  },
+});
+
+// Test-only probe, installed before any game script runs. It counts AudioContexts and tracks every started
+// source node until it ends, so a scenario can see what is still sounding without the game exposing anything.
+function installAudioProbe() {
+  const probe = { contexts: 0, started: 0, noise: 0, nodes: new Set() };
+  window.__audioProbe = probe;
+  const Base = window.AudioContext;
+  window.AudioContext = class extends Base {
+    constructor(...options) {
+      super(...options);
+      probe.contexts++;
+    }
+  };
+  for (const Type of [OscillatorNode, AudioBufferSourceNode, ConstantSourceNode]) {
+    const start = Type.prototype.start;
+    Type.prototype.start = function probedStart(...parameters) {
+      const entry = { at: performance.now() };
+      probe.started++;
+      if (Type === AudioBufferSourceNode) probe.noise++; // key clicks are noise bursts; trace pings are plain oscillators
+      probe.nodes.add(entry);
+      this.addEventListener('ended', () => probe.nodes.delete(entry), { once: true });
+      return start.apply(this, parameters);
+    };
+  }
+}
+
+// Audio must not exist before the launch click (autoplay policy and the project rule).
+scenarios.push({
+  name: 'reduced: no AudioContext exists before the launch click',
+  contextOptions: REDUCED,
+  async beforeLoad({ page }) { await page.addInitScript(installAudioProbe); },
+  async run({ page }) {
+    await page.waitForFunction(() => document.getElementById('launch').open, null, { timeout: 10000 });
+    await sleep(1200);
+    const before = await page.evaluate(() => ({ contexts: window.__audioProbe.contexts, nodes: window.__audioProbe.nodes.size }));
+    if (before.contexts !== 0 || before.nodes !== 0) throw new Error(`audio started before the click: ${JSON.stringify(before)}`);
+    await initialize(page);
+    await page.waitForFunction(() => window.__audioProbe.contexts === 1, null, { timeout: 5000 })
+      .catch(() => { throw new Error('the launch click did not create exactly one AudioContext'); });
+  },
+});
+
+// body.quiet-motion is an app-level switch that must work on its own, without the media query.
+scenarios.push({
+  name: 'desktop: quiet-motion class alone fast-forwards the story and flattens animations',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    const media = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (media) throw new Error('this scenario needs the reduced-motion media query to be off');
+    await page.evaluate(() => document.body.classList.add('quiet-motion'));
+    const flattened = await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.style.animation = 'probe-spin 5s linear infinite';
+      document.body.appendChild(probe);
+      const style = getComputedStyle(probe);
+      const result = { duration: parseFloat(style.animationDuration), iterations: style.animationIterationCount };
+      probe.remove();
+      return result;
+    });
+    if (flattened.duration > 0.001 || flattened.iterations !== '1') {
+      throw new Error(`quiet-motion did not flatten animations: ${JSON.stringify(flattened)}`);
+    }
+    // The story's wait() helper resolves immediately under quiet-motion, so the trust choice appears
+    // without holding the skip control (a real-time boot takes minutes).
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    await chooseTrust(page, 'unknown', 'click');
+    await reachPuzzle(page);
+    const stillMedia = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (stillMedia) throw new Error('the media query turned on during the scenario');
+  },
+});
+
+// Typing sounds (extra 6): real keystrokes tick, but never faster than the cue's limit, and keys that are not
+// typing (Shift, arrows, Tab, shortcuts, held-down repeats) do not tick at all. Only noise-buffer sources are
+// counted: every key-tick has one or two, while the once-per-second trace ping is a plain oscillator.
+scenarios.push({
+  name: 'reduced: typing ticks are rate limited and ignore modifier and navigation keys',
+  contextOptions: REDUCED,
+  async beforeLoad({ page }) { await page.addInitScript(installAudioProbe); },
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sleep(1500); // let the story's own sounds finish
+    const input = page.locator('.tty-input');
+    await input.focus();
+    const clicks = () => page.evaluate(() => window.__audioProbe.noise);
+    const quiet = await clicks();
+    for (const key of ['Shift', 'Control', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) await page.keyboard.press(key);
+    for (const shortcut of ['Control+a', 'Control+c', 'Alt+x']) await page.keyboard.press(shortcut);
+    await sleep(200);
+    if ((await clicks()) !== quiet) throw new Error('modifier keys, navigation keys or shortcuts made typing sounds');
+    await page.keyboard.down('a');
+    for (let i = 0; i < 20; i++) await page.keyboard.down('a'); // auto-repeat: event.repeat is true
+    await page.keyboard.up('a');
+    await sleep(200);
+    const afterOne = (await clicks()) - quiet;
+    if (afterOne > 2) throw new Error(`key repeat made sound: ${afterOne} click nodes for one real keystroke`);
+    if (afterOne < 1) throw new Error('a real keystroke made no sound');
+    await input.fill('');
+    await sleep(500);
+    const before = await clicks();
+    await page.keyboard.type('abcdefghijklmnopqrstuvwxyz0123', { delay: 0 }); // 30 keys in a few ms
+    await sleep(200);
+    const burst = (await clicks()) - before;
+    // A key-tick is 1 or 2 click nodes and the limit is 15 per second: a burst of about 100 ms admits a handful.
+    if (burst > 8) throw new Error(`30 instant keystrokes started ${burst} click nodes: the rate limit is not working`);
+    if (burst < 1) throw new Error('typing a burst made no sound');
+  },
+});
+
+// Rebooting must silence the old run: every source node that was started before the click has ended soon after.
+scenarios.push({
+  name: 'reduced: reboot leaves no sound from the previous run',
+  contextOptions: REDUCED,
+  async beforeLoad({ page }) { await page.addInitScript(installAudioProbe); },
+  async run({ page }) {
+    await playToShell(page, { who: 'watcher', how: 'type', reduced: true });
+    await loseByLockout(page);
+    const during = await page.evaluate(() => window.__audioProbe.nodes.size);
+    if (during === 0) throw new Error('no source nodes were live before the reboot (the probe is broken)');
+    const clickedAt = await page.evaluate(() => performance.now());
+    await page.click('#restartControl');
+    await sleep(1500);
+    const leftover = await page.evaluate((limit) => [...window.__audioProbe.nodes].filter((entry) => entry.at < limit).length, clickedAt);
+    if (leftover !== 0) throw new Error(`${leftover} source node(s) from the previous run are still live 1.5 s after the reboot click`);
   },
 });
 

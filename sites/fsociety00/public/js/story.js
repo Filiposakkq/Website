@@ -1,4 +1,5 @@
 import { startTrace } from './trace.js';
+import { createTraceSound } from './trace-sound.js';
 import { createLevel01, revealLevel01SourcePart } from './level01.js';
 import { createSession, isAbortError, swallowAbort } from './session.js';
 import { createGameContext } from './context.js';
@@ -34,6 +35,8 @@ const shutdownEvents = document.getElementById('shutdownEvents');
 const skipLabel = skipHint.querySelector('.skip-label');
 const srAnnouncer = document.getElementById('srAnnouncer');
 const audio = createAudioController();
+// Auto-typed text (type, cmd, say) ticks on every 3rd character at 60% of a real keystroke's level.
+const AUTO_TYPING = { gain: 0.6 };
 // The rain reacts to prefers-reduced-motion / body.quiet-motion changes by itself (see rain.js).
 const rain = createRain(document.getElementById('rain'));
 const setRain = (opacity, immediate = false) => rain.setOpacity(opacity, immediate);
@@ -50,7 +53,7 @@ const caseFile = createCaseFile({
 const createTrace = (seconds) => {
   activeTrace?.halt(true);
   audio.play('trace-appear');
-  activeTrace = startTrace(seconds, { session });
+  activeTrace = startTrace(seconds, { session, onSecond: createTraceSound(audio) });
   return activeTrace;
 };
 document.body.classList.toggle('quiet-motion', motionPreference.matches);
@@ -159,7 +162,7 @@ const terminal = createTerminal({
   out,
   promptLine,
   scroll,
-  onKeyPress: (key) => audio.play(key === 'Enter' ? 'command-submit' : 'key-tap'),
+  onKeyPress: (key) => audio.play(key === 'Enter' ? 'command-submit' : 'key-tick'),
 });
 const { abort: ttyAbort, close: closePrompt } = terminal;
 // Rejects with the abort error when the session aborts mid-prompt (no leaked promise).
@@ -217,6 +220,8 @@ function armSession(target) {
     activeTrace = null;
     stopAmbient();
     caseFile.close();
+    // Cues and the voice clip stop at once; the bed fades out smoothly (a reboot must not leave sound behind).
+    audio.stopAll({ beds: false });
     audio.setScene('idle');
     sweepStage();
   });
@@ -257,7 +262,7 @@ async function type(text, cls = '', speed = 35, { silent = false } = {}) {
   const d = line('', cls);
   d.textContent = '';
   for (const [index, ch] of [...text].entries()) {
-    if (index % 5 === 0 && ch.trim()) audio.play('key-tap');
+    if (index % 3 === 0 && ch.trim()) audio.play('key-tick', AUTO_TYPING);
     d.textContent += ch;
     await wait(motionReduced() ? 0 : speed * 0.78);
   }
@@ -442,7 +447,7 @@ async function cmd(text, speed = 55, pause = 450) {
   d.append(p, t);
   out.appendChild(d);
   for (const [index, ch] of [...text].entries()) {
-    if (index % 3 === 0 && ch.trim()) audio.play('key-tap');
+    if (index % 3 === 0 && ch.trim()) audio.play('key-tick', AUTO_TYPING);
     t.textContent += ch;
     scroll();
     await wait(motionReduced() ? 0 : speed * 0.78);
@@ -606,7 +611,7 @@ async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', 
         seg.textContent = seg.textContent.slice(0, -1);
         await wait(140);
       }
-      if (name !== 'Mr. Robot' && i % 6 === 0 && ch.trim()) audio.play('key-tap');
+      if (name !== 'Mr. Robot' && i % 3 === 0 && ch.trim()) audio.play('key-tick', AUTO_TYPING);
       seg.textContent += ch;
       scroll();
       let ms = motionReduced() ? 0 : (speed + rand(-20, 40)) * 0.78;
