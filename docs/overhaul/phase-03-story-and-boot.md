@@ -212,3 +212,12 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
+
+### Resume point (2026-10-14, session 1 start)
+
+- Branch `overhaul/phase-3-story`, created from `main` `33c7b94`. Head commit: see `git log`.
+- `last green commit`: none yet (no smoke run on this branch).
+- Step in progress: none, only the tracker row was set to `in progress`.
+- Nothing broken, nothing half edited. No code has been changed yet.
+- Next: re-verify the "Current state" section of this file against the code, then start 3.1 (engine, node types, `tools/validate-story.mjs`).
+

@@ -70,7 +70,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 |---|---|---|---|---|---|---|
 | 1 | Foundation & bug fixes | merged | — | `overhaul/phase-1-foundation` | PR #4, squash commit `841cad0` | all rows done, smoke 16/16, owner tested the preview on phone and PC; review findings carried over, see "Known issues carried over" |
 | 2 | Audio | merged | 1 | `overhaul/phase-02-audio` | PR #7, squash commit `b0ea8ee` | all rows done, smoke 20/20, audio-lint 0 problems; **not yet listened to**: owner checklist "Phase 2 only" |
-| 3 | Story & boot | todo | 1 | `overhaul/phase-3-story` | | |
+| 3 | Story & boot | in progress | 1 | `overhaul/phase-3-story` | | started 2026-10-14 from `main` `33c7b94` |
 | 4 | Evidence board | todo | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | | |
 | 5 | Animations | todo | 1 (3 recommended) | `overhaul/phase-5-animations` | | |
 | 6 | TRACED game over | todo | 1, 2, 3, 5 | `overhaul/phase-6-traced` | | |
