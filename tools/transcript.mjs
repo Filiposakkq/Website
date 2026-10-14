@@ -121,7 +121,10 @@ async function shellTour(page, commands) {
 }
 
 const COMMON = ['help', 'ls', 'cat readme.txt', 'cat notes.txt', 'cat sdb9.lock', 'cat', 'cat nothing.txt',
-  'source', 'source map', 'view-source', 'cat page/index.html', 'cat page/styles.css', 'trace', 'board', 'frobnicate'];
+  'source', 'source map', 'view-source', 'cat page/index.html', 'cat page/styles.css', 'trace', 'board', 'frobnicate',
+  // phase 3.9: the flavor commands (`clear` is left out: it would wipe the recording)
+  'whoami', 'uname', 'uname -a', 'ps aux', 'netstat -an', 'ifconfig', 'history', 'pwd', 'date', 'echo hello world',
+  'cat /var/log/auth.log', 'sudo ls', 'cd /'];
 
 // Reduced motion wipes the screen right after some lines, so capture the rows from inside the page the moment a
 // marker line appears, then wait for it.

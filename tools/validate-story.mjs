@@ -254,5 +254,46 @@ if (story) {
   }
 }
 
+// ---- the command registry and the system commands (phase 3.8 / 3.9)
+{
+  console.log('\ncommands');
+  const { createRegistry } = await import('../sites/fsociety00/public/js/commands.js');
+  const { registerSystemCommands } = await import('../sites/fsociety00/public/js/system-commands.js');
+  const systemData = await import('../sites/fsociety00/public/js/story-data/system.js');
+  const registry = createRegistry();
+  const printed = [];
+  const line = (text, cls) => printed.push([text, cls]);
+  registerSystemCommands(registry, { line, audio: { play() {} }, out: { replaceChildren() {} }, scrollTop() {} });
+  let duplicate = false;
+  try { registry.register({ name: 'ps', run() {} }); } catch { duplicate = true; }
+  expect(duplicate, 'a command word cannot be registered twice');
+  let badName = false;
+  try { registry.register({ name: 'Mixed', run() {} }); } catch { badName = true; }
+  expect(badName, 'a command name must be lower case');
+  const helpText = registry.helpLines({ trusted: 'unknown' }).map(([text]) => text).join('\n');
+  expect(/system:\n\s+whoami/.test(helpText) && /uname -a/.test(helpText), 'help lists the system group');
+  expect(!/\bsudo\b|\becho\b|\bpwd\b/.test(helpText), 'denied and tiny commands stay out of help');
+  for (const word of ['whoami', 'uname', 'ps', 'netstat', 'ifconfig', 'history', 'pwd', 'date', 'echo', 'clear', 'sudo', 'cd']) {
+    printed.length = 0;
+    await registry.dispatch(`${word} -a`, { trusted: 'unknown' }, line);
+    expect(printed.length > 0 || word === 'clear', `"${word}" prints something`);
+  }
+  printed.length = 0;
+  await registry.dispatch('definitely-not-a-command', { trusted: 'unknown' }, line);
+  expect(printed[0]?.[0] === 'command not found: definitely-not-a-command', 'an unknown word is "command not found"');
+
+  // World facts and invariants of the flavor text.
+  const all = [...Object.values(systemData.SYSTEM_OUTPUT).flat(), ...Object.values(systemData.SYSTEM_FILES).flatMap((file) => file())].join('\n');
+  const addresses = all.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g) ?? [];
+  const documentation = (address) => /^(192\.0\.2|198\.51\.100|203\.0\.113|10\.0\.2|127\.0\.0|0\.0\.0|255\.)/.test(address);
+  expect(addresses.every(documentation), `only documentation-range addresses appear (${addresses.filter((a) => !documentation(a)).join(', ') || 'none outside'})`);
+  expect(/1337/.test(systemData.SYSTEM_OUTPUT.ps.join('\n')) && /ghost\.sh/.test(systemData.SYSTEM_OUTPUT.ps.join('\n')), 'ps shows ghost.sh as PID 1337');
+  expect(/eth0:1/.test(systemData.SYSTEM_OUTPUT.ifconfig.join('\n')), 'ifconfig shows the rogue eth0:1 adapter');
+  expect(/:4444\b/.test(systemData.SYSTEM_OUTPUT.netstat.join('\n')) && /███/.test(systemData.SYSTEM_OUTPUT.netstat.join('\n')), 'netstat has the redacted outbound connection on port 4444');
+  expect(/03:14/.test(systemData.SYSTEM_FILES['var/log/auth.log']().join('\n')), 'auth.log has the guest login at 03:14');
+  const level = await import('../sites/fsociety00/public/js/story-data/level01.js');
+  expect(Object.values(level.LEVEL01_FILES).every((file) => file({ attempts: 3 }).every((row) => !/sdb9-part|--sdb9/.test(row))), 'no file text prints a key layer');
+}
+
 console.log(failures ? `\n${failures} problem(s)` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

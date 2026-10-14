@@ -28,7 +28,7 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `key-tap` | terminal | no caller since phase 2.5 (replaced by `key-tick`; kept, names are never removed) |
 | `command-submit` | terminal | `story.js` `onKeyPress` when the key is Enter |
 | `list-hit` | terminal | `level01.js` commands `help`, `ls` |
-| `file-read` | terminal | `level01.js` commands `cat`, `evidence`, `view-source` |
+| `file-read` | terminal | `level01.js` commands `cat`, `evidence`, `view-source`, and the system commands (`system-commands.js`: `whoami`, `ps`, `netstat`, ...) |
 | `hint` | terminal | `level01.js` command `hint` |
 | `success` | terminal | `level01.js` `unlock` (correct key); `ghost.js` `setStep` (last ghost step) |
 | `failure` | terminal | `level01.js` `unlock` (wrong key); `output.js` `svc` plays `boot-fail` instead since phase 3.3 |
