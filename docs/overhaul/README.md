@@ -4,7 +4,7 @@
 
 - Baseline commit these docs were verified against: `8ea680b` ("A lot of editz"), 2026-10-11
 - Source documents (the original request): [`source/code-review.md`](source/code-review.md) and [`source/overhaul-plan.md`](source/overhaul-plan.md)
-- **Documents in this folder (2026-10-13):** [`state-after-phase-1.md`](state-after-phase-1.md) (code as it is now: read before the phase files' older "current state"), [`prompts.md`](prompts.md) (copy-paste prompts: start, resume, review-only, small fix, parallel phase), [`phase-conflicts.md`](phase-conflicts.md) (which phase touches which file, merge order), [`deploy.md`](deploy.md) (Cloudflare Workers, names, `previews`), [`merging.md`](merging.md) (merge procedure, protecting `main`), [`owner-test-checklist.md`](owner-test-checklist.md) (owner only: phone and PC test), and the story canon in [`../story/story-bible.md`](../story/story-bible.md).
+- **Documents in this folder (2026-10-13):** [`../state/`](../state/README.md) (living docs of the code as it is now, split by area: read before the phase files' older "current state"), [`prompts.md`](prompts.md) (copy-paste prompts: start, resume, review-only, small fix, parallel phase), [`phase-conflicts.md`](phase-conflicts.md) (which phase touches which file, merge order), [`deploy.md`](deploy.md) (Cloudflare Workers, names, `previews`), [`merging.md`](merging.md) (merge procedure, protecting `main`), [`owner-test-checklist.md`](owner-test-checklist.md) (owner only: phone and PC test), and the story canon in [`../story/story-bible.md`](../story/story-bible.md).
 - Scope decision by the owner: the full overhaul plan (sections 1–8) **plus extras 4, 5, 6 and 8 only** (see [Scope](#scope)).
 
 ---
