@@ -69,7 +69,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 | # | Phase | Status | Depends on | Branch | PR / commit | Notes |
 |---|---|---|---|---|---|---|
 | 1 | Foundation & bug fixes | merged | — | `overhaul/phase-1-foundation` | PR #4, squash commit `841cad0` | all rows done, smoke 16/16, owner tested the preview on phone and PC; review findings carried over, see "Known issues carried over" |
-| 2 | Audio | in progress | 1 | `overhaul/phase-02-audio` | | started 2026-10-13; branch name set by the owner (docs said `phase-2-audio`) |
+| 2 | Audio | in review | 1 | `overhaul/phase-02-audio` | PR (see the pull request list) | all rows done, smoke 20/20, audio-lint 0 problems; **not yet listened to**: owner checklist "Phase 2 only" |
 | 3 | Story & boot | todo | 1 | `overhaul/phase-3-story` | | |
 | 4 | Evidence board | todo | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | | |
 | 5 | Animations | todo | 1 (3 recommended) | `overhaul/phase-5-animations` | | |
@@ -372,7 +372,9 @@ None of these is a regression and none blocks the game; each has a home phase.
 | Trace timer: no per-scene policy. The HUD can hit 00:00 before the trust choice with nothing happening, it keeps running during the ghost sequence, and the times (480/120/120/60) are untuned | Phase 3 (`trace` policy in story data, task 3.5) and phase 5 (HUD look, 5.4) |
 | Trace HUD overlaps the ghost panel label on phones (docks to the top right) | Phase 5 |
 | More ways to be traced (noisy commands, honeypot file, unverified `ghost.sh`, watcher lockout) | Idea only: "Phase 10", see `docs/story/README.md`; needs owner canon decisions |
-| Real-device checks not done: screen reader, audible output, 60 fps of the rain on weak phones | Owner, on the preview of each phase |
+| Real-device checks not done: screen reader, audible output (phase 2 sounds have never been heard by anyone), 60 fps of the rain on weak phones | Owner, on the preview of each phase |
+| The trace tick (phase 2) runs for the whole trace, also during the ghost sequence; no per-scene sound policy | Phase 3 (trace policy, task 3.5) |
+| Firefox/Safari fallback for `cancelAndHoldAtTime` in `audio/render.js` has never been executed | Owner or phase 9 QA |
 
 ## Decisions and open questions log
 
@@ -392,5 +394,6 @@ None of these is a regression and none blocks the game; each has a home phase.
 | 2026-10-13 | Hostnames: Worker `fsociety` serves `fsociety.filiposakkq.dev`, Worker `filiposakkq` serves `filiposakkq.dev`. The project card link `https://fsociety.filiposakkq.dev/` is therefore correct | Decided by owner |
 | 2026-10-13 | The owner tests every phase on a phone and on desktop on the Cloudflare preview before merging; PRs are merged with "Squash and merge" | Decided by owner |
 | 2026-10-13 | The owner switches the repo between private and public; no rule about secrets in chat is added to the docs | Decided by owner |
+| 2026-10-14 | Phase 2: no `audio.setMasterVolume()` (not trivial, volume UI is out of scope); brief names that match existing sounds are aliases; new cues are registered only, wired by phases 3, 4 and 6 | Default; see the phase 2 handoff report |
 | 2026-10-13 | Skip control made smaller and with a more transparent background (not a lower text opacity, which fails 4.5:1) because it covered text on phones | Done in the post-phase-1 docs PR |
 | 2026-10-13 | Phase 2 branch is `overhaul/phase-02-audio` (owner's instruction), not `overhaul/phase-2-audio` as the docs said | Decided by owner |

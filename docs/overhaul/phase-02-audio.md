@@ -131,13 +131,20 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 2.4 New cues (boot, terminal, story, trace, evidence, hacking, game over) | done | e9b34e3 | 21 new cues + 2 aliases registered; lint 0 problems (headroom rule added). Not wired, except what 2.5 does: see `audio-cues.md` |
 | 2.5 Typing sounds (extra 6) + reactive trace ticks | done | ee885d4 | `key-tick` wired (real keys + auto-typing every 3rd char at 60% level), `trace-sound.js` (tick every second with `secondsLeft`, warn at 120 s, critical at 60 s and 10 s), `trace.js` `onSecond`; old threshold sounds removed from `level01.js`. Full smoke 20/20 |
 | 2.6 Session cleanup + tools/audio-lint.mjs | done | ee885d4 | abort hook: `audio.stopAll({ beds: false })` then `setScene('idle')`; `pendingNodes()` for tests (no global); lint: 108 rows, 0 problems. Full smoke 20/20 |
-| 2.7 Listening checklist in the PR | todo | | |
+| 2.7 Listening checklist in the PR | done | (PR) | checklist is in `owner-test-checklist.md` ("Phase 2 only") and copied into the PR description; the owner has not listened yet: unverified by ear |
 
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
 
-### Resume point (session 1, 2026-10-13)
+### Resume point (session 2, 2026-10-14)
+
+- Phase 2 is **finished and waiting for review**. Branch `overhaul/phase-02-audio`, code head `bc1534b` (docs-only commits may follow it). `main` was `a993475` and had not moved.
+- `last green commit`: `bc1534b`: full `node tools/smoke.mjs` 20/20 (snapshot run), `node tools/audio-lint.mjs` 110 rows, 0 problems.
+- Nothing is half edited. Next: the owner listens on the Cloudflare preview and ticks the "Phase 2 only" list in `owner-test-checklist.md`; a different Claude or the owner merges (never the author). If the owner reports sound problems, change numbers in `js/audio/patches.js` only and rerun the lint.
+- If `main` has moved when you resume: `git fetch origin main && git merge origin/main`, rerun smoke and lint, push.
+
+### Resume point (historical: session 1, 2026-10-13)
 
 - Branch `overhaul/phase-02-audio`, created from `main` at `a993475`. Started at 2.2 after the 2.1 audit.
 - `last green commit`: `ee885d4` (full `node tools/smoke.mjs`: 20/20 on a snapshot of that commit; `25695fc` was 19/19 before the three new scenarios). Baseline on `a993475` before my changes: 16/16 after rerunning two scenarios that timed out in the parallel run (known flakiness, see `tools/README.md`).
@@ -149,3 +156,51 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
 
 - The owner named the branch `overhaul/phase-02-audio` (docs said `phase-2-audio`).
 - Pushes in this session go through a git proxy that only allows repos attached to the session; the first push attempt failed until the GitHub connection was linked and the repo attached.
+
+## Handoff report (2026-10-14)
+
+### What was built
+
+- **Data-driven engine.** `js/audio/patches.js` holds every sound as data: 83 cues (62 original, all names kept, plus 21 new) and 4 ambient beds, built from a few constructors (`tone`, `noise`, `fm`, `layers`, `variants`, `clip`). `js/audio/render.js` renders any patch with one envelope helper (attack clamped to 40% of the sound, ramp times strictly increasing, NaN-safe) and tracks every source node. `js/audio.js` keeps the public API (`unlock`, `setScene`, `play`) and adds `list()` (the registry for the phase 7 preview panel), `duration()`, `stopAll({ beds })`, `dispose()`, `pendingNodes()` and `prepare()`. `play(name, params)` takes `{ gain }` and cue specific parameters.
+- **Review items closed:** 3 (envelope, final), 10 (the 300-line switch), and `stopBed` mixing clocks (beds fade with `setTargetAtTime` and stop with `node.stop(audioClockTime)`; no `setTimeout` for audio lifetimes).
+- **Per-play variation:** random detune and gain spread on every play, `variants` for `key-tick` (4 click variants, never the same twice in a row), a per-cue rate limiter (`rate`).
+- **Master chain:** compressor, then a soft clip. The loudest possible output is about -2.3 to -2.9 dBFS (the 2x oversampled curve peaks slightly above its nominal value); the lint proves this by driving two cues at 200x gain.
+- **Typing (extra 6):** real keystrokes play `key-tick` (limited to 15 per second, never for modifier, navigation, shortcut or auto-repeat keys; `tty.js` got the shortcut guard). Auto-typed text (`type`, `cmd`, `say`) ticks on every 3rd character at 60% level. `key-tap` is no longer played but still exists.
+- **Reactive trace sound:** `js/trace-sound.js` is called once per second through a new `onSecond` option of `trace.js` (separate from `onTick`, which `level01.js` still replaces). Tick pitch rises from 1.0 to 2.1 kHz as time drops, it gets louder below 120 s and metallic below 60 s, and the rate doubles at 30 s and below. `trace-warn` once at 120 s, `trace-critical` once at 60 s and once at 10 s (one alarm per tick). The old 60/30/10 s sounds were removed from `level01.js`.
+- **Session cleanup:** the abort hook in `story.js` calls `audio.stopAll({ beds: false })` (cues and the voice clip stop at once) then `setScene('idle')` (the bed fades smoothly).
+- **New cues, registered but not played by anything yet** (listed with their owners in `audio-cues.md`): boot (`boot-complete`, `boot-memtest`, `boot-fail`), terminal (`cmd-run`, `cmd-fail`), story (`ghost-appear`, `trust-choice`), trace (`trace-start`), evidence (4), hacking (4), game over (3). Two aliases: `trace-expire`, `identity-reveal`.
+- **Docs:** `audio-cues.md` (new), owner checklist ("Phase 2 only"), `tools/README.md`, `state-after-phase-1.md` (after-phase-2 section), `CHANGELOG.md`, master README (tracker, decisions, known issue removed), `context.js` typedef.
+
+### Tests
+
+| Check | Result |
+|---|---|
+| `node tools/smoke.mjs` (full, 20 scenarios, desktop / mobile / reduced) | 20/20 on `bc1534b` (run on a snapshot copy of the tree) |
+| `node tools/audio-lint.mjs` | 110 rows, 0 problems: every cue, alias, reactive sample and bed rendered offline (no NaN, not silent, 9 dB headroom, silent after its declared duration), bed crossfades without clicks, rate limits, `stopAll`, the limiter, trace thresholds, `trace.js` `onSecond` |
+| New smoke scenarios | no `AudioContext` before the launch click; `body.quiet-motion` alone (without the media query); typing limits; no source node from the previous run alive 1.5 s after a reboot |
+| Baseline before my changes (`a993475`) | 14/16 in the first parallel run, 16/16 after rerunning the two timed out scenarios alone (the known flakiness in `tools/README.md`) |
+| Independent review-only pass | no Critical or Major findings; 6 minor findings, all fixed in `bc1534b` (see the commit message) |
+
+### Unverified (say so, do not assume)
+
+- **Nobody has listened to any of it.** Levels, taste, "grittier and lower", the beds and the trace tick curve are judged by numbers only. The owner's listening list is in the PR.
+- Real devices: iOS Safari and Android audio start, the phone speaker, background tab behaviour of the beds.
+- Firefox and Safari: `cancelAndHoldAtTime` does not exist in Firefox, so the code falls back to `cancelScheduledValues` + `setValueAtTime`; that branch has not been run (the lint runs in Chromium only). `Object.hasOwn` needs Safari 15.4 or newer.
+- The `hello-friend` voice clip is an mp3; headless Chromium may lack the codec, so the voice path was only checked up to the code level.
+- The Cloudflare preview build of this branch has not been looked at.
+
+### Decisions made without the owner
+
+- Branch name `overhaul/phase-02-audio` (the owner's instruction) instead of `phase-2-audio` from the docs.
+- `audio.setMasterVolume()` was **not** added (the spec said "only if trivial"; a volume UI is out of scope).
+- Brief names that match an existing sound became **aliases** (`trace-expire`, `identity-reveal`); `ghost-appear` and `trust-choice` are new sounds because the brief describes different ones.
+- `trace-tick` plays every second for the whole trace, very quietly above 120 s. Phase 3 owns the per-scene trace policy and may want to silence it in some scenes.
+- `trace-critical` plays at 60 s and again at 10 s (the 10 s one preserves the old behaviour).
+- New cues are registered only; wiring them is left to phases 3, 4 and 6 as the spec says.
+
+### Follow-ups for later phases
+
+- Phase 3: wire `boot-*`, `cmd-*`, `ghost-appear`, `trust-choice`, `trace-start`; decide the per-scene trace sound policy (the tick also runs during the ghost sequence).
+- Phase 4: wire the evidence and hacking cues. Phase 6: `traced-alert`, `system-takeover`, `session-kill`. Phase 7: the preview panel reads `audio.list()`; add rows to `audio-cues.md` when wiring.
+- `audio.dispose()` is implemented and linted through `stopAll` but nothing calls it.
+- `tools/smoke.mjs` now has 20 scenarios and takes about 4 minutes in parallel; two long scenarios can still time out under load (rerun them alone before concluding anything).
