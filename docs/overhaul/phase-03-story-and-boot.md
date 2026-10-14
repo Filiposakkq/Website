@@ -200,9 +200,9 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 |---|---|---|---|
 | 3.1 Engine + node types + tools/validate-story.mjs | done | 1650879 | `js/engine.js`, `js/pace.js`, `session.flush()`, `tools/validate-story.mjs` (self-test only; no story data yet). Engine is not driving the game before 3.3 |
 | 3.2 Skip logic as segment fast-forward | done | see 3.3 | Skip = `pace.setFast` + `session.flush()` per engine segment; `js/skip-control.js` holds the 3 s state per session; old `run.skip*` flags deleted. Smoke 20/20 |
-| 3.3 Realistic boot data (incl. the sdb9 hook) | done | (this commit) | `story-data/boot.js` runs through the engine; `output.js` extracted; smoke 20/20 (updated the BIOS header string in `tools/smoke.mjs`); transcript diff vs baseline = boot text only |
-| 3.4 Intro + transmission migrated | todo | | |
-| 3.5 Trust choice + branches migrated | todo | | |
+| 3.3 Realistic boot data (incl. the sdb9 hook) | done | 61b98cd | `story-data/boot.js` runs through the engine; `output.js` extracted; smoke 20/20 (updated the BIOS header string in `tools/smoke.mjs`); transcript diff vs baseline = boot text only |
+| 3.4 Intro + transmission migrated | done | ae37c3c | `story-data/intro.js`; transcript = baseline byte for byte (smoke 19/20 in one parallel run, the typing-ticks scenario is the known flaky one, passes alone) |
+| 3.5 Trust choice + branches migrated | done | ae37c3c | `story-data/routes.js`, generic `chooseOption`; trace policy (Design 3.5): `trace.js` modes + `close()`, `TRACE` constants, `trust-choice` and `trace-start` cues wired; smoke 20/20 incl. new TRACE CLOSED assertion; audio-lint 0 problems |
 | 3.6 Ghost route migrated | todo | | |
 | 3.7 Identity reveal + endings migrated | todo | | |
 | 3.8 Command registry (migrate all existing commands) | todo | | |
@@ -213,7 +213,15 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
 
-### Resume point (2026-10-14, session 1, after 3.3)
+### Resume point (2026-10-14, session 1, after 3.5)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: `ae37c3c` (full `node tools/smoke.mjs` 20/20 on a snapshot of it, `node tools/audio-lint.mjs` 0 problems, `node tools/validate-story.mjs` passes, `node tools/transcript.mjs --diff` vs the baseline shows the boot text only).
+- Engine segments: `boot` (nodes), `intro` (nodes), `choice` (nodes: trust choice, both routes, trace reset, then one `run` node calling `legacyLevel` in `story.js`).
+- Next: 3.6 ghost route. `promptGhost` + `runGhost` + the ghost part of `revealName` into nodes (the ghost panel with its steps stays a bespoke `run` beat; the trace is already `close()`d there). Then 3.7 reveal + endings (`playIdentityReveal`, `renameEverywhere`, `moveHelloIntoChat`, `gameOver`, `watcherTakeover` stay functions called by `run` nodes), 3.8 command registry (`level01.js` switch), 3.9 Linux commands, 3.10 cleanup (story.js under ~400 lines) + dialogue polish.
+- Nothing half edited. Baseline for transcript diffs: `main` 33c7b94 (record into a scratch dir from a checkout; the session scratchpad copy is not committed).
+- Reminders: update docs in the same commit (audio-cues.md, docs/state/*, tools/README.md); a `CHANGELOG.md` line at the end; the handoff report at the end.
+
+### Resume point (2026-10-14, session 1, after 3.3) (historical)
 
 - Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.3 (full `node tools/smoke.mjs` 20/20 on a snapshot of it; the commit before it, 1650879, was 17/20 in one parallel run and the 3 load failures passed alone).
 - Done: 3.1 engine, 3.2 skip, 3.3 boot data. The engine runs three segments: `boot` (nodes), `intro` and `choice` (each a single `run` node calling `legacyIntro` / `legacyRest` in `story.js`).
@@ -244,3 +252,11 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
 - **Boot length** is unverified on a real clock: estimated about 38 s un-skipped (the BIOS part is about 14 s). Check on the preview; tune the waits in `story-data/boot.js`.
 - **`tools/transcript.mjs`** gained a `boot` scenario (captured inside the page, because the story wipes the screen) and normalizes the `eta:` line. Baseline for later diffs: record from a checkout of `33c7b94`.
 - `tools/smoke.mjs`: the only change is the BIOS header string (`FSOC-BIOS v3.1.4`).
+
+### 3.4 and 3.5 notes (2026-10-14)
+
+- **Skipping now drops sounds** in the skipped segment (`sfx` nodes and the sounds inside typing helpers): before, a skipped intro still played `transmission`, `mail-arrive` and so on. Intended (spec: sounds are dropped).
+- **Trace policy.** `running` (until the trust choice) counts down to 10 s and holds there reading TRACE PENDING, so it can never end the game before the player has chosen; the trust route turns it `lethal` (`trace-start` cue) and resets it to 120 s; `ghost.sh`'s "close_trace" now calls `trace.close()` (HUD reads TRACE CLOSED, clock stopped for good; before it was `kill()` / TRACE KILLED, same effect). Between the start of the ghost script and that step (about 5 s) the trace is still lethal, as before. `startTrace` requires the session now (the raw `setInterval` fallback is deleted). The times are named constants (`story-data/constants.js` `TRACE`); tuning is for after the owner's phone test.
+- **Generic choice.** `story-choices.js` exports `chooseOption(ctx, options)`; `chooseTrust` is gone. The accepted answers (`1`, `unknown`, `trust <unknown>` ...) are the options' `match` lists in `story-data/routes.js`; the optional leading `trust ` verb is still stripped inside `chooseOption` (a small trust-specific leftover, noted for 3.10).
+- **Tool fix.** `tools/transcript.mjs` shared one variable between its two capture scenarios (a race when run in parallel); each scenario returns its own rows now and the baseline was re-recorded. `tools/audio-lint.mjs` passes a session and `mode: 'lethal'` to `startTrace` and checks the new modes.
+- **Smoke note.** The scenario `reduced: typing ticks are rate limited...` failed once in a loaded parallel run again (unrelated to this phase; passes alone).
