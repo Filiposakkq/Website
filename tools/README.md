@@ -33,6 +33,21 @@ Notes:
 - Audio cannot be heard in headless runs. The smoke only checks that nothing throws, that no `AudioContext` exists before the launch click, and that a reboot leaves no source node running (a test-only probe installed with `addInitScript`; the game exposes no global). Levels and tails are in `audio-lint.mjs`.
 - A full run takes a few minutes because the story runs in real time (scenarios run in parallel).
 
+## `transcript.mjs` — playthrough text recorder and differ (phase 3)
+
+```sh
+node tools/transcript.mjs --out=/tmp/before                  # record 4 scripted playthroughs (reduced motion, ~1 min)
+node tools/transcript.mjs --site=<copy-of-public> --out=/tmp/after
+node tools/transcript.mjs --diff=/tmp/before,/tmp/after      # lines present in only one of the two recordings
+```
+
+Plays both trust routes to victory (every shell command, the ghost prompt), the `abort` ending and the lock-out in
+reduced motion and saves the terminal text, with random parts normalized (relay IPs, latencies, redaction blocks,
+kernel timestamps, memory counter), so two recordings of the same build are identical. Used in phase 3 to check that
+every story line that was not changed on purpose is still there. `--diff` compares sets of lines, not their order,
+and exits 1 when anything differs. To record the baseline of an older commit, check it out into a scratch directory and
+pass its `sites/fsociety00/public` as `--site`. It judges text only, not looks or sound.
+
 ## `audio-lint.mjs` — audio engine lint (phase 2)
 
 ```sh
