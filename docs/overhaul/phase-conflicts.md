@@ -7,13 +7,14 @@ Written 2026-10-13 from the "Touches" line of each phase file. It is the file-le
 | `js/story.js` | call sites | **shrinks a lot** | | helpers | endings | `runDeveloperRoute` | | |
 | `js/level01.js` | call sites | **yes** | **yes** | | | | | `source`/`cat` |
 | `js/casefile.js` | call sites | | **large rework** | board reveal CSS | | | | |
-| `js/audio.js` | **rewrite** | | | | cue wiring | previews | | |
-| `js/trace.js` | | | | hooks | `onEnd` hook | | | |
+| `js/audio.js`, `js/audio/*` (`patches.js`, `render.js`, new in 2) | **rewrite** | | | | cue wiring | previews | | |
+| `js/trace-sound.js` (new in 2) | **creates** | trace policy (3.5: no tick when frozen) | | | | | | |
+| `js/trace.js` | `onSecond` option (sound hook) | policy (3.5) | | hooks | `onEnd` hook | | | |
 | `js/rain.js` | | | | **yes** | | | | |
 | `js/commands.js` (new in 3) | | **creates** | new commands | | | | | quick actions |
 | `js/engine.js`, `js/story-data/*` (new in 3) | | **creates** | | | uses | scene table | | |
 | `js/developer-menu.js` | | | | | | **rewrite** | | |
-| `js/tty.js` | | | | | | | | **yes** |
+| `js/tty.js` | key-tick, ignores Ctrl/Cmd/Alt shortcuts | | | | | | | **yes** |
 | `styles.css` | | | `.case-*` | **many rules** | game-over panel | `.developer-*` | | quick bar, viewer |
 | `index.html` | | | case trigger | overlays | game-over panel | | | quick bar |
 | `sites/main/public/*` | | | | | | | **only this** | |
