@@ -7,10 +7,10 @@ Use it to keep the story consistent in phases 3 (story data), 4 (evidence), 6 (T
 ## 1. Scene timeline
 
 1. **Launch dialog** (H:19-28): "INCOMING CONNECTION // FSOCIETY00", button `[ INITIALIZE SYSTEM ]`; status lines NEGOTIATING DISPLAY MODE, VERIFYING LOCAL CONSOLE, OPENING GUEST SESSION (S:1741-1771). Audio starts here, not before.
-2. **BIOS / POST** (S:1236-1254): `FSOC-BIOS v0.0.1 (c) 2015 E Corp`, build `15-05-2015 03:14:07`, drives sda 512GB SSD, sdb 2TB HDD.
-3. **GRUB and kernel log** (S:1257-1285): `Linux 4.19.0-fsoc`; a USB error followed by `Product: unknown`.
-4. **Services, network, disk** (S:1289-1338): Tor and the "fsociety00 relay service" start, eth0 gets a `203.0.113.x` address (documentation range), 5 relay hops, `/dev/sdb1` unlocked, then `found unlisted partition: /dev/sdb9`, `contents: encrypted`, `owner: unknown`.
-5. **First trace glitch** (S:1342-1349): `WARNING: unauthorized access detected`, `source: unknown`, `trace request failed.`
+2. **BIOS / POST** (`js/story-data/boot.js`, since phase 3.3): `AMIBIOS (C) 2015 E Corp Systems`, `FSOC-BIOS v3.1.4 Release 09/23/2015`, CPU i7-4790, a memory test that counts up to 16384MB, drive and PCI detection (all fictional hardware).
+3. **GRUB and kernel log** (`boot.js`): `fsociety-os (kernel 4.4.0-custom)`, `Linux version 4.4.0-fsoc`, kernel lines with increasing timestamps.
+4. **Services, the partition, warnings, login** (`boot.js`): services start and **one fails** (`[FAILED] Failed to start Firewall Service.`); then `found unlisted partition: /dev/sdb9`, `contents: encrypted`, `owner: unknown`; then three warnings (unauthorized adapter `eth0:1`, unknown process `ghost.sh` as PID 1337, outbound connection to `[REDACTED]` on port 4444) and an auto-typed login as `guest` (masked password, last login from `203.0.113.???`). The earlier Tor/relay-hop/fsck lines are gone.
+5. **First trace glitch** (end of `boot.js`): `WARNING: unauthorized access detected`, `source: unknown`, `trace request failed.`
 6. **Static, roll, blackout, then** `*** INCOMING TRANSMISSION ***` (`source: unknown`, `direct line open.`) (S:1359-1373).
 7. **Hello message** (S:1378-1397): `<unknown> you're right on time.` in big text, then "i've been waiting for you", "you shouldn't be here / but you are.", "there is something hidden in this system.", "find it before they do.", "they are already looking for you." Then `*** unknown disconnected ***`, `wiping session...` and the screen is wiped.
 8. **Logo reveal** (S:465-551, 1411-1415): glitchy decrypt of the pixel FSOCIETY logo, header `FS/00`, `RELAY ID // 0515`, caption `PRIVATE RELAY // TRUST NO ROUTE`, then `access level: GUEST`.

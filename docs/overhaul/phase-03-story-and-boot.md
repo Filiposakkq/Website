@@ -198,9 +198,9 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 3.1 Engine + node types + tools/validate-story.mjs | done | (hash in the next row's commit) | `js/engine.js`, `js/pace.js`, `session.flush()`, `tools/validate-story.mjs` (self-test only; no story data yet). Engine is not driving the game before 3.3 |
-| 3.2 Skip logic as segment fast-forward | todo | | |
-| 3.3 Realistic boot data (incl. the sdb9 hook) | todo | | |
+| 3.1 Engine + node types + tools/validate-story.mjs | done | 1650879 | `js/engine.js`, `js/pace.js`, `session.flush()`, `tools/validate-story.mjs` (self-test only; no story data yet). Engine is not driving the game before 3.3 |
+| 3.2 Skip logic as segment fast-forward | done | see 3.3 | Skip = `pace.setFast` + `session.flush()` per engine segment; `js/skip-control.js` holds the 3 s state per session; old `run.skip*` flags deleted. Smoke 20/20 |
+| 3.3 Realistic boot data (incl. the sdb9 hook) | done | (this commit) | `story-data/boot.js` runs through the engine; `output.js` extracted; smoke 20/20 (updated the BIOS header string in `tools/smoke.mjs`); transcript diff vs baseline = boot text only |
 | 3.4 Intro + transmission migrated | todo | | |
 | 3.5 Trust choice + branches migrated | todo | | |
 | 3.6 Ghost route migrated | todo | | |
@@ -213,12 +213,13 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
 
-### Resume point (2026-10-14, session 1, after 3.1)
+### Resume point (2026-10-14, session 1, after 3.3)
 
-- Branch `overhaul/phase-3-story` from `main` `33c7b94`. `last green commit`: none recorded on this branch yet (baseline `main` 33c7b94: 18/20 smoke scenarios in a parallel run, the 2 that failed passed when run alone, see the baseline note below).
-- Done: 3.1 (engine, pace, `session.flush()`, validator). `node tools/validate-story.mjs` passes its self-test.
-- In progress: nothing half edited. Next step: 3.2 + 3.3 together in practice, because the skip control only means something once the boot runs through the engine: create `js/story-data/` (dsl, voices, constants, boot, index), `js/output.js` (line, type, say, bar, klog, svc ... moved out of `story.js`), `js/skip-control.js`, and make `story.js` run the `boot` segment through the engine first, then the old `runStory` for the rest until 3.4 to 3.7 migrate it.
-- Tools to hand: `node tools/transcript.mjs --out=<dir>` (baseline recordings of `main` 33c7b94 were made into the session scratchpad and are not committed; record them again from a checkout of `33c7b94`), `node tools/validate-story.mjs`, `node tools/smoke.mjs`.
+- Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.3 (full `node tools/smoke.mjs` 20/20 on a snapshot of it; the commit before it, 1650879, was 17/20 in one parallel run and the 3 load failures passed alone).
+- Done: 3.1 engine, 3.2 skip, 3.3 boot data. The engine runs three segments: `boot` (nodes), `intro` and `choice` (each a single `run` node calling `legacyIntro` / `legacyRest` in `story.js`).
+- Next: 3.4. Turn `legacyIntro` (flash/blackout, INCOMING TRANSMISSION, hello, wipe, logo, inbox, LEVEL 01 brief, trace start, cut-off, watcher interruption, "who do you trust?") into nodes in `story-data/intro.js`. Bespoke beats stay `run` nodes. Check with `node tools/transcript.mjs --out=<dir>` then `--diff=` against the baseline (record the baseline from a checkout of `33c7b94`; the scratchpad copy is not committed).
+- Nothing half edited. Known harmless leftovers: `const story = []` in `legacyIntro` (dead, remove in 3.4).
+- Tools: `tools/validate-story.mjs`, `tools/transcript.mjs`, `tools/smoke.mjs`.
 
 ### Resume point (2026-10-14, session 1 start) (historical)
 
@@ -234,3 +235,12 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
 - **Baseline smoke on `main` 33c7b94 (before any change):** 18/20 in the parallel run; `reduced: typing ticks are rate limited...` (30 instant keystrokes started 14 click nodes) and `desktop: trust unknown -> victory` (90 s timeout waiting for the trust choice) failed under load and both passed when rerun alone (5 s and 158 s). This is the known flakiness in `tools/README.md`. Judge later runs against it: rerun failures alone before concluding anything.
 - **Engine design decisions.** Segments carry the skip policy (`skippable: 'boot' | 'intro'`, `announce`); a skip is `pace.setFast(true)` plus `session.flush()` (new, wakes every pending sleep without aborting), so a skip takes effect at once instead of after the current wait. `sfx`, `gfx`, `flash`, `static`, `corrupt` and `wait` nodes are dropped while skipping; text, `scene`, `trace`, `state`, `case` and `run` nodes still run. The next segment ends the fast-forward. Branches compile to jumps, so there is one flat program and a real pointer for `engine.getState()`.
 - **Validator.** `tools/validate-story.mjs` checks node fields strictly (a misspelled field is an error) and dry-runs every combination of choices with a recording host; `run` nodes are not called in a dry run.
+
+### 3.2 and 3.3 notes (2026-10-14)
+
+- **Stale engine events.** A developer jump aborts the old session, and the old engine's `finally` reports its end a moment later; it used to hide the shared skip button after the new run had shown it (found by the scenario `abort at BIOS...`). `skip-control.js` now ignores events once its own session has aborted. Anything that touches shared DOM from an engine event must do the same.
+- **Boot text changes (intentional, from the plan):** new BIOS/GRUB/kernel/service text; one failing service (`Firewall`); login lines type themselves with a masked password; three warnings after the partition scan. **Removed:** the Tor and relay-service lines, `fsck`, the network bring-up with five relay hops, cryptsetup/`/dev/sdb1`, the drive list `sda/sdb/sdc`. **Kept:** `scanning for partitions... found unlisted partition: /dev/sdb9 / contents: encrypted / owner: unknown` and the final `WARNING: unauthorized access detected / source: unknown / tracing connection... / trace request failed.` The later dialogue never mentions the removed lines (grep checked).
+- **Audio:** the boot now plays `boot-memtest`, `boot-checkpoint`, `drive-seek`, `boot-fail` (on the failed service, instead of `failure`) and `boot-complete`. `boot-memory`, `relay-hop`, `network-lock` and `disk-unseal` have no caller (kept). Listening is unverified (nobody has heard the new boot).
+- **Boot length** is unverified on a real clock: estimated about 38 s un-skipped (the BIOS part is about 14 s). Check on the preview; tune the waits in `story-data/boot.js`.
+- **`tools/transcript.mjs`** gained a `boot` scenario (captured inside the page, because the story wipes the screen) and normalizes the `eta:` line. Baseline for later diffs: record from a checkout of `33c7b94`.
+- `tools/smoke.mjs`: the only change is the BIOS header string (`FSOC-BIOS v3.1.4`).

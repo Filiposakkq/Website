@@ -218,7 +218,7 @@ async function snapshotRun(page) {
     const count = (needle) => text.split(needle).length - 1;
     const power = document.getElementById('powerPanel');
     return {
-      bios: count('FSOC-BIOS v0.0.1'),
+      bios: count('FSOC-BIOS v3.1.4'),
       restored: count('LOCAL CONSOLE RESTORED'),
       cpu: count('CPU: Intel(R)'),
       trustPrompts: count('who do you trust?'),
@@ -242,7 +242,7 @@ async function rebootAndVerify(page, { reduced }) {
   await waitGone(page, '#powerPanel', 60000);
   if (!reduced) {
     // Real-time run: the BIOS is still printing, so one stream means exactly one header.
-    await waitOutput(page, 'FSOC-BIOS v0.0.1');
+    await waitOutput(page, 'FSOC-BIOS v3.1.4');
     await sleep(6500);
     const early = await snapshotRun(page);
     expectClean(early, [

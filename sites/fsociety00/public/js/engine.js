@@ -25,11 +25,12 @@ export const NODE_SPECS = {
   type: spec(['text'], ['style', 'speed', 'silent']),
   say: spec(['who', 'text'], ['speed', 'typoAt', 'cls', 'floating', 'ref']),
   typing: spec(['ms'], ['who']),
-  cmd: spec(['text'], ['speed', 'pause']),
+  cmd: spec(['text'], ['speed', 'pause', 'prompt', 'mask']),
   bar: spec(['label'], ['ms']),
   klog: spec(['text'], ['style', 't']),
   svc: spec(['text'], ['state', 'ms']),
-  memtest: spec([], ['total']),
+  memtest: spec([], ['total', 'ms']),
+  probe: spec(['text', 'result'], ['ms', 'style']),
   wait: spec(['ms']),
   sfx: spec(['cue'], ['params']),
   scene: spec(['name']),
@@ -208,11 +209,12 @@ export function validateStory(story, known = {}) {
  * @property {(text: string, cls?: string, speed?: number, options?: object) => Promise<unknown>} type
  * @property {(text: string|object[], options: object) => Promise<unknown>} say   options.who names a voice
  * @property {(ms: number, who?: string) => Promise<void>} typingFor
- * @property {(text: string, speed?: number, pause?: number) => Promise<void>} cmd
+ * @property {(text: string, speed?: number, pause?: number, options?: { prompt?: string, mask?: boolean }) => Promise<void>} cmd
  * @property {(label: string, ms?: number) => Promise<void>} bar
  * @property {(text: string, cls?: string, t?: number) => Promise<void>} klog
  * @property {(text: string, state?: string, ms?: number) => Promise<void>} svc
- * @property {(total?: number) => Promise<void>} memtest
+ * @property {(total?: number, ms?: number) => Promise<void>} memtest
+ * @property {(text: string, result: string, ms?: number, cls?: string) => Promise<void>} probe  prints `text`, then appends `result` after a pause
  * @property {(cue: string, params?: object) => void} sfx
  * @property {(name: string) => void} setScene
  * @property {(name: string) => Promise<void>} gfx
@@ -282,11 +284,12 @@ export function createEngine({ story, host, session, pace, events = {}, executeR
       if (n.ref) refs[n.ref] = element;
     },
     typing: (n) => host.typingFor(val(n.ms), n.who ?? 'unknown'),
-    cmd: (n) => host.cmd(val(n.text), val(n.speed), val(n.pause)),
+    cmd: (n) => host.cmd(val(n.text), val(n.speed), val(n.pause), { prompt: val(n.prompt), mask: Boolean(n.mask) }),
     bar: (n) => host.bar(val(n.label), val(n.ms)),
     klog: (n) => host.klog(val(n.text), val(n.style), val(n.t)),
     svc: (n) => host.svc(val(n.text), val(n.state), val(n.ms)),
-    memtest: (n) => host.memtest(val(n.total)),
+    memtest: (n) => host.memtest(val(n.total), val(n.ms)),
+    probe: (n) => host.probe(val(n.text), val(n.result), val(n.ms), val(n.style)),
     wait: (n) => host.wait(val(n.ms)),
     sfx: (n) => host.sfx(val(n.cue), val(n.params)),
     scene: (n) => host.setScene(val(n.name)),

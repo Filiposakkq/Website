@@ -11,17 +11,17 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | Cue | Category | Caller |
 |---|---|---|
 | `power-on` | boot | `story.js` `launchStory` (after the launch click) |
-| `boot-memory` | boot | `story.js` `memtest` |
-| `boot-prompt` | boot | `story.js` `runStory` (BIOS step) |
-| `boot-checkpoint` | boot | `story.js` `runStory` (BIOS step) |
+| `boot-memory` | boot | no caller since phase 3.3 (the boot plays `boot-memtest` instead; kept, names are never removed) |
+| `boot-prompt` | boot | `story-data/boot.js` (BIOS) |
+| `boot-checkpoint` | boot | `story-data/boot.js` (BIOS) |
 | `kernel-tick` | boot | `story.js` `klog` (every 3rd kernel line) |
-| `kernel-start` | boot | `story.js` `runStory` |
+| `kernel-start` | boot | `story-data/boot.js` (GRUB to kernel) |
 | `service` | boot | `story.js` `svc` (start of a service line) |
-| `service-ready` | boot | `story.js` `svc` (state `OK`) |
+| `service-ready` | boot | `output.js` `svc` (state `OK`) |
 | `drive-seek` | boot | `story.js` `runStory` |
-| `relay-hop` | boot | `story.js` `runStory` (network relays) |
-| `network-lock` | boot | `story.js` `runStory` |
-| `disk-unseal` | boot | `story.js` `runStory` |
+| `relay-hop` | boot | no caller since phase 3.3 (the new boot has no relay hops; kept) |
+| `network-lock` | boot | no caller since phase 3.3 (kept) |
+| `disk-unseal` | boot | no caller since phase 3.3 (kept) |
 | `terminal-open` | boot | `story.js` `cmd` (a typed command appears) |
 | `typewriter-start` | terminal | `story.js` `type` (start of each typed line) |
 | `typing` | terminal | no caller found (defined, unused) |
@@ -31,7 +31,7 @@ Rules: do not rename or remove a cue name another file uses (grep first). Scene 
 | `file-read` | terminal | `level01.js` commands `cat`, `evidence`, `view-source` |
 | `hint` | terminal | `level01.js` command `hint` |
 | `success` | terminal | `level01.js` `unlock` (correct key); `story.js` `setStep` (last ghost step) |
-| `failure` | terminal | `level01.js` `unlock` (wrong key); `story.js` `svc` (state not `OK`) |
+| `failure` | terminal | `level01.js` `unlock` (wrong key); `output.js` `svc` plays `boot-fail` instead since phase 3.3 |
 | `progress-start` | terminal | `story.js` `bar` |
 | `progress-tick` | terminal | `story.js` `bar` (every 4th step) |
 | `progress-complete` | terminal | `story.js` `bar` |
@@ -86,9 +86,9 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 
 | Cue | Category | Wired by |
 |---|---|---|
-| `boot-complete` | boot | phase 3 (realistic boot) |
-| `boot-memtest` | boot | phase 3 (rising sweep for the memory counter) |
-| `boot-fail` | boot | phase 3 (the `[FAILED] Failed to start Firewall Service` line) |
+| `boot-complete` | boot | **phase 3.3, wired**: `story-data/boot.js` at the login prompt |
+| `boot-memtest` | boot | **phase 3.3, wired**: `story-data/boot.js` while the memory counts up |
+| `boot-fail` | boot | **phase 3.3, wired**: `output.js` `svc` when a service line is `FAILED` (the firewall) |
 | `key-tick` | terminal | **phase 2, wired**: real keystrokes (`story.js` `onKeyPress`) and auto-typing in `type`, `cmd`, `say` (every 3rd character, `{ gain: 0.6 }`) |
 | `cmd-run`, `cmd-fail` | terminal | phase 3 (Linux commands) |
 | `ghost-appear` | story | phase 3 (story engine) |

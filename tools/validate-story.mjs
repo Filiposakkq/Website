@@ -65,6 +65,7 @@ function createRecordingHost({ picks = {}, onRun = null } = {}) {
     klog: async (text) => note(`klog:${text}`),
     svc: async (text, state = 'OK') => note(`svc:${state}:${text}`),
     memtest: async () => note('memtest'),
+    probe: async (text, result) => note(`probe:${text}${result}`),
     wait: async () => note('wait'),
     sfx: (cue) => { cues.add(cue); note(`sfx:${cue}`); },
     setScene: (name) => note(`scene:${name}`),

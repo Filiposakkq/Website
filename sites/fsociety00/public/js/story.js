@@ -2,6 +2,10 @@ import { startTrace } from './trace.js';
 import { createTraceSound } from './trace-sound.js';
 import { createLevel01, revealLevel01SourcePart } from './level01.js';
 import { createSession, isAbortError, swallowAbort } from './session.js';
+import { createPace } from './pace.js';
+import { createEngine } from './engine.js';
+import { createOutput } from './output.js';
+import { createSkipControl } from './skip-control.js';
 import { createGameContext } from './context.js';
 import { createTerminal } from './tty.js';
 import { installDeveloperMenu } from './developer-menu.js';
@@ -11,6 +15,8 @@ import { rand, pad2, scrambleText } from './util.js';
 import { renderChoices } from './choices.js';
 import { createRain } from './rain.js';
 import { chooseTrust } from './story-choices.js';
+import { story as storyData } from './story-data/index.js';
+import { VOICES } from './story-data/voices.js';
 
 const out = document.getElementById('output');
 const screen = document.getElementById('screen');
@@ -35,14 +41,11 @@ const shutdownEvents = document.getElementById('shutdownEvents');
 const skipLabel = skipHint.querySelector('.skip-label');
 const srAnnouncer = document.getElementById('srAnnouncer');
 const audio = createAudioController();
-// Auto-typed text (type, cmd, say) ticks on every 3rd character at 60% of a real keystroke's level.
-const AUTO_TYPING = { gain: 0.6 };
 // The rain reacts to prefers-reduced-motion / body.quiet-motion changes by itself (see rain.js).
 const rain = createRain(document.getElementById('rain'));
 const setRain = (opacity, immediate = false) => rain.setOpacity(opacity, immediate);
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const ambientIntervals = new Set();
-const SKIP_HOLD_MS = 3000;
 
 const motionReduced = () => motionPreference.matches || document.body.classList.contains('quiet-motion');
 let activeTrace = null;
@@ -62,100 +65,30 @@ motionPreference.addEventListener('change', () => {
 });
 
 // One session per run of the story (see session.js). Aborting it stops every timer, sleep and
-// listener the run started, so a reboot or developer jump cannot leak into the next run.
+// listener the run started, so a reboot or developer jump cannot leak into the next run. Each session has its
+// own pace (skip / reduced motion), engine and skip control, built by prepareRun().
 let session = createSession();
-const newRunState = () => ({
-  skip: false,
-  skippable: true,
-  skipToChoice: false,
-  skipToChoiceArmed: true,
-  announce: true, // false while the fake BIOS / kernel text scrolls past
-});
-// Hold the on-screen control to skip boot or advance to the trust choice. Reset for every session.
-let run = newRunState();
-let holdStartedAt = 0;
-let holdTarget = null;
-let holdFrame = 0;
+let pace = createPace({ session, motionReduced });
+let engine = null;
 
-function setSkipHint(mode, visible = true) {
-  skipLabel.textContent = `HOLD 3S // SKIP ${mode}`;
-  skipHint.setAttribute('aria-label', `Hold for 3 seconds to skip the ${mode === 'BOOT' ? 'boot sequence' : 'story intro'}`);
-  skipHint.hidden = !visible;
-  skipHint.classList.remove('done');
-  skipHint.style.setProperty('--hold-progress', '0');
+function prepareRun() {
+  const skipControl = createSkipControl({ element: skipHint, session });
+  engine = createEngine({
+    story: storyData,
+    host: engineHost,
+    session,
+    pace,
+    events: { onSegment: skipControl.onSegment, onSkip: skipControl.onSkip },
+  });
+  skipControl.attach(engine);
+  output.reset();
 }
 
-function cancelSkipHold() {
-  if (holdFrame) cancelAnimationFrame(holdFrame);
-  holdFrame = 0;
-  holdStartedAt = 0;
-  holdTarget = null;
-  skipHint.classList.remove('holding');
-  skipHint.style.setProperty('--hold-progress', '0');
-}
-
-function advanceSkipHold(now) {
-  const progress = Math.min((now - holdStartedAt) / SKIP_HOLD_MS, 1);
-  skipHint.style.setProperty('--hold-progress', String(progress));
-  if (progress < 1) {
-    holdFrame = requestAnimationFrame(advanceSkipHold);
-    return;
-  }
-
-  const target = holdTarget;
-  cancelSkipHold();
-  if (target === 'boot' && run.skippable) {
-    run.skip = true;
-    skipHint.classList.add('done');
-  } else if (target === 'intro' && !run.skippable && run.skipToChoiceArmed) {
-    run.skipToChoice = true;
-    skipHint.hidden = true;
-  }
-}
-
-function beginSkipHold() {
-  if (holdStartedAt || skipHint.hidden || skipHint.disabled) return;
-  holdTarget = run.skippable ? 'boot' : run.skipToChoiceArmed ? 'intro' : null;
-  if (!holdTarget) return;
-  holdStartedAt = performance.now();
-  skipHint.classList.add('holding');
-  holdFrame = requestAnimationFrame(advanceSkipHold);
-}
-
-skipHint.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  skipHint.setPointerCapture(event.pointerId);
-  beginSkipHold();
-});
-skipHint.addEventListener('pointerup', cancelSkipHold);
-skipHint.addEventListener('pointercancel', cancelSkipHold);
-skipHint.addEventListener('lostpointercapture', cancelSkipHold);
-skipHint.addEventListener('pointermove', (event) => {
-  if (!holdStartedAt) return;
-  const bounds = skipHint.getBoundingClientRect();
-  if (event.clientX < bounds.left || event.clientX > bounds.right
-    || event.clientY < bounds.top || event.clientY > bounds.bottom) cancelSkipHold();
-});
-skipHint.addEventListener('keydown', (event) => {
-  if (event.key === ' ' || event.key === 'Enter') {
-    event.preventDefault();
-    beginSkipHold();
-  } else if (event.key === 'Escape') cancelSkipHold();
-});
-skipHint.addEventListener('keyup', (event) => {
-  if (event.key === ' ' || event.key === 'Enter') cancelSkipHold();
-});
-skipHint.addEventListener('click', (event) => event.preventDefault());
-addEventListener('blur', cancelSkipHold);
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) cancelSkipHold();
-});
-
-const isSkipping = () => run.skip || run.skipToChoice;
+const isSkipping = () => pace.isSkipping();
 
 // Everything sleeps through the *current* session, so aborting it wakes every awaiting chain at once.
-const sleep = (ms) => session.sleep(ms);
-const wait = (ms) => (isSkipping() || motionReduced() || ms <= 0 ? session.wait(0) : session.sleep(ms));
+const sleep = (ms) => pace.sleep(ms);
+const wait = (ms) => pace.wait(ms);
 const ip = () => `203.0.113.${rand(1, 254)}`;
 const scroll = () => window.scrollTo(0, document.body.scrollHeight);
 const terminal = createTerminal({
@@ -214,7 +147,6 @@ function sweepStage() {
 // What has to stop when a session aborts.
 function armSession(target) {
   target.onAbort(() => {
-    cancelSkipHold();
     closePrompt();
     activeTrace?.halt(true);
     activeTrace = null;
@@ -230,105 +162,26 @@ function armSession(target) {
 function beginSession(reason) {
   session.abort(reason);
   session = createSession();
-  run = newRunState();
+  pace = createPace({ session, motionReduced });
   armSession(session);
+  prepareRun();
 }
 armSession(session);
 
-// Screen readers: #output is role=log with aria-live=off, because it is mutated one character at a time
-// and would be read keystroke by keystroke. Instead, each COMPLETED line is appended here. Decorative
-// output (BIOS/kernel spam, progress bars, glitch text) is silent.
-function announce(text) {
-  const message = String(text ?? '').trim();
-  if (!message || !run.announce) return;
-  const entry = document.createElement('div');
-  entry.textContent = message;
-  srAnnouncer.appendChild(entry);
-  while (srAnnouncer.children.length > 12) srAnnouncer.firstElementChild.remove();
-}
-
-function line(text = '', cls = '', { silent = false } = {}) {
-  const d = document.createElement('div');
-  if (cls) d.className = cls;
-  d.textContent = text || '\u00a0';
-  out.appendChild(d);
-  scroll();
-  if (!silent) announce(text);
-  return d;
-}
-
-async function type(text, cls = '', speed = 35, { silent = false } = {}) {
-  audio.play('typewriter-start');
-  const d = line('', cls);
-  d.textContent = '';
-  for (const [index, ch] of [...text].entries()) {
-    if (index % 3 === 0 && ch.trim()) audio.play('key-tick', AUTO_TYPING);
-    d.textContent += ch;
-    await wait(motionReduced() ? 0 : speed * 0.78);
-  }
-  if (!silent) announce(text);
-  return d;
-}
-
-async function bar(label, ms = 1500) {
-  audio.play('progress-start');
-  const d = line();
-  if (motionReduced()) {
-    d.textContent = `${label} [################] 100%`;
-    audio.play('progress-complete');
-    return;
-  }
-  const total = 16;
-  for (let i = 0; i <= total; i++) {
-    if (i > 0 && i % 4 === 0) audio.play('progress-tick');
-    const pct = Math.round((i / total) * 100);
-    d.textContent = `${label} [${'#'.repeat(i)}${'.'.repeat(total - i)}] ${pct}%`;
-    await wait((ms * 0.82) / total);
-  }
-  audio.play('progress-complete');
-}
-
-// kernel log s časovým razítkem
-let kt = 0;
-let kernelLogCount = 0;
-async function klog(text, cls = 'dim') {
-  if (kernelLogCount++ % 3 === 0) audio.play('kernel-tick');
-  kt += Math.random() * 0.35;
-  line(`[${kt.toFixed(3).padStart(7)}] ${text}`, cls, { silent: true });
-  await wait(rand(24, 88));
-}
-
-// systemd styl: [ OK ] služba
-async function svc(text, state = 'OK', ms) {
-  audio.play('service');
-  const d = document.createElement('div');
-  const tag = document.createElement('span');
-  tag.className = 'dim';
-  tag.textContent = '[ .... ] ';
-  d.append(tag, text);
-  out.appendChild(d);
-  scroll();
-  await wait((ms ?? rand(150, 550)) * 0.78);
-  tag.textContent = state === 'OK' ? '[  OK  ] ' : '[FAILED] ';
-  tag.className = state === 'OK' ? '' : 'warn';
-  audio.play(state === 'OK' ? 'service-ready' : 'failure');
-  await wait(40);
-}
-
-async function memtest() {
-  audio.play('boot-memory');
-  const d = line();
-  const total = 16384;
-  if (motionReduced()) {
-    d.textContent = `Memory test: ${total} MB OK`;
-    return;
-  }
-  for (let mb = 0; mb <= total; mb += 512) {
-    d.textContent = `Memory test: ${mb} MB`;
-    await wait(22);
-  }
-  d.textContent = `Memory test: ${total} MB OK`;
-}
+// Output primitives (line, type, say, bar, klog, svc, ...) live in output.js. Screen readers hear finished lines
+// only (see output.js); the engine says which segments are decorative.
+const output = createOutput({
+  out,
+  announcer: srAnnouncer,
+  audio,
+  getPace: () => pace,
+  motionReduced,
+  isAnnouncing: () => engine?.announces() ?? true,
+  voices: VOICES,
+});
+const {
+  line, type, bar, klog, svc, memtest, probe, cmd, typingFor, say, helloSlots,
+} = output;
 
 async function glitch() {
   if (isSkipping() || motionReduced()) return;
@@ -436,25 +289,6 @@ async function glitchHello(el) {
   el.textContent = orig;
 }
 
-// napsání příkazu za prompt, jako v opravdovém terminálu
-async function cmd(text, speed = 55, pause = 450) {
-  audio.play('terminal-open');
-  const d = document.createElement('div');
-  const p = document.createElement('span');
-  p.className = 'dim';
-  p.textContent = 'guest@fsociety00:~$ ';
-  const t = document.createElement('span');
-  d.append(p, t);
-  out.appendChild(d);
-  for (const [index, ch] of [...text].entries()) {
-    if (index % 3 === 0 && ch.trim()) audio.play('key-tick', AUTO_TYPING);
-    t.textContent += ch;
-    scroll();
-    await wait(motionReduced() ? 0 : speed * 0.78);
-  }
-  await wait(pause);
-}
-
 const GLYPHS = {
   F: ['#####', '#....', '####.', '#....', '#....'],
   S: ['.####', '#....', '.###.', '....#', '####.'],
@@ -553,75 +387,6 @@ async function logo(words) {
     }, 2600);
     ambientIntervals.add(interval);
   }
-}
-
-// animovaná "píše..." bublina (tři pulzující tečky)
-async function typingFor(ms, name = 'unknown', nameCls = 'dim') {
-  audio.play('incoming-call');
-  const d = document.createElement('div');
-  d.innerHTML = `<span class="${nameCls}">&lt;${name}&gt; </span><span class="dots"><i></i><i></i><i></i></span>`;
-  out.appendChild(d);
-  scroll();
-  await wait(ms * 0.78);
-  d.remove();
-}
-
-// zpráva od "někoho" psaná po lidsku: nepravidelné tempo, pauzy, překlep
-// text je řetězec, nebo pole částí [{ t: 'text', cls: 'ok' }, ...]
-// (část s cls 'ok' se vypíše zeleně i uvnitř červené řeči watchera)
-// A floating line is fixed to the viewport, so it must live outside `.screen`: an animated
-// filter/transform on `.screen` makes it the containing block, and "centre" would then be the
-// middle of the whole scrolled log instead of the middle of the window.
-const helloSlots = new WeakMap(); // floating element -> its hidden placeholder in the log
-
-async function say(text, { cls = '', speed = 70, typoAt = -1, name = 'unknown', nameCls = 'dim', floating = false } = {}) {
-  if (name !== 'Mr. Robot') audio.play('message');
-  const parts = typeof text === 'string' ? [{ t: text }] : text;
-  const d = document.createElement('div');
-  const who = document.createElement('span');
-  who.className = nameCls;
-  who.textContent = `<${name}> `;
-  const t = document.createElement('span');
-  if (cls) t.className = cls;
-  if (floating) {
-    const slot = document.createElement('span');
-    slot.className = 'mr-hello-chat mr-hello-placeholder';
-    slot.textContent = parts.map((part) => part.t).join('');
-    d.append(who, slot);
-    const layer = document.createElement('div');
-    layer.className = 'hello-flight-layer';
-    layer.setAttribute('aria-hidden', 'true');
-    layer.appendChild(t);
-    document.body.appendChild(layer);
-    helloSlots.set(t, slot);
-  } else {
-    d.append(who, t);
-  }
-  out.appendChild(d);
-  let i = 0;
-  for (const part of parts) {
-    const seg = document.createElement('span');
-    if (part.cls) seg.className = part.cls;
-    t.appendChild(seg);
-    for (const ch of part.t) {
-      if (i === typoAt && !motionReduced()) {
-        seg.textContent += 'x';
-        scroll();
-        await wait(180);
-        seg.textContent = seg.textContent.slice(0, -1);
-        await wait(140);
-      }
-      if (name !== 'Mr. Robot' && i % 3 === 0 && ch.trim()) audio.play('key-tick', AUTO_TYPING);
-      seg.textContent += ch;
-      scroll();
-      let ms = motionReduced() ? 0 : (speed + rand(-20, 40)) * 0.78;
-      if (',.'.includes(ch)) ms += 220;
-      await wait(ms);
-      i++;
-    }
-  }
-  announce(`${name} says: ${parts.map((part) => part.t).join('')}`);
-  return t;
 }
 
 // vzdálené smazání: text zčervená, rozpadne se na šum a "zhltne se" řádek po řádku
@@ -777,9 +542,7 @@ async function resetGame() {
   setRain(0, true);
   window.scrollTo(0, 0);
   document.getElementById('hud')?.remove();
-  cancelSkipHold();
   caseFile.start();
-  setSkipHint('BOOT');
   line('LOCAL CONSOLE RESTORED', 'dim');
   audio.setScene('boot');
   void startStory();
@@ -1255,136 +1018,9 @@ function branchDialogueForWatcher(investigation) {
     : 'you chose the watcher. his channel stayed open until the script closed it.';
 }
 
-async function runStory() {
-  let trusted = null; // who the player chose: 'unknown' | 'watcher'
-  run.announce = false; // the BIOS / kernel text is decoration; announcing resumes with the story intro
-  await wait(600);
-
-  // 1) BIOS / POST
-  audio.play('boot-prompt');
-  line('FSOC-BIOS v0.0.1  (c) 2015 E Corp', 'dim');
-  line('Build 15-05-2015 03:14:07', 'dim');
-  line();
-  await wait(300);
-  line('CPU: Intel(R) Core(TM) i7-4790 @ 3.60GHz');
-  audio.play('boot-checkpoint');
-  await wait(200);
-  await memtest();
-  await wait(200);
-  line('Detecting drives...');
-  await wait(500);
-  audio.play('drive-seek');
-  line('  sda  512GB  SSD  OK', 'dim');
-  await wait(180);
-  line('  sdb  2TB    HDD  OK', 'dim');
-  await wait(180);
-  line('  sdc  ----   no media', 'dim');
-  await wait(600);
-  line();
-
-  // 2) bootloader
-  line('GNU GRUB  version 2.02');
-  await wait(400);
-  line('Loading Linux 4.19.0-fsoc ...');
-  await wait(700);
-  line('Loading initial ramdisk ...');
-  await wait(900);
-  audio.play('kernel-start');
-  line();
-
-  // 3) kernel log
-  await klog('Linux version 4.19.0-fsoc (root@fsociety00) (gcc 8.3.0)');
-  await klog('Command line: BOOT_IMAGE=/vmlinuz root=/dev/sda1 ro quiet');
-  await klog('x86/fpu: Supporting XSAVE feature 0x001: x87 floating point');
-  await klog('BIOS-provided physical RAM map:');
-  await klog('BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable');
-  await klog('BIOS-e820: [mem 0x0000000000100000-0x00000003ffffffff] usable');
-  await klog('NX (Execute Disable) protection: active');
-  await klog('DMI: E Corp / FSOC-MB 1.0.3, BIOS 0.0.1');
-  await klog('tsc: Detected 3600.000 MHz processor');
-  await klog('ACPI: Core revision 20180810');
-  await klog('PCI: Using configuration type 1 for base access');
-  await klog('NET: Registered protocol family 2');
-  await klog('TCP: Hash tables configured (established 131072)');
-  await klog('usb 1-1: new high-speed USB device number 2');
-  await klog('usb 1-1: device descriptor read/64, error -71', 'warn');
-  await klog('usb 1-1: Product: unknown');
-  await klog('EXT4-fs (sda1): mounted filesystem with ordered data mode');
-  await klog('random: crng init done');
-  line();
-  await wait(400);
-
-  // 4) služby
-  await svc('Started Journal Service.');
-  await svc('Mounted /boot.');
-  await svc('Started udev Kernel Device Manager.');
-  await svc('Reached target Local File Systems.');
-  await svc('Started Network Manager.');
-  await svc('Started OpenSSH server daemon.');
-  await svc('Started Tor anonymity daemon.');
-  await svc('Started fsociety00 relay service.');
-  line();
-
-  // 5) kontrola disku
-  await bar('fsck /dev/sda1', 1300);
-  line('/dev/sda1: clean, 41392/3276800 files', 'dim');
-  await wait(300);
-  line();
-
-  // 6) síť
-  line('Bringing up network...', 'dim');
-  audio.play('network-lock');
-  await wait(400);
-  line(`eth0: link up, 1000Mbps full duplex`);
-  await wait(300);
-  line(`eth0: inet ${ip()}  (documentation range)`, 'dim');
-  await wait(500);
-  line('Negotiating encrypted relay circuit...', 'dim');
-  await wait(300);
-  for (let i = 1; i <= 5; i++) {
-    audio.play('relay-hop');
-    line(`  relay ${i}: ${ip()}   ${rand(18, 210)}ms`, 'dim');
-    await wait(rand(250, 500));
-  }
-  line('Tunnel established.');
-  await wait(500);
-  line();
-
-  // 7) šifrovaný disk
-  await svc('Starting cryptsetup for /dev/sdb1...', 'OK', 700);
-  audio.play('disk-unseal');
-  await bar('unlocking /dev/sdb1', 1800);
-  await svc('Mounted /dev/sdb1.');
-  await wait(500);
-  line();
-  line('scanning for partitions...', 'dim');
-  await wait(900);
-  line('found unlisted partition: /dev/sdb9', 'warn');
-  await wait(500);
-  line('contents: encrypted', 'dim');
-  await wait(250);
-  line('owner: unknown', 'dim');
-  await wait(900);
-  line();
-
-  // 8) něco je špatně
-  line('WARNING: unauthorized access detected', 'warn');
-  audio.play('trace-warning');
-  await wait(700);
-  line('source: unknown', 'warn');
-  await wait(800);
-  line('tracing connection...', 'dim');
-  await wait(1300);
-  line('trace request failed.', 'warn');
-  await wait(700);
-
-  // The BIOS can no longer be skipped once the story intro begins.
-  run.skip = false;
-  run.skippable = false;
-  run.announce = true;
-  cancelSkipHold();
-  setSkipHint('INTRO', !run.skipToChoice);
-
+// MIGRATION (phase 3): the boot is story data (story-data/boot.js). The intro and the rest still live in these two
+// functions until steps 3.4 to 3.7 turn them into nodes. The engine calls them through `host.legacy`.
+async function legacyIntro() {
   await flash();
   await staticBurst(500);
   await gfx('roll');
@@ -1571,11 +1207,12 @@ async function runStory() {
   await type('who do you trust?', 'dim', 60);
   await wait(1200);
   line();
+}
 
-  // Stop offering skip before the trust choice.
-  run.skipToChoice = false;
-  run.skipToChoiceArmed = false;
-  setSkipHint('INTRO', false);
+async function legacyRest() {
+  const W = { name: 'watcher', nameCls: 'warn', cls: 'warn' };
+  const trace = activeTrace; // created by the intro
+  let trusted = null; // who the player chose: 'unknown' | 'watcher'
 
   // výběr: klepnutí na možnost, nebo napsat příkaz přímo do terminálu
   trusted = await chooseTrust({ out, line, cmd, terminal: sessionTerminal });
@@ -1636,6 +1273,45 @@ async function runStory() {
   await revealName(trace, trusted);
 }
 
+// What the narrative engine can do on screen. Everything visible goes through here (engine.js never touches the DOM).
+const engineHost = {
+  line,
+  type,
+  say: (text, options) => say(text, options),
+  typingFor,
+  cmd,
+  bar,
+  klog,
+  svc,
+  memtest,
+  probe,
+  wait: (ms) => wait(ms),
+  sfx: (cue, params) => audio.play(cue, params),
+  setScene: (name) => audio.setScene(name),
+  gfx: (name) => gfx(name),
+  flash: () => flash(),
+  staticBurst: (ms) => staticBurst(ms),
+  corrupt: (rounds) => corrupt(rounds),
+  blackout: (ms) => blackout(ms),
+  setRain: (opacity, immediate) => setRain(opacity, immediate),
+  logo: (words) => logo(words),
+  wipe: () => wipe([...out.children]),
+  trace: (action) => {
+    switch (action.do) {
+      case 'start': createTrace(action.secs); break;
+      case 'dock': activeTrace?.dock(); break;
+      case 'boost': activeTrace?.boost(action.rate); break;
+      case 'slow': activeTrace?.slow(); break;
+      case 'set': activeTrace?.set(action.secs); break;
+      default: throw new Error(`trace action "${action.do}" is not implemented yet`);
+    }
+  },
+  choose: async () => { throw new Error('no choice nodes exist yet'); },
+  get caseFile() { return caseFile; },
+  // MIGRATION: removed step by step in 3.4 to 3.7.
+  legacy: { intro: () => legacyIntro(), rest: () => legacyRest() },
+};
+
 function buildContext() {
   return createGameContext({
     out,
@@ -1678,7 +1354,7 @@ function level01() {
 async function startStory() {
   const owner = session;
   try {
-    await runStory();
+    await engine.run();
   } catch (error) {
     swallowAbort(error);
   } finally {
@@ -1701,14 +1377,13 @@ async function runDeveloperRoute(route) {
   document.body.classList.remove('powering-down');
   shutdownSequence.hidden = true;
   closeModal(powerPanel);
-  setSkipHint('BOOT', route === 'boot'); // only the full boot has anything to skip; also resets a stale label
   const trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
   caseFile.start(trusted);
   caseFile.chooseTrust(trusted);
   audio.setScene(route === 'boot' ? 'boot' : 'story');
 
   if (route === 'boot') {
-    await runStory();
+    await engine.run();
   } else if (route === 'puzzle' || route === 'puzzle-watcher') {
     audio.setScene('puzzle');
     line(`LOCAL TEST ROUTE // LEVEL 01 // ${trusted.toUpperCase()}`, 'dim');
@@ -1765,6 +1440,7 @@ async function runDeveloperRoute(route) {
   }
 }
 
+prepareRun();
 openModal(launch);
 
 async function launchStory() {
@@ -1793,7 +1469,6 @@ async function launchStory() {
   initializeLabel.textContent = '[ INITIALIZE SYSTEM ]';
   launchStatus.textContent = '';
   screen.classList.add('boot-entry');
-  setSkipHint('BOOT');
   void startStory();
   await wait(1050);
   screen.classList.remove('boot-entry');
