@@ -674,7 +674,8 @@ export function createBoardUI({
     const title = el('h2', '', 'CASE FILE // INTELLIGENCE DASHBOARD');
     title.id = 'caseTitle';
     const status = el('p', 'case-status');
-    heading.append(title, status);
+    const owner = el('p', 'case-owner', 'PROPERTY OF THE AGENCY // RESTRICTED // ACCESS LOGGED');
+    heading.append(title, owner, status);
     const close = button('case-close', 'CLOSE', 'Close the evidence board');
     close.addEventListener('click', () => api.close());
     header.append(heading, close);

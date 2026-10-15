@@ -67,9 +67,9 @@ export function createOutput({ out, announcer, audio, getPace, motionReduced, is
     return d;
   }
 
-  async function bar(label, ms = 1500) {
+  async function bar(label, ms = 1500, cls = '') {
     play('progress-start');
-    const d = line();
+    const d = line('', cls);
     if (motionReduced()) {
       d.textContent = `${label} [################] 100%`;
       play('progress-complete');

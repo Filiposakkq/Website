@@ -8,7 +8,7 @@
 import { rand } from '../util.js';
 import { TRACE } from './constants.js';
 import {
-  line, blank, type, say, typing, cmd, svc, wait, sfx, scene, gfx, flash, burst, corrupt, blackout, rain, logo,
+  line, blank, type, say, typing, cmd, svc, bar, wait, sfx, scene, gfx, flash, burst, corrupt, blackout, rain, logo,
   wipe, trace, caseFile, run, parts,
 } from './dsl.js';
 
@@ -105,8 +105,15 @@ const caseBriefing = [
   burst(300),
   wait(800),
   typing(1500, 'mystery'),
-  say('mystery', 'the case file is in the corner.', { speed: 65 }),
+  say('mystery', 'i am sending you the case file.', { speed: 65 }),
+  wait(600),
+  // The upload, in the third voice's blue: a progress bar and the receipt, then the button appears.
+  bar('uploading case_file.agency', 2600, 'voice-blue'),
+  wait(300),
+  line('case_file.agency // upload complete // property of the agency', 'voice-blue'),
+  wait(700),
   caseFile('makeAvailable'),
+  say('mystery', 'it is in the corner.', { speed: 65 }),
   wait(900),
   say('mystery', 'open it. record what you find.', { speed: 65 }),
   wait(900),

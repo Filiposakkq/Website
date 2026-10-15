@@ -13,7 +13,9 @@
 
 import { createRegistry } from './commands.js';
 import { registerHackingCommands } from './hacking-commands.js';
-import { BOARD_PROMPT, BOARD_USE_SHELL, BOARD_SHELL_WORDS, BOARD_HELP_HINT } from './story-data/hacking.js';
+import {
+  BOARD_PROMPT, BOARD_USE_SHELL, BOARD_SHELL_WORDS, BOARD_HELP_HINT, BOARD_MYSTERY,
+} from './story-data/hacking.js';
 
 const MAX_LINES = 300;
 const MAX_HISTORY = 50;
@@ -23,13 +25,15 @@ const STATE_WORD = { unlocked: 'read', decrypted: 'decrypted', locked: 'locked',
  * @param {{ caseFile: object, audio: object, session: object, motionReduced: () => boolean, getTrace: () => (object|null) }} deps
  */
 export function createBoardCommands({
-  caseFile, audio, session, motionReduced, getTrace,
+  caseFile, audio, session, motionReduced, getTrace, random = Math.random,
 }) {
   /** @type {{ text: string, cls: string, silent: boolean }[]} */
   let entries = [];
   let history = [];
   let introduced = false;
   let running = false;
+  let resting = 0; // commands left before <???> may speak again
+  let lastSaid = -1;
   const listeners = new Set();
   const notify = (kind, entry) => listeners.forEach((listener) => listener(kind, entry));
 
@@ -110,6 +114,22 @@ export function createBoardCommands({
     },
   });
 
+  /** <???> now and then, after a command has finished (never during a job, never twice in a row). */
+  function maybeSpeak() {
+    if (resting > 0) {
+      resting--;
+      return;
+    }
+    if (random() >= BOARD_MYSTERY.chance) return;
+    const pool = BOARD_MYSTERY.lines;
+    let index = Math.min(pool.length - 1, Math.floor(random() * pool.length));
+    if (index === lastSaid) index = (index + 1) % pool.length;
+    lastSaid = index;
+    resting = BOARD_MYSTERY.rest;
+    audio.play('key-tick-mystery');
+    line(`<???> ${pool[index]}`, 'mystery');
+  }
+
   /** Runs one typed line. Resolves when it has finished; an abort of the session is swallowed here. */
   async function submit(raw) {
     const text = String(raw ?? '').trim();
@@ -135,6 +155,7 @@ export function createBoardCommands({
       running = false;
       notify('busy');
     }
+    if (!/^close\b/i.test(text)) maybeSpeak();
   }
 
   return {
@@ -160,6 +181,8 @@ export function createBoardCommands({
       history = [];
       introduced = false;
       running = false;
+      resting = 0;
+      lastSaid = -1;
       notify('reset');
     },
     /** For tests and the validator: the registered board commands. */

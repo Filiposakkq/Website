@@ -285,7 +285,7 @@ if (story) {
   const briefing = lines.filter(({ index }) => index < traceStart);
   const returns = lines.filter(({ index }) => index > unlockAt && unlockAt >= 0);
   expect(briefing.length + returns.length === lines.length, 'the third voice speaks only in the briefing and once when sdb9 opens');
-  expect(briefing.length >= 2 && briefing.length <= 12, `the briefing has 2 to 12 lines (${briefing.length})`);
+  expect(briefing.length >= 2 && briefing.length <= 14, `the briefing has 2 to 14 lines (${briefing.length})`);
   expect(returns.length >= 1 && returns.length <= 3, `the return has 1 to 3 lines (${returns.length})`);
   expect(returns.every(({ index }) => flat.slice(Math.max(0, index - 3), index).some((node) => node.type === 'say' && node.who === 'watcher' || node.type === 'typing')),
     'the return happens in a conversation: another voice is on the line');
@@ -297,8 +297,11 @@ if (story) {
   expect(briefing.every(({ index }) => index > inbox), 'the briefing comes after the inbox message');
   expect(all.filter((node) => (node.type === 'say' || node.type === 'typing') && node.who === 'mystery').length === lines.length + all.filter((node) => node.type === 'typing' && node.who === 'mystery').length,
     'nothing but its lines and its typing indicator names the third voice');
-  expect(lines.length > 0 && lines[0].index < available[0] && available[0] - lines[0].index <= 2, 'the board appears with the first mention: the case file node follows the first line');
-  expect(lines.every(({ index }) => flat[index - 1]?.type === 'typing' || flat[index - 1]?.type === 'wait' || flat[index - 1]?.type === 'say'), 'every line of the third voice follows its typing indicator or another line');
+  expect(lines.length > 0 && lines[0].index < available[0] && available[0] - lines[0].index <= 7, 'the board appears with the first mention: the case file node follows the first line within the upload');
+  const upload = flat.slice(lines[0].index, available[0]);
+  expect(upload.some((node) => node.type === 'bar' && node.cls === 'voice-blue' && /upload/i.test(node.label)), 'the case file is uploaded with a blue progress bar before the button appears');
+  expect(upload.some((node) => node.type === 'line' && node.style === 'voice-blue' && /agency/i.test(String(node.text))), 'the upload receipt is blue and says the file is property of the agency');
+  expect(lines.every(({ index }) => ['typing', 'wait', 'say', 'case'].includes(flat[index - 1]?.type)), 'every line of the third voice follows its typing indicator or another line');
   expect(lines.length > 0 && flat[lines[0].index - 1]?.type === 'typing' && flat[lines[0].index - 1].who === 'mystery', 'the first line is preceded by its typing indicator');
 }
 
@@ -915,7 +918,7 @@ if (story) {
         },
       };
       const board = createBoardCommands({
-        caseFile, audio, session, motionReduced: () => false, getTrace: () => (world.trace ? { mode: () => world.trace.mode, left: () => world.trace.secs } : null),
+        caseFile, audio, session, motionReduced: () => false, random: world.random ?? (() => 1), getTrace: () => (world.trace ? { mode: () => world.trace.mode, left: () => world.trace.secs } : null),
       });
       caseFile.attachCommands(board);
       caseFile.start(route);
@@ -1095,6 +1098,38 @@ if (story) {
       expect(world.board.entries().length === 0 && world.board.history().length === 0, 'starting a new run clears the board log and history');
       world.board.introduce();
       expect(world.board.entries().length === 1, 'the reminder comes back in the next run');
+    }
+
+    // <???> now and then in the board terminal.
+    {
+      const pool = hackingData.BOARD_MYSTERY.lines;
+      expect(pool.length >= 6 && new Set(pool).size === pool.length, `<???> has a pool of different lines for the board terminal (${pool.length})`);
+      expect(pool.every((entry) => entry === entry.toLowerCase() && !entry.includes('!') && !/sdb9|ghost|shell|1337|key layer|meta|\bcss\b|console|robot|elliot|unknown|watcher/i.test(entry)),
+        'its board lines are lowercase, have no exclamation marks, and touch no key text or other character');
+      expect(pool.some((entry) => /agency/i.test(entry)) && pool.every((entry) => !/\bthe agency (is|was) (the|a)\b/i.test(entry)), 'the pool mentions the agency without defining it');
+      // Always speak: the first command ends with a line; then it rests; never the same line twice in a row.
+      const world = setup('unknown', { mode: 'running', secs: 480 });
+      const loud = createBoardCommands({
+        caseFile: world.caseFile, audio, session: { async sleep() {} }, motionReduced: () => false, random: () => 0, getTrace: () => null,
+      });
+      await loud.submit('list');
+      const said = () => loud.entries().filter((row) => row.cls === 'mystery').map((row) => row.text);
+      expect(said().length === 1 && said()[0].startsWith('<???> ') && pool.includes(said()[0].slice(6)), 'after a command <???> may say one line of its pool, tagged as <???>');
+      await loud.submit('list');
+      await loud.submit('list');
+      expect(said().length === 1, `it rests for ${hackingData.BOARD_MYSTERY.rest} commands afterwards`);
+      await loud.submit('list');
+      expect(said().length === 2 && said()[0] !== said()[1], 'then it may speak again, never the same line twice in a row');
+      await loud.submit('close');
+      expect(said().length === 2, 'closing the board is not followed by a line');
+      loud.reset();
+      expect(loud.entries().length === 0, 'a new run clears what it said');
+      // Never: a random number that is always too high keeps it silent.
+      const quiet = createBoardCommands({
+        caseFile: world.caseFile, audio, session: { async sleep() {} }, motionReduced: () => false, random: () => 0.99, getTrace: () => null,
+      });
+      await quiet.submit('list');
+      expect(quiet.entries().every((row) => row.cls !== 'mystery'), 'with a high random number it stays silent');
     }
 
     // The messages used by the new code exist, and nothing in the board code starts a timer of its own.

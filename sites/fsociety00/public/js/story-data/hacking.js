@@ -138,6 +138,27 @@ export const BOARD_SHELL_WORDS = [
   'whoami', 'pwd', 'date', 'ps', 'netstat', 'ifconfig', 'history', 'uname', 'echo', 'clear',
   ...Object.keys(RESTRICTED), ...DENIED,
 ];
+/**
+ * What <???> may drop into the board's terminal now and then (board-commands.js: after a command, one chance in
+ * `chance`, never twice in a row, then a rest of `rest` commands). Cryptic, short, commanding, lowercase; no key, no
+ * names, no explanation of who it is (story bible section 5). It never changes the case file.
+ */
+export const BOARD_MYSTERY = {
+  chance: 0.3,
+  rest: 2,
+  lines: [
+    'keep working.',
+    'this terminal is agency property. treat it so.',
+    'a missing record is also a record.',
+    'do not trust the order things arrive in.',
+    'you are not the first to sit here.',
+    'log it. all of it.',
+    'slow down. the trace is not the only thing listening.',
+    'every gap you leave, someone else fills.',
+    'the agency reads this log. write it well.',
+    'if it fits too neatly, check it again.',
+  ],
+};
 export const BOARD_HELP_HINT = 'type help for the board commands.';
 
 /** Fills `{0}`, `{1}` in a message. */

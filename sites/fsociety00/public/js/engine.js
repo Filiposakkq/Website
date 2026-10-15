@@ -26,7 +26,7 @@ export const NODE_SPECS = {
   say: spec(['who', 'text'], ['speed', 'typoAt', 'cls', 'floating', 'ref']),
   typing: spec(['ms'], ['who']),
   cmd: spec(['text'], ['speed', 'pause', 'prompt', 'mask']),
-  bar: spec(['label'], ['ms']),
+  bar: spec(['label'], ['ms', 'cls']),
   klog: spec(['text'], ['style', 't']),
   svc: spec(['text'], ['state', 'ms']),
   memtest: spec([], ['total', 'ms']),
@@ -211,7 +211,7 @@ export function validateStory(story, known = {}) {
  * @property {(text: string|object[], options: object) => Promise<unknown>} say   options.who names a voice
  * @property {(ms: number, who?: string) => Promise<void>} typingFor
  * @property {(text: string, speed?: number, pause?: number, options?: { prompt?: string, mask?: boolean }) => Promise<void>} cmd
- * @property {(label: string, ms?: number) => Promise<void>} bar
+ * @property {(label: string, ms?: number, cls?: string) => Promise<void>} bar
  * @property {(text: string, cls?: string, t?: number) => Promise<void>} klog
  * @property {(text: string, state?: string, ms?: number) => Promise<void>} svc
  * @property {(total?: number, ms?: number) => Promise<void>} memtest
@@ -290,7 +290,7 @@ export function createEngine({ story, host, session, pace, events = {}, executeR
     },
     typing: (n) => host.typingFor(val(n.ms), n.who ?? 'unknown'),
     cmd: (n) => host.cmd(val(n.text), val(n.speed), val(n.pause), { prompt: val(n.prompt), mask: Boolean(n.mask) }),
-    bar: (n) => host.bar(val(n.label), val(n.ms)),
+    bar: (n) => host.bar(val(n.label), val(n.ms), val(n.cls)),
     klog: (n) => host.klog(val(n.text), val(n.style), val(n.t)),
     svc: (n) => host.svc(val(n.text), val(n.state), val(n.ms)),
     memtest: (n) => host.memtest(val(n.total), val(n.ms)),

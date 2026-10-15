@@ -1438,6 +1438,8 @@ body.quiet-motion .case-panel.is-opening [data-reveal-index] { animation: none; 
 .case-cmd-line.is-ok { color: var(--case-ok); }
 .case-cmd-line.is-warn { color: var(--case-warn); }
 .case-cmd-line.is-cmd { color: #eafff0; }
+.case-cmd-line.is-mystery { color: #4da6ff; text-shadow: 0 0 6px rgba(77, 166, 255, 0.45); }
+.case-owner { margin: 2px 0 0; color: #4da6ff; font-size: 11px; letter-spacing: 0.12em; }
 .case-cmd-form { display: flex; align-items: center; flex: none; min-height: 44px; }
 .case-cmd-label { color: var(--case-ok); white-space: pre; }
 .case-cmd-input {

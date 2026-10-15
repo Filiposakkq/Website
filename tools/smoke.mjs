@@ -414,11 +414,15 @@ scenarios.push({
         tagClass: tag?.className ?? '',
         tagColor: tag ? getComputedStyle(tag).color : '',
         textColor: first ? getComputedStyle(first.children[1]).color : '',
+        uploadColors: rows.filter((row) => /^uploading case_file\.agency|upload complete/.test(row.textContent.trim())).map((row) => getComputedStyle(row).color),
       };
     });
     const at = (needle) => log.texts.findIndex((text) => text.includes(needle));
     const lines = [
-      '<???> the case file is in the corner.',
+      '<???> i am sending you the case file.',
+      'uploading case_file.agency',
+      'case_file.agency // upload complete // property of the agency',
+      '<???> it is in the corner.',
       '<???> open it. record what you find.',
       '<???> every record is a piece. none of them is the whole.',
       '<???> two pieces that belong together will say so. connect them.',
@@ -434,6 +438,9 @@ scenarios.push({
     const order = [at('cat ~/inbox/001.msg'), at('*** new connection: ??? ***'), ...lines.map((text) => at(text)), at('*** ??? disconnected ***'), at('=== LEVEL 01 :: THE KEY ===')];
     if (order.some((index) => index < 0) || order.some((index, i) => i > 0 && index <= order[i - 1])) {
       throw new Error(`the third voice should speak in order between the inbox message and the level brief: ${JSON.stringify(order)}`);
+    }
+    if (log.uploadColors.length !== 2 || log.uploadColors.some((color) => color !== 'rgb(77, 166, 255)')) {
+      throw new Error(`the upload progress bar and its receipt should both be blue: ${JSON.stringify(log.uploadColors)}`);
     }
     if (log.tagClass !== 'voice-blue' || log.tagColor !== 'rgb(77, 166, 255)' || log.textColor !== 'rgb(77, 166, 255)') {
       throw new Error(`the <???> tag and text should be blue: ${JSON.stringify({ tagClass: log.tagClass, tagColor: log.tagColor, textColor: log.textColor })}`);
@@ -509,6 +516,8 @@ scenarios.push({
     await reachTrustChoice(page, { reduced: true });
     await openBoardFromButton(page);
     await waitCmd(page, 'type help for the board commands.');
+    const owner = await page.locator('.case-owner').textContent();
+    if (!/PROPERTY OF THE AGENCY/.test(owner)) throw new Error(`the board should say it is property of the agency, says "${owner}"`);
     const trace = await page.locator('.case-trace-time').textContent();
     if (trace !== 'TRACE PENDING') throw new Error(`a pending trace must read TRACE PENDING on the board, reads "${trace}"`);
     await boardCmd(page, 'help');
