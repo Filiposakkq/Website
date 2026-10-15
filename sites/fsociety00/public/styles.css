@@ -93,6 +93,8 @@ body::after {
 .output .dim  { color: var(--dim); }
 .output .warn { color: var(--warn); text-shadow: 0 0 6px rgba(255, 59, 59, 0.7); }
 .output .big  { font-size: 1.9em; letter-spacing: 0.08em; margin: 0.4em 0; }
+/* The third voice <???> (story-data/voices.js). #4da6ff on #000 is 8.21:1 (node tools/contrast.mjs); a static glow only. */
+.output .voice-blue { color: #4da6ff; text-shadow: 0 0 6px rgba(77, 166, 255, 0.45); }
 
 .line {
   display: flex;

@@ -71,6 +71,9 @@ Play once on a phone and once on a desktop on the preview. Agents did not hear a
 ## Phase 4b only: the case file introduction, the board command line and the 5-minute window
 
 - [ ] **The window:** after you choose who to trust, the clock reads about `05:00` and the voice says "five minutes. no extensions." Does it still feel like pressure? (It is easier than before: tell me if it is too easy. The numbers are `TRACE` and `CASE` in `js/story-data/constants.js`.)
+- [ ] **The introduction (4b.1, 4b.2):** right after the inbox message a blue `<???>` says five short lines, and the CASE FILE button appears in the corner with its first line. Does it feel natural? Is the wording right (it is a draft, cryptic on purpose, and never says who it is)? Does anything contradict what `unknown` or the watcher say?
+- [ ] **Its typing sound (nobody has heard it yet):** `key-tick-mystery` should sound clearly different from the clicks of every other voice (a soft, round blip), quiet, not annoying. Is the typing speed right (it is the same as `unknown`)?
+- [ ] **Skip:** hold the skip control through the intro: the button still appears (you just do not see the lines).
 - [ ] **Trace sounds:** with the longer window the first three minutes only tick; the first warning comes at two minutes left, the critical one at one minute. Does that build well?
 
 ## C. Report format

@@ -94,9 +94,32 @@ const guestSession = [
   blank(),
 ];
 
-// The first mention of the case file (phase 4b): right after the inbox message the CASE FILE button appears.
+// The first mention of the case file (phase 4b): right after the inbox message a third voice, a complete mystery,
+// opens a channel, names the case file (the CASE FILE button appears with the first line) and explains it in a few
+// short orders: what it is, that evidence is not identity, that scan and decrypt cost trace time, that it is optional.
+// It never says who it is, why it knows or what it wants (the story bible keeps that open on purpose), it does not
+// touch the key, and it does not contradict <unknown> or <watcher>. Lowercase, no exclamation marks.
 const caseBriefing = [
+  wait(700),
+  line('*** new connection: ??? ***', 'dim'),
+  burst(300),
+  wait(800),
+  typing(1500, 'mystery'),
+  say('mystery', 'the case file is in the corner.', { speed: 65 }),
   caseFile('makeAvailable'),
+  wait(900),
+  say('mystery', 'open it. record what you find.', { speed: 65 }),
+  wait(900),
+  say('mystery', 'evidence is not identity.', { speed: 65 }),
+  wait(1000),
+  say('mystery', 'scan and decrypt cost time. the trace does not wait.', { speed: 60 }),
+  wait(1000),
+  say('mystery', 'it is optional. use it.', { speed: 65 }),
+  wait(1100),
+  blank(),
+  line('*** ??? disconnected ***', 'dim'),
+  wait(900),
+  blank(),
 ];
 
 // The countdown appears in the middle of the screen, hangs there for a moment, then docks to the corner.

@@ -15,4 +15,5 @@ Facts that bite:
 - Skip control (lower right): `min-width:104px`, hold 3 s. Its logic is `js/skip-control.js` (per session, follows the engine segments); the visual rework (HOLD TO SKIP label, progress bar) is phase 5.
 - Font size minimum 11px outside `.developer-*` (to fix in phase 7); `.case-*` (the board) is at 11px or more since phase 4.5.
 
+- `.output .voice-blue` (static colour `#4da6ff`, 8.21:1 on black, and a static glow) is the third voice `<???>`: name tag and text (`story-data/voices.js`). It does not animate.
 - The evidence board (phase 4.5): `.case-dialog` (native `<dialog>`, no backdrop blur), `.case-panel`, `.case-grid` / `.case-pane` (2 x 2 on a wide screen, tabs on a phone via `@media (max-width: 720px)`), `.case-node`, `.case-row`, `.case-detail`, `.topo-*` (trace path). Only opacity animates (`.case-panel.is-opening [data-reveal-index]`; off for reduced motion and `body.quiet-motion`).

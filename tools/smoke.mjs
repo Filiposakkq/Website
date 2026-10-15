@@ -390,6 +390,43 @@ scenarios.push({
   },
 });
 
+// Phase 4b.2: the third voice explains the case file right after the inbox message, in blue, as <???>.
+scenarios.push({
+  name: 'reduced: the third voice <???> explains the case file after the inbox message',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    const log = await page.evaluate(() => {
+      const rows = [...document.getElementById('output').children];
+      const texts = rows.map((row) => row.textContent.trim());
+      const first = rows.find((row) => row.textContent.startsWith('<???> '));
+      const tag = first?.children[0];
+      return {
+        texts,
+        tagClass: tag?.className ?? '',
+        tagColor: tag ? getComputedStyle(tag).color : '',
+        textColor: first ? getComputedStyle(first.children[1]).color : '',
+      };
+    });
+    const at = (needle) => log.texts.findIndex((text) => text.includes(needle));
+    const lines = [
+      '<???> the case file is in the corner.',
+      '<???> open it. record what you find.',
+      '<???> evidence is not identity.',
+      '<???> scan and decrypt cost time. the trace does not wait.',
+      '<???> it is optional. use it.',
+    ];
+    const order = [at('cat ~/inbox/001.msg'), at('*** new connection: ??? ***'), ...lines.map((text) => at(text)), at('*** ??? disconnected ***'), at('=== LEVEL 01 :: THE KEY ===')];
+    if (order.some((index) => index < 0) || order.some((index, i) => i > 0 && index <= order[i - 1])) {
+      throw new Error(`the third voice should speak in order between the inbox message and the level brief: ${JSON.stringify(order)}`);
+    }
+    if (log.tagClass !== 'voice-blue' || log.tagColor !== 'rgb(77, 166, 255)' || log.textColor !== 'rgb(77, 166, 255)') {
+      throw new Error(`the <???> tag and text should be blue: ${JSON.stringify({ tagClass: log.tagClass, tagColor: log.tagColor, textColor: log.textColor })}`);
+    }
+  },
+});
+
 // Phase 4.3: the hacking commands build the case file in real time and the key is still solved afterwards.
 scenarios.push({
   name: 'desktop: scan, intercept, dump, decrypt, connect -> victory',

@@ -15,6 +15,7 @@ Use it to keep the story consistent in phases 3 (story data), 4 (evidence), 6 (T
 7. **Hello message** (S:1378-1397): `<unknown> you're right on time.` in big text, then "i've been waiting for you", "you shouldn't be here / but you are.", "there is something hidden in this system.", "find it before they do.", "they are already looking for you." Then `*** unknown disconnected ***`, `wiping session...` and the screen is wiped.
 8. **Logo reveal** (S:465-551, 1411-1415): glitchy decrypt of the pixel FSOCIETY logo, header `FS/00`, `RELAY ID // 0515`, caption `PRIVATE RELAY // TRUST NO ROUTE`, then `access level: GUEST`.
 9. **Guest session and inbox** (S:1418-1441): `1 unread message` from unknown, subject `sdb9`; `cat ~/inbox/001.msg`: the partition is not empty, it is locked, the key is not in this system, it is hidden in the page itself, look closer.
+9b. **The third voice and the case file** (`story-data/intro.js`, `caseBriefing`, phase 4b): right after the inbox message `*** new connection: ??? ***`, then `<???>` (blue, its own typing sound) says "the case file is in the corner." (the CASE FILE button appears here), "open it. record what you find.", "evidence is not identity.", "scan and decrypt cost time. the trace does not wait.", "it is optional. use it."; then `*** ??? disconnected ***`. Both trust routes see it. The wording is a draft that still needs the owner's approval.
 10. **Level 01 intro** (S:1444-1470): `=== LEVEL 01 :: THE KEY ===`, target /dev/sdb9, LOCKED, 3 attempts, key `????????`. "you have 8 minutes." Trace HUD in the centre (480 s), then docks to the corner.
 11. **Cut-off and lost connection** (S:1473-1506): unknown starts "sdb9 holds a list. everyone they have erased. and the key to open it is-" and is cut off; `*** connection lost ***`; IDS alerts; trace rate doubles; "you are on your own now."
 12. **Watcher breaks in** (S:1512-1541): `*** new connection: watcher ***`: "i see you.", "<unknown> has been lying to you.", "there is no key.", "there is only the trace." Trace speed x3. Unknown reconnects: "don't listen to him. he wants you to stop looking."
@@ -28,6 +29,7 @@ Use it to keep the story consistent in phases 3 (story data), 4 (evidence), 6 (T
 
 - **unknown** (`<unknown>`, lowercase, calm, conspiratorial, typo effects). Sends the inbox note; "i can't tell you my name yet. they listen for it." (S:1563). Pushes the player to find the key in the page and later says it threw the watcher out (S:1051). After the reveal the label becomes `<Mr. Robot>`; typing sounds are suppressed for him.
 - **watcher** (`<watcher>`, red/warn style, terse and accusatory). A hostile remote operator on `pts/1`, "attached: before guest login" (L:158-159). In the ghost sequence he opens a private line: "he is not trying to save you. he needs you to open it. when it opens, the list has your name too." and is cut off mid-sentence (S:970-988).
+- **???** (`<???>`, blue, phase 4b): a third voice that stays a complete mystery. Neutral, cryptic and commanding: short orders, never a request, never an explanation of who it is, why it knows or what it wants. It explains the case file once (scene 9b) and says nothing else in Level 01. It is expected to return in a later level or chapter; nothing in the code or the text may give it a name or a backstory without an owner decision. Its typing sound is `key-tick-mystery`.
 - **ghost** is not a character: it is the script `ghost.sh` (header comment "by the one who cannot say his name") and the state "you are a ghost".
 - **Mr. Robot** is what `unknown` is renamed to in the reveal. The story only says "names are how they keep track of us... the one they gave me-" (S:1022-1024). **No backstory** is given.
 - **Elliot easter egg:** `unlock elliot` shows a hooded silhouette for about 5 s (L:312-315). The case file calls it an "Unverified visual echo": atmosphere only, it verifies no identity (C:95-104). It is not connected to Mr. Robot in any text.
@@ -58,7 +60,7 @@ The other route's evidence appears as "SEALED // OTHER BRANCH".
 ## 5. Voice and tone rules (derived from the code)
 
 - Lowercase, short lines, no exclamation marks, calm menace; typos and cut-offs are a device ("the key to open it is-").
-- unknown is warm but evasive; the watcher is cold and procedural; system messages are terse and technical (`[ALERT] ...`, `*** ... ***`).
+- unknown is warm but evasive; the watcher is cold and procedural; `<???>` is flat, brief and commanding; system messages are terse and technical (`[ALERT] ...`, `*** ... ***`).
 - Everything is English. Names of real people, real IPs and real places are never used.
 
 ## 6. Loose ends and contradictions in the current code
@@ -73,7 +75,7 @@ These are **open**: do not "fix" one silently, ask the owner (they may be delibe
 6. Not in code: who "they" are, any year other than 2015, a PID for `ghost.sh` (phase 3's fake `ps aux` plans one: `ghost.sh` PID 1337), whose name Elliot is beyond the easter egg.
 7. Developer route `ending` skips the trust choice, so it always uses the unknown route; `DEVELOPER SHUTDOWN TEST` records no case outcome.
 
-8. **Planned (phase 4b, owner decision 2026-10-15):** a **third voice**, a complete mystery, appears right after the inbox message and explains the case file. It has no name or backstory by design: do not add one without an owner decision. It is expected to return in a later level or chapter (owner, 2026-10-15), so leave room for it and do not close its mystery in Level 01. The trace window after the trust choice grew from 2 to 5 minutes (300 s) in phase 4b.0b (owner decision 2026-10-15); the `hint` cost stays 30 s.
+8. **Built in phase 4b (owner decision 2026-10-15):** a **third voice**, a complete mystery, appears right after the inbox message and explains the case file (scene 9b). It has no name or backstory by design: do not add one without an owner decision. It is expected to return in a later level or chapter (owner, 2026-10-15), so leave room for it and do not close its mystery in Level 01. The trace window after the trust choice grew from 2 to 5 minutes (300 s) in phase 4b.0b (owner decision 2026-10-15); the `hint` cost stays 30 s.
 
 ## 7. Rules for changing the story
 

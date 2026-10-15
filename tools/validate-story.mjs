@@ -265,6 +265,85 @@ if (story) {
   expect(inbox >= 0 && traceStart >= 0, 'the inbox message and the trace start are in the story');
   expect(available.length === 1, `the story makes the case file available exactly once (${available.length})`);
   expect(available[0] > inbox && available[0] < traceStart, 'the case file becomes available after the inbox message and before the trace starts');
+
+  // 4b.2: the third voice. Every voice a node names exists; a voice's own typing cue exists and is not the default one.
+  const { VOICES } = await import(js('story-data/voices.js'));
+  const everyNode = (nodes) => nodes.flatMap((node) => [node, ...everyNode(node.then ?? []), ...everyNode(node.else ?? [])]);
+  const all = story.segments.flatMap((segment) => everyNode(segment.nodes));
+  const named = [...new Set(all.filter((node) => node.type === 'say' || (node.type === 'typing' && node.who)).map((node) => node.who))];
+  expect(named.every((who) => VOICES[who]), `every voice a node names exists (${named.join(', ')})`);
+  expect(Object.values(VOICES).every((voice) => voice.name && typeof voice.nameCls === 'string' && typeof voice.cls === 'string' && typeof voice.quiet === 'boolean'),
+    'every voice has a name, two classes and the quiet flag');
+  expect(Object.entries(VOICES).every(([, voice]) => voice.tick === undefined || known.cues.includes(voice.tick)), 'every voice tick names a registered cue');
+  expect(VOICES.mystery?.name === '???' && VOICES.mystery.nameCls === 'voice-blue' && VOICES.mystery.tick && VOICES.mystery.tick !== 'key-tick',
+    'the third voice is <???> in blue with its own typing cue');
+
+  const lines = flat.map((node, index) => ({ node, index })).filter(({ node }) => node.type === 'say' && node.who === 'mystery');
+  const spoken = lines.map(({ node }) => node.text);
+  expect(lines.length >= 2 && lines.length <= 5, `the third voice has 2 to 5 lines (${lines.length})`);
+  expect(spoken.every((text) => typeof text === 'string'), 'its lines are plain text');
+  const text = spoken.filter((entry) => typeof entry === 'string');
+  expect(text.every((entry) => entry === entry.toLowerCase() && !entry.includes('!')), 'its lines are lowercase and have no exclamation marks');
+  expect(!text.some((entry) => /sdb9-part|--sdb9|ghost|shell|1337|key layer|meta|\bcss\b|console/i.test(entry)), 'its lines do not touch the key or its layers');
+  expect(!text.some((entry) => /robot|elliot|unknown|watcher/i.test(entry)), 'its lines name no other character and no real name');
+  expect(lines.every(({ index }) => index > inbox && index < traceStart), 'the third voice speaks only between the inbox message and the trace start');
+  expect(all.filter((node) => (node.type === 'say' || node.type === 'typing') && node.who === 'mystery').length === lines.length + all.filter((node) => node.type === 'typing' && node.who === 'mystery').length,
+    'nothing but its lines and its typing indicator names the third voice');
+  expect(lines.length > 0 && lines[0].index < available[0] && available[0] - lines[0].index <= 2, 'the board appears with the first mention: the case file node follows the first line');
+  expect(lines.length > 0 && flat[lines[0].index - 1]?.type === 'typing' && flat[lines[0].index - 1].who === 'mystery', 'the first line is preceded by its typing indicator');
+}
+
+// ---- what a voice looks and sounds like (phase 4b.2): output.js with a tiny DOM stand-in
+{
+  console.log('\nvoices in the output');
+  const { createOutput } = await import(js('output.js'));
+  const { VOICES } = await import(js('story-data/voices.js'));
+  const node = () => ({
+    className: '',
+    textContent: '',
+    children: [],
+    append(...items) { this.children.push(...items); },
+    appendChild(item) { this.children.push(item); return item; },
+    remove() {},
+    get firstElementChild() { return this.children[0]; },
+  });
+  const realDocument = globalThis.document;
+  const realWindow = globalThis.window;
+  globalThis.document = { createElement: node, body: { scrollHeight: 0 } };
+  globalThis.window = { scrollTo() {} };
+  try {
+    const run = async (who, text) => {
+      const played = [];
+      const out = node();
+      const announcer = node();
+      const output = createOutput({
+        out,
+        announcer,
+        audio: { play: (cue) => played.push(cue) },
+        getPace: () => ({ wait: async () => {}, isSkipping: () => false }),
+        motionReduced: () => true,
+        isAnnouncing: () => true,
+        voices: VOICES,
+      });
+      await output.say(text, { who, speed: 1 });
+      const [tag, body] = out.children[0].children;
+      return { played, tag, body, spoken: announcer.children.map((entry) => entry.textContent) };
+    };
+    const mystery = await run('mystery', 'the case file is in the corner.');
+    expect(mystery.tag.textContent === '<???> ' && mystery.tag.className === 'voice-blue' && mystery.body.className === 'voice-blue', 'the third voice is shown as <???> in blue (name and text)');
+    expect(mystery.played.includes('key-tick-mystery') && !mystery.played.includes('key-tick'), 'the third voice types with its own tick and not the default one');
+    expect(mystery.played[0] === 'message', 'the third voice plays the message cue first, like the other voices');
+    expect(mystery.spoken.join() === '??? says: the case file is in the corner.', 'a screen reader hears "??? says: ..."');
+    const other = await run('unknown', 'you are early.');
+    expect(other.played.includes('key-tick') && !other.played.includes('key-tick-mystery'), 'the other voices keep the default tick');
+    const quiet = await run('robot', 'bonsoir.');
+    expect(!quiet.played.includes('key-tick') && !quiet.played.includes('message'), 'a quiet voice still makes no sound');
+  } finally {
+    globalThis.document = realDocument;
+    globalThis.window = realWindow;
+    if (realDocument === undefined) delete globalThis.document;
+    if (realWindow === undefined) delete globalThis.window;
+  }
 }
 
 // ---- the command registry and the system commands (phase 3.8 / 3.9)

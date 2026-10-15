@@ -445,6 +445,16 @@ export const CUES = {
     tone(55, 0.5, { type: 'sine', volume: 0.1, delay: 0.05, endFrequency: 30, attack: 0.005 }),
   ), { usedBy: 'phase 6 (TRACED game over)' }),
 
+  // Typing of the third voice
+  // The typing tick of the third voice (<???>, phase 4b): a rounder, lower blip than the clicks of key-tick, so the
+  // owner can hear who is typing without reading the tag. Same rate limit and level class as key-tick. It is the last
+  // cue of the table on purpose: tools/audio-lint.mjs renders with a seeded random generator in table order, so a cue
+  // inserted earlier changes the random draws (and the peak) of every cue after it.
+  'key-tick-mystery': cue('terminal', 'Typing tick of the third voice: a soft hollow blip, lower and rounder than key-tick, limited to 15 per second', variants(
+    layers(tone(440, 0.05, { type: 'sine', volume: 0.014, endFrequency: 330, spread: 30, attack: 0.003 }), click(900, 0.006, 0.02, 0, 200)),
+    layers(tone(392, 0.055, { type: 'sine', volume: 0.014, endFrequency: 294, spread: 25, attack: 0.003 }), click(800, 0.006, 0.02, 0, 200)),
+    layers(tone(494, 0.045, { type: 'triangle', volume: 0.011, endFrequency: 370, spread: 30, attack: 0.003 }), click(1000, 0.005, 0.018, 0, 200)),
+  ), { rate: 15, jitter: { detune: 20, gain: 0.1 } }),
 };
 
 // ---- ambient beds ----
