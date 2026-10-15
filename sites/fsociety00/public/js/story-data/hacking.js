@@ -123,3 +123,17 @@ export const MESSAGES = {
 
 /** Fills `{0}`, `{1}` in a message. */
 export const fill = (template, ...values) => template.replace(/\{(\d)\}/g, (_match, index) => values[Number(index)] ?? '');
+
+/**
+ * The trace path shown by `trace --status` and the board (topology.js): you, `CASE.hops` relays, then the target.
+ * Documentation-range addresses only (the same relays `decrypt` shows for the relay chain); the last relay and the
+ * target are redacted. `label` is at most 8 characters, so a line fits a phone terminal.
+ */
+export const TOPOLOGY_NODES = [
+  { label: 'you', address: '10.0.2.15' },
+  { label: 'relay 1', address: '198.51.100.12' },
+  { label: 'relay 2', address: '203.0.113.7' },
+  { label: 'relay 3', address: '198.51.100.88' },
+  { label: 'relay 4', address: '203.0.113.███' },
+  { label: 'target', address: '[REDACTED]' },
+];

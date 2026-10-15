@@ -1,10 +1,11 @@
 import { sourcePartThree, whisperSourcePart } from './source.js';
 import { formatClock } from './util.js';
+import { topologyState, topologyLines } from './topology.js';
 import { isAbortError } from './session.js';
 import { createRegistry } from './commands.js';
 import { registerSystemCommands } from './system-commands.js';
 import { registerHackingCommands } from './hacking-commands.js';
-import { TRACE } from './story-data/constants.js';
+import { TRACE, CASE } from './story-data/constants.js';
 import { SYSTEM_FILES } from './story-data/system.js';
 import {
   LEVEL01_HINTS, LEVEL01_FILES, LEVEL01_FILE_ROUTE, LEVEL01_FILE_EVIDENCE, LEVEL01_LS, LEVEL01_SOURCE_FILES,
@@ -193,13 +194,16 @@ export function createLevel01(ctx) {
   });
 
   registry.register({
-    name: 'trace', usage: 'trace', summary: 'show monitoring status',
-    run(_args, env) {
+    name: 'trace', usage: 'trace [--status]', summary: 'show monitoring status',
+    run(args, env) {
       audio.play('trace-status');
-      const closing = env.trace.left() < 120;
+      const left = env.trace.left();
+      const closing = left < 120;
+      const state = topologyState(left);
       line(`trace:  ${closing ? 'CLOSING' : 'ACTIVE'}`, closing ? 'warn' : '');
-      line(`eta:    ${formatClock(env.trace.left())}`, 'dim');
-      line('relays: 7 / 9', 'dim');
+      line(`eta:    ${formatClock(left)}`, 'dim');
+      line(`relays: ${state.relaysReached} / ${CASE.hops}`, 'dim');
+      if (args.includes('--status')) topologyLines(left).forEach((row) => line(row, 'dim'));
     },
   });
 

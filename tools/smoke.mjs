@@ -336,7 +336,8 @@ scenarios.push({
     await waitOutput(page, '[evidence] e12');
     await sendCommand(page, 'connect e10 e12');
     await waitOutput(page, 'no relation between e10 and e12');
-    await sendCommand(page, 'trace');
+    await sendCommand(page, 'trace --status');
+    await waitOutput(page, 'hops remaining:');
     const leaked = await page.evaluate(() => /sdb9-part|ghost[-\s]shell|shell[-\s]1337/i.test(document.getElementById('output').textContent.replace(/unlock ghost shell 1337/g, '')));
     if (leaked) throw new Error('a hacking command printed a key layer');
     await winGame(page);

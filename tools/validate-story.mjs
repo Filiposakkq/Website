@@ -723,5 +723,33 @@ if (story) {
   }
 }
 
+// ---- the trace topology (phase 4.4)
+{
+  console.log('\ntrace topology');
+  const { topologyState, topologyLines } = await import(js('topology.js'));
+  const { TOPOLOGY_NODES } = await import(js('story-data/hacking.js'));
+  const { CASE: TUNING } = await import(js('story-data/constants.js'));
+  expect(TOPOLOGY_NODES.length === TUNING.hops + 2, `the path has you, ${TUNING.hops} relays and the target`);
+  expect(TOPOLOGY_NODES.every((node) => /^(10\.0\.2\.|198\.51\.100\.|203\.0\.113\.|\[REDACTED\])/.test(node.address)), 'only documentation addresses on the path');
+  expect(/█|REDACTED/.test(TOPOLOGY_NODES.at(-1).address) && /█/.test(TOPOLOGY_NODES.at(-2).address), 'the last relay and the target are redacted');
+  const at = (secs) => topologyState(secs);
+  expect(at(TUNING.traceWindow).reached === 0 && at(TUNING.traceWindow).hopsLeft === TUNING.hops + 1 && at(480).percent === 0, 'before the window nothing is reached');
+  expect(at(0).reached === TUNING.hops + 1 && at(0).hopsLeft === 0 && at(0).percent === 100, 'at 0 s the target is reached');
+  let previous = -1;
+  let monotonic = true;
+  for (let secs = TUNING.traceWindow; secs >= 0; secs--) {
+    const { reached } = at(secs);
+    if (reached < previous) monotonic = false;
+    previous = reached;
+  }
+  expect(monotonic, 'the reached count never goes down as time runs out');
+  expect(at(-5).percent === 100 && at(9999).percent === 0, 'out-of-range seconds are clamped');
+  const lines = topologyLines(TUNING.traceWindow / 2);
+  expect(lines.every((row) => row.length <= 34), `every status line fits a phone (longest ${Math.max(...lines.map((row) => row.length))})`);
+  expect(lines[0].startsWith('trace [') && lines.at(-1).startsWith('hops remaining: '), 'bar first, hops last');
+  expect(lines.filter((row) => row.startsWith('[x]')).length === at(TUNING.traceWindow / 2).reached + 1, 'rows marked reached = you + reached nodes');
+  expect(!lines.some((row) => /\[?x\]? .*REDACTED/.test(row)) || at(TUNING.traceWindow / 2).reached === TUNING.hops + 1, 'the target stays unmarked until reached');
+}
+
 console.log(failures ? `\n${failures} problem(s)` : '\nall checks passed');
 process.exit(failures ? 1 : 0);
