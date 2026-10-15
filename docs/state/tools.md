@@ -6,6 +6,6 @@ Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15; the `valid
 - `node tools/transcript.mjs --out=<dir>` / `--diff=<a>,<b>`: records the terminal text of four scripted playthroughs (reduced motion) and compares two recordings; used to prove a refactor kept the story text.
 - `node tools/validate-story.mjs`: self-test of the narrative engine, then validation and dry runs of the story data (targets, cues, scenes, fields, developer routes), then the evidence data (schema, ids, reachability, 17 mutation self-tests, every `discover` reference in the code), the case file state machine (45 checks) and the hacking commands (31 checks with a fake clock; phase 4.3). No browser needed, runs in about a second.
 - `node tools/audio-lint.mjs`: renders every cue and bed offline, checks NaN, silence, peak, headroom, crossfade clicks, trace modes and trace-sound logic (waits for the trace to expire by polling, no fixed sleep).
-- `bash tools/check-fonts.sh`: no font-size below 11px (`--all` includes `.case-*`/`.developer-*`).
+- `bash tools/check-fonts.sh`: no font-size below 11px (`--all` also includes `.developer-*`; `.case-*` is checked since phase 4.5).
 - `node tools/contrast.mjs`: WCAG contrast calculator and CSS audit.
 - Owner tests on the preview: `../overhaul/owner-test-checklist.md`.

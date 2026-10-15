@@ -366,6 +366,93 @@ scenarios.push({
   },
 });
 
+// Phase 4.5: the evidence board is a native dialog with four panes (wide) or four tabs (phone).
+async function buildBoardEvidence(page) {
+  await sendCommand(page, 'scan');
+  await waitOutput(page, 'new nodes: 2', 30000);
+  await sendCommand(page, 'dump relay/handshake.log');
+  await waitOutput(page, '[evidence] e12');
+  await sendCommand(page, 'decrypt e13');
+  await waitOutput(page, '[ok] decrypted:', 30000);
+}
+
+const boardState = (page) => page.evaluate(() => {
+  const dialog = document.querySelector('dialog.case-dialog');
+  const visible = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+  return {
+    open: !!dialog?.open,
+    legacyDialogs: document.querySelectorAll('div[role="dialog"]').length,
+    panes: [...document.querySelectorAll('.case-pane')].filter(visible).map((el) => el.id),
+    tabsVisible: visible(document.querySelector('.case-tabs')),
+    nodes: document.querySelectorAll('.case-node').length,
+    rows: [...document.querySelectorAll('.case-row')].map((el) => el.textContent),
+    live: dialog?.querySelector('[role="status"]')?.textContent ?? '',
+    focusInside: !!dialog?.contains(document.activeElement),
+    pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    paneOverflow: [...document.querySelectorAll('.case-pane-body')].filter(visible).some((el) => el.scrollWidth > el.clientWidth + 1),
+    smallest: Math.min(...[...dialog?.querySelectorAll('*') ?? []].filter((el) => el.childNodes.length && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).map((el) => parseFloat(getComputedStyle(el).fontSize))),
+  };
+});
+
+for (const [label, contextOptions] of [['desktop', REDUCED], ['mobile', { ...MOBILE, reducedMotion: 'reduce' }]]) {
+  scenarios.push({
+    name: `reduced: ${label === 'mobile' ? 'phone ' : ''}evidence board dialog, map, connect, escape`,
+    contextOptions,
+    async run({ page }) {
+      await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+      await buildBoardEvidence(page);
+      await sleep(300);
+      await page.locator('#caseTrigger').click();
+      await page.waitForSelector('dialog.case-dialog[open]');
+      let board = await boardState(page);
+      if (!board.open || board.legacyDialogs !== 0) throw new Error(`board should be one native dialog: ${JSON.stringify(board)}`);
+      if (!board.focusInside) throw new Error('focus should move into the board');
+      if (board.pageOverflow || board.paneOverflow) throw new Error(`the board overflows horizontally: ${JSON.stringify(board)}`);
+      if (board.smallest < 11) throw new Error(`board text below 11px: ${board.smallest}`);
+      if (!board.rows.some((row) => row.includes('e13') && row.includes('DECRYPTED'))) throw new Error(`e13 should be listed as decrypted: ${JSON.stringify(board.rows)}`);
+      await page.locator('.case-row', { hasText: 'e12' }).click();
+      if (label === 'desktop') {
+        if (board.panes.length !== 4 || board.tabsVisible) throw new Error(`wide layout shows four panes and no tabs: ${JSON.stringify(board)}`);
+      } else {
+        if (board.panes.length !== 1 || !board.tabsVisible) throw new Error(`phone layout shows one pane and the tabs: ${JSON.stringify(board)}`);
+        await page.locator('#caseTab-trace').click();
+        await page.waitForSelector('#casePane-trace:not([hidden])');
+        const topo = await page.evaluate(() => document.querySelectorAll('.topo-node').length);
+        if (topo !== 6) throw new Error(`the trace pane should show six path nodes, shows ${topo}`);
+        await page.locator('#caseTab-map').click();
+        await page.waitForSelector('#casePane-map:not([hidden])');
+        const inside = await page.evaluate(() => {
+          const net = document.querySelector('.case-network').getBoundingClientRect();
+          const node = [...document.querySelectorAll('.case-node')].find((n) => n.textContent.includes('e12')).getBoundingClientRect();
+          return node.left >= net.left - 1 && node.right <= net.right + 1 && node.top >= net.top - 1 && node.bottom <= net.bottom + 1;
+        });
+        if (!inside) throw new Error('the selected node should be panned fully into the phone map');
+        await page.locator('#caseTab-evidence').click();
+        await page.waitForSelector('#casePane-evidence:not([hidden])');
+      }
+      if (process.env.SMOKE_DEBUG) console.log(JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.case-row')].map((el) => { const r = el.getBoundingClientRect(); const c = getComputedStyle(el); return [el.textContent, Math.round(r.top), Math.round(r.height), c.opacity, c.color, c.display]; }))));
+      if (process.env.SMOKE_SHOTS) await page.screenshot({ path: path.join(process.env.SMOKE_SHOTS, `board-${label}.png`) });
+      // Connect on the board: handshake log + decrypted ledger -> intel (rows on the phone, nodes on a wide screen).
+      await page.locator('.case-action').click();
+      await page.locator(label === 'desktop' ? '.case-node' : '.case-row', { hasText: 'e13' }).click();
+      await page.waitForFunction(() => [...document.querySelectorAll('.case-row')].some((el) => el.textContent.includes('e17')));
+      board = await boardState(page);
+      if (!board.live.includes('Intel')) throw new Error(`the live region should announce the intel: "${board.live}"`);
+      if (board.legacyDialogs !== 0) throw new Error('a role=dialog div appeared');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+      const focus = await page.evaluate(() => document.activeElement?.id);
+      if (focus !== 'caseTrigger') throw new Error(`focus should return to the CASE FILE button, is on ${focus}`);
+      // Reopen from the keyboard, close with the close button.
+      await page.locator('#caseTrigger').press('Enter');
+      await page.waitForSelector('dialog.case-dialog[open]');
+      await page.locator('.case-close').click();
+      await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+      await winGame(page);
+    },
+  });
+}
+
 // The third hint reveals the console part. It used to throw (revealSourcePart was never passed in).
 scenarios.push({
   name: 'reduced: third hint whispers the console part',

@@ -1,6 +1,8 @@
-import { formatClock, pad2, scrambleText } from './util.js';
+import { pad2, scrambleText } from './util.js';
 import { EVIDENCE as RECORDS, ORIGINAL_IDS, ROUTE_LABELS } from './story-data/evidence.js';
 import { CASE } from './story-data/constants.js';
+import { INTERCEPT_PASSES } from './story-data/hacking.js';
+import { createBoardUI } from './board-ui.js';
 
 // The case file: the evidence state machine and the board that shows it.
 //
@@ -16,9 +18,8 @@ import { CASE } from './story-data/constants.js';
 //   compromised  lost: the trace got close before the player held it (see `compromiseAtTrace`); never comes back
 // A record the player already holds is never taken away.
 //
-// Phase 4.1/4.2: the board below still renders only the original nine records through a temporary filter
-// (LEGACY_VIEW). The new board (4.5) replaces it.
-const LEGACY_VIEW = RECORDS.filter((item) => ORIGINAL_IDS.includes(item.id));
+// The board (the dialog the player opens with the CASE FILE button or `board`) is board-ui.js. This file gives it
+// the data (`getView()`), tells it when something changed (`subscribe`) and takes its actions (`connect`).
 const READABLE = ['unlocked', 'decrypted'];
 
 const OUTCOME_LABELS = {
@@ -31,14 +32,7 @@ const OUTCOME_LABELS = {
   'trace-complete': 'TRACE COMPLETE',
 };
 
-const create = (tag, className, text) => {
-  const element = document.createElement(tag);
-  if (className) element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-};
-
-export function createCaseFile({ trigger, getTraceLeft = () => null, audio = null }) {
+export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLeft = null, audio = null }) {
   const state = {
     startedAt: 0,
     route: '',
@@ -55,35 +49,28 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, audio = nul
     hintsUsed: 0,
     failedUnlocks: 0,
     outcome: '',
-    selected: 'lock-header',
-    activeTab: 'network',
-    mapView: { x: 0, y: 0, scale: 1 },
     ghostScriptInspected: false,
     relayVerified: false,
     watcherIsolated: false,
   };
-  let overlay = null;
-  let refreshInterval = 0;
-  let lastFocus = null;
 
   const elapsed = () => state.startedAt ? Math.floor((performance.now() - state.startedAt) / 1000) : 0;
-  const timeLabel = (seconds) => {
-    if (seconds === null || !Number.isFinite(seconds)) return 'NOT TRACKED';
-    return formatClock(seconds);
-  };
   const recordOf = (id) => RECORDS.find((item) => item.id === id) ?? null;
   const inRoute = (item) => !item.route || item.route === state.route;
   const stateOf = (id) => state.items.get(id) ?? 'hidden';
   const isReadable = (id) => READABLE.includes(stateOf(id));
   const play = (cue) => audio?.play(cue);
-  // The temporary board (see LEGACY_VIEW above) lists the original nine records only.
-  const visibleEvidence = () => LEGACY_VIEW.filter(inRoute);
-  const discoveredEvidence = () => visibleEvidence().filter((item) => state.discoveries.has(item.id));
+
+  // The board subscribes while it is open: kind 'data' (something changed) or 'tick' (one trace second passed).
+  const listeners = new Set();
+  function notify(kind) {
+    listeners.forEach((listener) => listener(kind));
+  }
 
   function recordEvent(kind, title, detail = '') {
     state.events.push({ kind, title, detail, at: elapsed() });
     updateTrigger();
-    if (overlay) render();
+    notify('data');
   }
 
   function updateTrigger() {
@@ -108,9 +95,6 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, audio = nul
     state.hintsUsed = 0;
     state.failedUnlocks = 0;
     state.outcome = '';
-    state.selected = 'lock-header';
-    state.activeTab = 'network';
-    state.mapView = { x: 0, y: 0, scale: 1 };
     trigger.classList.remove('case-trigger--revealed');
     state.ghostScriptInspected = false;
     state.relayVerified = false;
@@ -302,6 +286,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, audio = nul
   /** Called once per trace second by the level shell (the one timer; the case file never starts its own). */
   function tick(secsLeft) {
     compromiseCheck(secsLeft);
+    notify('tick');
   }
 
   function decide(id, title, detail) {
@@ -420,364 +405,91 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, audio = nul
     };
   }
 
-  function evidenceStatus(item) {
-    if (state.discoveries.has(item.id)) return 'COLLECTED';
-    return item.route ? 'SEALED // OTHER BRANCH' : 'NOT YET OBSERVED';
-  }
+  // ---- what the board shows -----------------------------------------------------------------------------------
 
-  function statCard(label, value, note, tone = '') {
-    const card = create('div', `case-stat${tone ? ` ${tone}` : ''}`);
-    card.append(create('span', 'case-stat-label', label), create('strong', 'case-stat-value', value), create('span', 'case-stat-note', note));
-    return card;
-  }
-
-  function renderHeader() {
-    const header = create('header', 'case-header');
-    const heading = create('div', 'case-heading');
-    heading.append(
-      create('p', 'case-eyebrow', 'FSOCIETY // FIELD INTELLIGENCE'),
-      create('h2', '', 'EVIDENCE BOARD'),
-      create('p', 'case-subtitle', 'SESSION DOSSIER 4097 // LOCAL INVESTIGATION')
-    );
-    const right = create('div', 'case-header-right');
-    const status = create('span', 'case-status', state.outcome ? 'CASE CLOSED' : 'LIVE SESSION');
-    const close = create('button', 'case-close', '×');
-    close.type = 'button';
-    close.setAttribute('aria-label', 'Close evidence board');
-    close.addEventListener('click', closeBoard);
-    right.append(status, close);
-    header.append(heading, right);
-    return header;
-  }
-
-  function renderStats() {
-    const grid = create('div', 'case-stats');
-    const evidenceCount = discoveredEvidence().length;
-    const traceLabel = state.outcome
-      ? state.outcome === 'trace-complete' ? 'COMPLETE' : 'CLOSED'
-      : timeLabel(traceLeft());
-    grid.append(
-      statCard('ARTIFACTS', `${pad2(evidenceCount)} / ${pad2(visibleEvidence().length)}`, 'verified observations'),
-      statCard('TRUST ROUTE', state.route ? state.route.toUpperCase() : 'UNDECIDED', 'operator selection', state.route === 'watcher' ? 'danger' : ''),
-      statCard(state.outcome ? 'TRACE STATUS' : 'TRACE REMAINING', traceLabel, state.outcome ? 'session investigation status' : 'timer continues while board is open', 'danger'),
-      statCard('COSTS', `${state.hintsUsed} HINTS / ${state.failedUnlocks} REJECTS`, 'time penalty / key failures')
-    );
-    return grid;
-  }
-
-  function traceLeft() {
-    return getTraceLeft();
-  }
-
-  function renderTabs() {
-    const nav = create('nav', 'case-tabs');
-    nav.setAttribute('aria-label', 'Evidence board views');
-    const tabs = [
-      ['network', 'INTELLIGENCE MAP', 'MAP'],
-      ['evidence', `ARTIFACTS ${pad2(discoveredEvidence().length)}`, `FILES ${pad2(discoveredEvidence().length)}`],
-      ['decisions', `CASE TIMELINE ${pad2(state.events.length)}`, `LOG ${pad2(state.events.length)}`],
-    ];
-    tabs.forEach(([id, label, compactLabel]) => {
-      const button = create('button', `case-tab${state.activeTab === id ? ' active' : ''}`);
-      button.type = 'button';
-      button.setAttribute('aria-pressed', String(state.activeTab === id));
-      button.setAttribute('aria-label', label);
-      button.append(create('span', 'case-tab-full', label), create('span', 'case-tab-compact', compactLabel));
-      button.addEventListener('click', () => { state.activeTab = id; render(); });
-      nav.appendChild(button);
-    });
-    return nav;
-  }
-
-  function renderNetwork() {
-    const section = create('section', 'case-network-view');
-    const title = create('div', 'case-section-heading');
-    title.append(create('h3', '', 'SIGNAL RELATIONSHIPS'), create('span', '', 'PAN THE BOARD // SELECT A NODE TO INSPECT'));
-    const controls = create('div', 'case-map-controls');
-    const zoomOut = create('button', 'case-map-control', '−');
-    const zoomIn = create('button', 'case-map-control', '+');
-    const fit = create('button', 'case-map-control case-map-fit', 'FIT MAP');
-    [[zoomOut, 'Zoom out'], [zoomIn, 'Zoom in'], [fit, 'Fit entire map']].forEach(([button, label]) => {
-      button.type = 'button';
-      button.setAttribute('aria-label', label);
-      controls.appendChild(button);
-    });
-    const network = create('div', 'case-network');
-    network.setAttribute('role', 'group');
-    network.setAttribute('aria-label', 'Interactive evidence map. Drag the map background to pan. Use arrow keys to pan, plus and minus to zoom, or Home to fit the map. Select a node to inspect it.');
-    network.tabIndex = 0;
-    const world = create('div', 'case-map-world');
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 100 100');
-    svg.setAttribute('preserveAspectRatio', 'none');
-    svg.setAttribute('aria-hidden', 'true');
-    const visible = visibleEvidence();
-    const edges = new Set();
-    visible.forEach((item) => item.links.forEach((linkedId) => {
-      const target = visible.find((entry) => entry.id === linkedId);
-      if (!target) return;
-      const edgeKey = [item.id, target.id].sort().join('|');
-      if (edges.has(edgeKey)) return;
-      edges.add(edgeKey);
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', String(item.x));
-      line.setAttribute('y1', String(item.y));
-      line.setAttribute('x2', String(target.x));
-      line.setAttribute('y2', String(target.y));
-      line.setAttribute('class', state.discoveries.has(item.id) && state.discoveries.has(target.id) ? 'linked' : '');
-      svg.appendChild(line);
-    }));
-    world.appendChild(svg);
-    visible.forEach((item) => {
-      const found = state.discoveries.has(item.id);
-      const node = create('button', `case-node${found ? ' found' : ''}${state.selected === item.id ? ' selected' : ''}`);
-      node.type = 'button';
-      node.style.setProperty('--node-x', `${item.x}%`);
-      node.style.setProperty('--node-y', `${item.y}%`);
-      node.setAttribute('aria-label', `${item.title}, ${found ? 'collected' : 'not observed'}. Select to inspect.`);
-      node.append(create('span', 'case-node-dot'), create('span', 'case-node-title', found ? item.title : 'UNOBSERVED'));
-      node.addEventListener('click', () => {
-        state.selected = item.id;
-        state.activeTab = 'evidence';
-        render();
-      });
-      world.appendChild(node);
-    });
-    network.appendChild(world);
-    const dimensions = () => ({
-      viewportWidth: network.clientWidth,
-      viewportHeight: network.clientHeight,
-      worldWidth: world.scrollWidth,
-      worldHeight: world.scrollHeight,
-    });
-    const applyTransform = () => {
-      const { viewportWidth, viewportHeight, worldWidth, worldHeight } = dimensions();
-      const scaledWidth = worldWidth * state.mapView.scale;
-      const scaledHeight = worldHeight * state.mapView.scale;
-      state.mapView.x = scaledWidth <= viewportWidth
-        ? (viewportWidth - scaledWidth) / 2
-        : Math.min(0, Math.max(viewportWidth - scaledWidth, state.mapView.x));
-      state.mapView.y = scaledHeight <= viewportHeight
-        ? (viewportHeight - scaledHeight) / 2
-        : Math.min(0, Math.max(viewportHeight - scaledHeight, state.mapView.y));
-      world.style.transform = `translate(${state.mapView.x}px, ${state.mapView.y}px) scale(${state.mapView.scale})`;
-      network.dataset.zoom = `${Math.round(state.mapView.scale * 100)}%`;
+  /** One record as the board may show it: text only for what the player may read, scrambled text for a lost record. */
+  function itemView(item, traceLeft) {
+    const current = stateOf(item.id);
+    const open = READABLE.includes(current);
+    const lost = current === 'compromised' ? state.scrambled.get(item.id) : null;
+    return {
+      id: item.id,
+      code: item.code,
+      type: item.type,
+      group: item.group,
+      state: current,
+      encrypted: !!item.encrypted,
+      decryptSeconds: item.decryptSeconds ?? 0,
+      file: item.file ?? '',
+      x: item.x,
+      y: item.y,
+      links: item.links ?? [],
+      title: open || current === 'locked' ? item.title : lost?.title ?? '',
+      source: open ? item.source : '',
+      summary: open ? item.summary : lost?.summary ?? '',
+      detail: open ? item.detail : lost?.detail ?? '',
+      decrypting: state.job?.id === item.id,
+      // A locked record the trace is about to overwrite (within 20 s of its threshold).
+      atRisk: current === 'locked' && item.compromiseAtTrace !== undefined && Number.isFinite(traceLeft)
+        && traceLeft <= item.compromiseAtTrace + 20,
     };
-    const zoomAt = (scale, x = network.clientWidth / 2, y = network.clientHeight / 2) => {
-      const nextScale = Math.min(2.25, Math.max(0.45, scale));
-      const ratio = nextScale / state.mapView.scale;
-      state.mapView.x = x - (x - state.mapView.x) * ratio;
-      state.mapView.y = y - (y - state.mapView.y) * ratio;
-      state.mapView.scale = nextScale;
-      applyTransform();
+  }
+
+  /**
+   * Everything the board draws, as plain data: the records the player may see (a record of the story that is not found
+   * yet appears as an unobserved node; scan, intercept and connect records appear only once seen), the log of
+   * captures, the timeline and the assessment.
+   */
+  function getView() {
+    const traceLeft = getTraceLeft();
+    const items = RECORDS.filter((item) => inRoute(item)
+      && (stateOf(item.id) !== 'hidden' || ['cat', 'story', 'echo'].includes(item.found)))
+      .map((item) => itemView(item, traceLeft));
+    return {
+      route: state.route,
+      routeLabel: ROUTE_LABELS[state.route] ?? '',
+      outcome: state.outcome,
+      outcomeLabel: OUTCOME_LABELS[state.outcome] ?? '',
+      hintsUsed: state.hintsUsed,
+      failedUnlocks: state.failedUnlocks,
+      elapsed: elapsed(),
+      traceLeft,
+      readable: items.filter((item) => READABLE.includes(item.state)).length,
+      total: items.length,
+      items,
+      connected: [...state.connected].map((pair) => pair.split('|')),
+      packets: INTERCEPT_PASSES.slice(0, state.intercepts).map((pass) => ({ title: pass.title, rows: pass.rows })),
+      events: state.events.map((entry) => ({ ...entry })),
+      conclusion: conclusion(),
+      job: state.job ? { id: state.job.id, seconds: state.job.seconds } : null,
     };
-    const fitMap = () => {
-      const { viewportWidth, viewportHeight, worldWidth, worldHeight } = dimensions();
-      state.mapView.scale = Math.min(viewportWidth / worldWidth, viewportHeight / worldHeight, 1);
-      state.mapView.x = (viewportWidth - worldWidth * state.mapView.scale) / 2;
-      state.mapView.y = (viewportHeight - worldHeight * state.mapView.scale) / 2;
-      applyTransform();
-    };
-    zoomOut.addEventListener('click', () => zoomAt(state.mapView.scale / 1.2));
-    zoomIn.addEventListener('click', () => zoomAt(state.mapView.scale * 1.2));
-    fit.addEventListener('click', fitMap);
-    let pan = null;
-    network.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || event.target.closest('button')) return;
-      pan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-      network.setPointerCapture(event.pointerId);
-      network.classList.add('panning');
-    });
-    network.addEventListener('pointermove', (event) => {
-      if (!pan || pan.pointerId !== event.pointerId) return;
-      state.mapView.x += event.clientX - pan.x;
-      state.mapView.y += event.clientY - pan.y;
-      pan.x = event.clientX;
-      pan.y = event.clientY;
-      applyTransform();
-    });
-    const stopPan = (event) => {
-      if (!pan || pan.pointerId !== event.pointerId) return;
-      pan = null;
-      network.classList.remove('panning');
-    };
-    network.addEventListener('pointerup', stopPan);
-    network.addEventListener('pointercancel', stopPan);
-    network.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      const bounds = network.getBoundingClientRect();
-      zoomAt(state.mapView.scale * (event.deltaY < 0 ? 1.1 : 1 / 1.1), event.clientX - bounds.left, event.clientY - bounds.top);
-    }, { passive: false });
-    network.addEventListener('keydown', (event) => {
-      if (event.target !== network) return;
-      const directions = {
-        ArrowLeft: [36, 0],
-        ArrowRight: [-36, 0],
-        ArrowUp: [0, 36],
-        ArrowDown: [0, -36],
-      };
-      if (directions[event.key]) {
-        event.preventDefault();
-        state.mapView.x += directions[event.key][0];
-        state.mapView.y += directions[event.key][1];
-        applyTransform();
-      } else if (event.key === '+' || event.key === '=') {
-        event.preventDefault();
-        zoomAt(state.mapView.scale * 1.2);
-      } else if (event.key === '-') {
-        event.preventDefault();
-        zoomAt(state.mapView.scale / 1.2);
-      } else if (event.key === 'Home') {
-        event.preventDefault();
-        fitMap();
+  }
+
+  /** The board connects two nodes. Like the `connect` command, a pair with no relation costs trace time. */
+  function connectFromBoard(idA, idB) {
+    const result = connect(idA, idB);
+    if (!result.ok && result.reason === 'none' && CASE.connectMissCost > 0) {
+      const left = getTraceLeft();
+      if (setTraceLeft && Number.isFinite(left)) {
+        setTraceLeft(Math.max(5, left - CASE.connectMissCost));
+        result.cost = CASE.connectMissCost;
       }
-    });
-    applyTransform();
-    section.append(title, network, renderSelectedEvidence());
-    section.insertBefore(controls, network);
-    return section;
-  }
-
-  function renderSelectedEvidence() {
-    const item = LEGACY_VIEW.find((entry) => entry.id === state.selected) || visibleEvidence()[0];
-    if (!item) return create('div', 'case-analysis');
-    const found = state.discoveries.has(item.id);
-    const analysis = create('article', `case-analysis${found ? ' verified' : ' sealed'}`);
-    const top = create('div', 'case-analysis-top');
-    top.append(create('span', 'case-evidence-group', item.group), create('span', 'case-evidence-status', evidenceStatus(item)));
-    analysis.append(
-      top,
-      create('h4', '', found ? item.title : 'Signal not yet observed'),
-      create('p', 'case-source', `PROVENANCE // ${item.source}`),
-      create('p', 'case-analysis-copy', found ? item.detail : 'This record is still outside the evidence chain. Find and inspect its source in the terminal.'),
-      create('p', 'case-analysis-summary', found ? item.summary : 'No conclusion drawn. Missing artifacts remain unknown, not false.')
-    );
-    return analysis;
-  }
-
-  function renderEvidenceList() {
-    const section = create('section', 'case-evidence-view');
-    const intro = create('div', 'case-section-heading');
-    intro.append(create('h3', '', 'ARTIFACT REGISTER'), create('span', '', `${discoveredEvidence().length} VERIFIED / ${visibleEvidence().length} KNOWN SOURCES`));
-    const list = create('div', 'case-evidence-list');
-    visibleEvidence().forEach((item) => {
-      const found = state.discoveries.has(item.id);
-      const button = create('button', `case-evidence-row${found ? ' found' : ''}${state.selected === item.id ? ' selected' : ''}`);
-      button.type = 'button';
-      button.append(
-        create('span', 'case-evidence-mark', found ? '●' : '○'),
-        create('span', 'case-evidence-group', item.group),
-        create('span', 'case-evidence-title', found ? item.title : 'UNOBSERVED SIGNAL'),
-        create('span', 'case-evidence-source', found ? item.source : 'source not inspected'),
-        create('span', 'case-evidence-status', evidenceStatus(item))
-      );
-      button.addEventListener('click', () => { state.selected = item.id; render(); });
-      list.appendChild(button);
-    });
-    section.append(intro, list, renderSelectedEvidence());
-    return section;
-  }
-
-  function renderDecisions() {
-    const section = create('section', 'case-decisions-view');
-    const heading = create('div', 'case-section-heading');
-    heading.append(create('h3', '', 'DECISIONS & EVENT TIMELINE'), create('span', '', 'NEWEST EVENTS FIRST'));
-    const conclusionCard = create('article', `case-conclusion ${conclusion().tone}`);
-    const current = conclusion();
-    conclusionCard.append(
-      create('span', 'case-eyebrow', 'CURRENT ASSESSMENT'),
-      create('h4', '', current.title),
-      create('p', '', current.text)
-    );
-    const timeline = create('ol', 'case-timeline');
-    const entries = [...state.events].reverse();
-    if (!entries.length) timeline.appendChild(create('li', 'case-empty', 'No decisions recorded yet.'));
-    entries.forEach((entry) => {
-      const row = create('li', `case-event ${entry.kind}`);
-      row.append(
-        create('time', '', `T+${timeLabel(entry.at)}`),
-        create('span', 'case-event-type', entry.kind.toUpperCase()),
-        create('strong', '', entry.title),
-        create('span', 'case-event-detail', entry.detail)
-      );
-      timeline.appendChild(row);
-    });
-    section.append(heading, conclusionCard, timeline);
-    return section;
-  }
-
-  function renderFooter() {
-    const footer = create('footer', 'case-footer');
-    footer.append(
-      create('span', '', `SESSION AGE ${timeLabel(elapsed())}`),
-      create('span', '', 'EVIDENCE IS NOT IDENTITY // VERIFY EVERY CHANNEL'),
-      create('span', '', 'ESC TO RETURN')
-    );
-    return footer;
-  }
-
-  function refreshLiveValues() {
-    if (!overlay) return;
-    const values = overlay.querySelectorAll('.case-stat-value');
-    if (values[2]) values[2].textContent = state.outcome
-      ? state.outcome === 'trace-complete' ? 'COMPLETE' : 'CLOSED'
-      : timeLabel(traceLeft());
-    const age = overlay.querySelector('.case-footer span');
-    if (age) age.textContent = `SESSION AGE ${timeLabel(elapsed())}`;
-  }
-
-  function render() {
-    if (!overlay) return;
-    const panel = overlay.querySelector('.case-panel');
-    panel.replaceChildren(
-      renderHeader(),
-      renderStats(),
-      renderTabs(),
-      state.activeTab === 'network' ? renderNetwork()
-        : state.activeTab === 'evidence' ? renderEvidenceList()
-          : renderDecisions(),
-      renderFooter()
-    );
-  }
-
-  function closeBoard() {
-    if (!overlay) return;
-    clearInterval(refreshInterval);
-    refreshInterval = 0;
-    document.removeEventListener('keydown', onKeyDown);
-    overlay.remove();
-    overlay = null;
-    lastFocus?.focus();
-    lastFocus = null;
-  }
-
-  function onKeyDown(event) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeBoard();
     }
+    return result;
   }
 
-  function openBoard() {
-    if (!state.startedAt || overlay) return;
-    lastFocus = document.activeElement;
-    overlay = create('div', 'case-overlay');
-    overlay.addEventListener('pointerdown', (event) => {
-      if (event.target === overlay) closeBoard();
-    });
-    const panel = create('section', 'case-panel');
-    panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-modal', 'true');
-    panel.setAttribute('aria-label', 'Session evidence board');
-    overlay.appendChild(panel);
-    document.body.appendChild(overlay);
-    document.addEventListener('keydown', onKeyDown);
-    render();
-    panel.querySelector('.case-close')?.focus();
-    refreshInterval = setInterval(refreshLiveValues, 1000);
-  }
+  const ui = createBoardUI({
+    trigger,
+    audio,
+    getView,
+    connect: connectFromBoard,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    isStarted: () => !!state.startedAt,
+  });
 
-  trigger.addEventListener('click', openBoard);
   updateTrigger();
 
   return {
@@ -804,8 +516,9 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, audio = nul
     decide,
     setOutcome,
     setFailureOutcome,
-    open: openBoard,
-    close: closeBoard,
+    open: ui.open,
+    close: ui.close,
+    getView,
     snapshot: () => ({
       route: state.route,
       discoveries: [...state.discoveries],

@@ -44,6 +44,7 @@ let activeTrace = null;
 const caseFile = createCaseFile({
   trigger: document.getElementById('caseTrigger'),
   getTraceLeft: () => activeTrace?.left() ?? null,
+  setTraceLeft: (secs) => activeTrace?.set(secs),
   audio,
 });
 // `mode` is the trace policy (trace.js): the story data starts it `running` (it cannot expire) and turns it

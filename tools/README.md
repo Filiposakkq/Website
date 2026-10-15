@@ -94,7 +94,7 @@ It judges numbers, not taste: the owner still has to listen (listening checklist
 ## `check-fonts.sh` — minimum font size
 
 ```sh
-tools/check-fonts.sh          # ignores .case-* and .developer-* (phases 4 and 7 own those)
+tools/check-fonts.sh          # ignores .developer-* (phase 7 owns it); .case-* is checked since phase 4.5
 tools/check-fonts.sh --all    # whole file; required to pass from phase 7 on
 ```
 

@@ -97,7 +97,7 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `trace-warn` | trace | **phase 2, wired**: `trace-sound.js` when the trace crosses 120 s |
 | `evidence-unlock` | evidence | **phase 4.2, wired**: `casefile.js` when a record becomes readable (`discover`, `dump`, an `intercept` capture) |
 | `evidence-decrypt` | evidence | **phase 4.2, wired**: `casefile.js` `finishDecrypt` |
-| `board-open`, `node-select` | evidence | phase 4.5 |
+| `board-open`, `node-select` | evidence | **phase 4.5, wired**: `board-ui.js` (the board opens; a row or node is selected) |
 | `relay-connect` | hacking | **phase 4.2, wired**: `casefile.js` `connect` (a pair revealed INTEL) |
 | `breach-alert` | hacking | **phase 4.2, wired**: `casefile.js` `compromiseCheck` (evidence lost to the trace) |
 | `decrypt-progress` (12 per second max), `packet-intercept` | hacking | wired in phase 4.3: `decrypt-progress` ticks with every redraw of the progress line of `scan` and `decrypt`; `packet-intercept` plays once per packet row of `intercept` |
