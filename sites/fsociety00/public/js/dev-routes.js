@@ -33,6 +33,8 @@ export function createDeveloperRoutes({
     const trusted = route === 'puzzle-watcher' ? 'watcher' : 'unknown';
     caseFile.start(trusted);
     caseFile.chooseTrust(trusted);
+    // Every route except `boot` skips the intro, where the story makes the board available: do it here.
+    if (route !== 'boot') caseFile.makeAvailable();
     audio.setScene(route === 'boot' ? 'boot' : 'story');
     const engine = getEngine();
     const lethalTrace = (seconds) => {

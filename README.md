@@ -44,7 +44,7 @@ The terminal game is a static HTML/CSS/JavaScript story and puzzle; it has no bu
 
 - Fullscreen is recommended. Audio starts when you activate the opening screen; browser audio permissions require that interaction.
 - Hold the lower-right skip control for 3 seconds to skip the BIOS or (after BIOS) the story intro. The trust choice and puzzle remain playable.
-- The trace starts at 8 minutes and tightens to 2 minutes at the Level 01 puzzle. The trace continues while the tab is in the background. Reduced-motion preferences are respected.
+- The trace starts at 8 minutes and tightens to 5 minutes at the Level 01 puzzle. The trace continues while the tab is in the background. Reduced-motion preferences are respected.
 - Open the CASE FILE tab or type `board` during the puzzle to inspect the evidence map, artifact provenance, trace status, choices, and session timeline.
 - In the intelligence map, drag the empty board area to pan, use the zoom and fit controls to navigate, and select a node to inspect it. Keyboard users can focus the map and pan with arrow keys, zoom with `+`/`-`, or fit with `Home`; on mobile, pan horizontally to reach nodes beyond the initial view.
 - Trusting Unknown opens a backchannel note and the `verify relay` action. Trusting Watcher opens a session log and the `isolate watcher` action. Inspect `ghost.sh` before running it to record a verified handoff.

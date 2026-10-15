@@ -90,6 +90,7 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `boot-memtest` | boot | **phase 3.3, wired**: `story-data/boot.js` while the memory counts up |
 | `boot-fail` | boot | **phase 3.3, wired**: `output.js` `svc` when a service line is `FAILED` (the firewall) |
 | `key-tick` | terminal | **phase 2, wired**: real keystrokes (`story.js` `onKeyPress`) and auto-typing in `type`, `cmd`, `say` (every 3rd character, `{ gain: 0.6 }`) |
+| `key-tick-mystery` | terminal | **phase 4b.2, wired**: the typing tick of the third voice `<???>` (also played when it drops a line into the board terminal, `board-commands.js` `maybeSpeak`): `output.js` `say` plays the `tick` named in `story-data/voices.js` instead of `key-tick` for that voice only. A soft hollow blip (390 to 500 Hz, round, quiet), rate limited to 15 per second like `key-tick`. It is the last cue of the table (the audio lint draws random numbers in table order). **Not heard by anyone yet**: owner checklist, section "Phase 4b only" |
 | `cmd-run`, `cmd-fail` | terminal | wired in phase 4.3 by `hacking-commands.js` (`cmd-run` when `scan`/`intercept`/`decrypt` start, `cmd-fail` on a refusal or a miss); the phase 3 Linux commands still do not play them |
 | `ghost-appear` | story | **phase 3.6, wired**: `story-data/ghost.js` when the ghost panel opens |
 | `trust-choice` | story | **phase 3.5, wired**: `story-data/routes.js`, right after the player picks |

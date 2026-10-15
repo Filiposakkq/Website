@@ -254,6 +254,119 @@ if (story) {
   }
 }
 
+// ---- the case file introduction in the story (phase 4b.1, 4b.2)
+if (story) {
+  console.log('\ncase file introduction');
+  const flat = story.segments.flatMap((segment) => segment.nodes);
+  const at = (test) => flat.findIndex(test);
+  const inbox = at((node) => node.type === 'cmd' && /inbox\/001\.msg/.test(node.text));
+  const available = flat.map((node, index) => (node.type === 'case' && node.call === 'makeAvailable' ? index : -1)).filter((index) => index >= 0);
+  const traceStart = at((node) => node.type === 'trace' && node.do === 'start');
+  expect(inbox >= 0 && traceStart >= 0, 'the inbox message and the trace start are in the story');
+  expect(available.length === 1, `the story makes the case file available exactly once (${available.length})`);
+  expect(available[0] > inbox && available[0] < traceStart, 'the case file becomes available after the inbox message and before the trace starts');
+
+  // 4b.2: the third voice. Every voice a node names exists; a voice's own typing cue exists and is not the default one.
+  const { VOICES } = await import(js('story-data/voices.js'));
+  const everyNode = (nodes) => nodes.flatMap((node) => [node, ...everyNode(node.then ?? []), ...everyNode(node.else ?? [])]);
+  const all = story.segments.flatMap((segment) => everyNode(segment.nodes));
+  const named = [...new Set(all.filter((node) => node.type === 'say' || (node.type === 'typing' && node.who)).map((node) => node.who))];
+  expect(named.every((who) => VOICES[who]), `every voice a node names exists (${named.join(', ')})`);
+  expect(Object.values(VOICES).every((voice) => voice.name && typeof voice.nameCls === 'string' && typeof voice.cls === 'string' && typeof voice.quiet === 'boolean'),
+    'every voice has a name, two classes and the quiet flag');
+  expect(Object.entries(VOICES).every(([, voice]) => voice.tick === undefined || known.cues.includes(voice.tick)), 'every voice tick names a registered cue');
+  expect(VOICES.mystery?.name === '???' && VOICES.mystery.nameCls === 'voice-blue' && VOICES.mystery.tick && VOICES.mystery.tick !== 'key-tick',
+    'the third voice is <???> in blue with its own typing cue');
+
+  const lines = flat.map((node, index) => ({ node, index })).filter(({ node }) => node.type === 'say' && node.who === 'mystery');
+  const spoken = lines.map(({ node }) => node.text);
+  // Two appearances: the briefing (between the inbox message and the trace start) and one return when sdb9 opens.
+  const unlockAt = at((node) => node.type === 'label' && node.name === 'unlock');
+  const briefing = lines.filter(({ index }) => index < traceStart);
+  const revealAt = at((node) => node.type === 'label' && node.name === 'reveal');
+  const returns = lines.filter(({ index }) => index > unlockAt && unlockAt >= 0 && index < revealAt);
+  const finale = lines.filter(({ index }) => index > revealAt && revealAt >= 0);
+  expect(briefing.length + returns.length + finale.length === lines.length, 'the third voice speaks in three places only: the briefing, when sdb9 opens and at the end of the level');
+  expect(finale.length >= 1 && finale.length <= 3, `the closing appearance has 1 to 3 lines (${finale.length})`);
+  const secure = flat.slice(revealAt);
+  const secureAt = secure.findIndex((node) => node.type === 'bar' && node.cls === 'voice-blue' && /secure line/i.test(node.label));
+  expect(secureAt >= 0 && secure.slice(0, secureAt).some((node) => node.type === 'say' && node.who === 'watcher'), 'at the end the watcher tries to reconnect, then a blue "establishing secure line" bar runs');
+  expect(secure.slice(secureAt).some((node) => node.type === 'line' && node.style === 'voice-blue' && /blocked/i.test(String(node.text))), 'the blue secure line blocks the watcher');
+  expect(secureAt >= 0 && secure.findIndex((node) => node.type === 'say' && node.who === 'mystery') > secureAt, 'the third voice speaks after the secure line is up');
+  expect(flat.at(-1)?.type === 'line' && /this is where the signal ends/.test(String(flat.at(-1).text)), 'the story still ends on "this is where the signal ends."');
+  expect(briefing.length >= 2 && briefing.length <= 14, `the briefing has 2 to 14 lines (${briefing.length})`);
+  expect(returns.length >= 1 && returns.length <= 3, `the return when sdb9 opens has 1 to 3 lines (${returns.length})`);
+  expect([...returns, ...finale].every(({ index }) => flat.slice(Math.max(0, index - 3), index).some((node) => node.type === 'say' && node.who === 'watcher' || node.type === 'typing')),
+    'the return happens in a conversation: another voice is on the line');
+  expect(spoken.every((text) => typeof text === 'string'), 'its lines are plain text');
+  const text = spoken.filter((entry) => typeof entry === 'string');
+  expect(text.every((entry) => entry === entry.toLowerCase() && !entry.includes('!')), 'its lines are lowercase and have no exclamation marks');
+  expect(!text.some((entry) => /sdb9-part|--sdb9|ghost|shell|1337|key layer|meta|\bcss\b|console/i.test(entry)), 'its lines do not touch the key or its layers');
+  expect(!text.some((entry) => /robot|elliot|unknown|watcher/i.test(entry)), 'its lines name no other character and no real name');
+  expect(briefing.every(({ index }) => index > inbox), 'the briefing comes after the inbox message');
+  expect(all.filter((node) => (node.type === 'say' || node.type === 'typing') && node.who === 'mystery').length === lines.length + all.filter((node) => node.type === 'typing' && node.who === 'mystery').length,
+    'nothing but its lines and its typing indicator names the third voice');
+  expect(lines.length > 0 && lines[0].index < available[0] && available[0] - lines[0].index <= 7, 'the board appears with the first mention: the case file node follows the first line within the upload');
+  const upload = flat.slice(lines[0].index, available[0]);
+  expect(upload.some((node) => node.type === 'bar' && node.cls === 'voice-blue' && /upload/i.test(node.label)), 'the case file is uploaded with a blue progress bar before the button appears');
+  expect(upload.some((node) => node.type === 'line' && node.style === 'voice-blue' && /agency/i.test(String(node.text))), 'the upload receipt is blue and says the file is property of the agency');
+  expect(lines.every(({ index }) => ['typing', 'wait', 'say', 'case'].includes(flat[index - 1]?.type)), 'every line of the third voice follows its typing indicator or another line');
+  expect(lines.length > 0 && flat[lines[0].index - 1]?.type === 'typing' && flat[lines[0].index - 1].who === 'mystery', 'the first line is preceded by its typing indicator');
+}
+
+// ---- what a voice looks and sounds like (phase 4b.2): output.js with a tiny DOM stand-in
+{
+  console.log('\nvoices in the output');
+  const { createOutput } = await import(js('output.js'));
+  const { VOICES } = await import(js('story-data/voices.js'));
+  const node = () => ({
+    className: '',
+    textContent: '',
+    children: [],
+    append(...items) { this.children.push(...items); },
+    appendChild(item) { this.children.push(item); return item; },
+    remove() {},
+    get firstElementChild() { return this.children[0]; },
+  });
+  const realDocument = globalThis.document;
+  const realWindow = globalThis.window;
+  globalThis.document = { createElement: node, body: { scrollHeight: 0 } };
+  globalThis.window = { scrollTo() {} };
+  try {
+    const run = async (who, text) => {
+      const played = [];
+      const out = node();
+      const announcer = node();
+      const output = createOutput({
+        out,
+        announcer,
+        audio: { play: (cue) => played.push(cue) },
+        getPace: () => ({ wait: async () => {}, isSkipping: () => false }),
+        motionReduced: () => true,
+        isAnnouncing: () => true,
+        voices: VOICES,
+      });
+      await output.say(text, { who, speed: 1 });
+      const [tag, body] = out.children[0].children;
+      return { played, tag, body, spoken: announcer.children.map((entry) => entry.textContent) };
+    };
+    const mystery = await run('mystery', 'the case file is in the corner.');
+    expect(mystery.tag.textContent === '<???> ' && mystery.tag.className === 'voice-blue' && mystery.body.className === 'voice-blue', 'the third voice is shown as <???> in blue (name and text)');
+    expect(mystery.played.includes('key-tick-mystery') && !mystery.played.includes('key-tick'), 'the third voice types with its own tick and not the default one');
+    expect(mystery.played[0] === 'message', 'the third voice plays the message cue first, like the other voices');
+    expect(mystery.spoken.join() === '??? says: the case file is in the corner.', 'a screen reader hears "??? says: ..."');
+    const other = await run('unknown', 'you are early.');
+    expect(other.played.includes('key-tick') && !other.played.includes('key-tick-mystery'), 'the other voices keep the default tick');
+    const quiet = await run('robot', 'bonsoir.');
+    expect(!quiet.played.includes('key-tick') && !quiet.played.includes('message'), 'a quiet voice still makes no sound');
+  } finally {
+    globalThis.document = realDocument;
+    globalThis.window = realWindow;
+    if (realDocument === undefined) delete globalThis.document;
+    if (realWindow === undefined) delete globalThis.window;
+  }
+}
+
 // ---- the command registry and the system commands (phase 3.8 / 3.9)
 {
   console.log('\ncommands');
@@ -473,7 +586,7 @@ if (story) {
   const { createCaseFile } = await import(js('casefile.js'));
   const { CASE: CASEQ } = await import(js('story-data/constants.js'));
   const cues = [];
-  let secs = 120;
+  let secs = CASEQ.traceWindow;
   const trigger = {
     hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
   };
@@ -481,7 +594,7 @@ if (story) {
     const file = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => cues.push(cue) } });
     file.start(route);
     file.chooseTrust(route);
-    secs = 120;
+    secs = CASEQ.traceWindow;
     cues.length = 0;
     return file;
   };
@@ -579,6 +692,18 @@ if (story) {
   }
 
   {
+    // Phase 4b.1: the story's first mention opens the board; before it the button stays hidden.
+    const file = make('unknown');
+    expect(trigger.hidden === true, 'after start() the CASE FILE button is hidden');
+    expect(file.makeAvailable() === true && trigger.hidden === false, 'makeAvailable reveals the CASE FILE button');
+    expect(file.makeAvailable() === false, 'makeAvailable is safe to call twice (false the second time)');
+    expect(file.getView().events.some((entry) => entry.title === 'CASE FILE AVAILABLE'), 'the timeline records that the board became available');
+    expect(file.snapshot().discoveries.length === 0, 'making the board available discovers no evidence');
+    file.start('unknown');
+    expect(trigger.hidden === true, 'start() (a reboot) hides the button again');
+  }
+
+  {
     // What the board is given (phase 4.5/4.6): getView() is plain data and never carries text the player may not read.
     for (const [route, other] of [['unknown', 'watcher-log'], ['watcher', 'route-note']]) {
       const file = make(route);
@@ -626,18 +751,22 @@ if (story) {
     const played = [];
     const line = (text = '', cls = '') => { const row = { textContent: text, cls }; rows.push(row); return row; };
     const output = () => rows.map((row) => row.textContent).join('\n');
-    let secs = 120;
+    let secs = TUNING.traceWindow;
+    let mode = 'lethal'; // 'lethal' | 'running' | null (no trace): what the trace is doing
     let onSleep = () => {};
     const trigger = {
       hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
     };
     const setup = (route) => {
-      secs = 120;
+      secs = TUNING.traceWindow;
       clock = 1000;
       rows.length = 0;
       played.length = 0;
       onSleep = () => {};
-      const caseFile = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => played.push(cue) } });
+      mode = 'lethal';
+      const caseFile = createCaseFile({
+        trigger, getTraceLeft: () => secs, setTraceLeft: (n) => { secs = n; }, getTraceMode: () => mode, audio: { play: (cue) => played.push(cue) },
+      });
       caseFile.start(route);
       caseFile.chooseTrust(route);
       const session = {
@@ -645,7 +774,9 @@ if (story) {
       };
       const registry = createRegistry();
       registerHackingCommands(registry, {
-        line, audio: { play: (cue) => played.push(cue) }, session, caseFile, motionReduced: () => false, terminal: { close() {} },
+        audio: { play: (cue) => played.push(cue) }, session, caseFile, motionReduced: () => false,
+      }, {
+        line, hidePrompt() {}, over: (env) => env.play.over, group: 'game',
       });
       const env = { trusted: route, trace: { left: () => secs, set: (n) => { secs = n; } }, play: { over: null } };
       const run = (command) => { rows.length = 0; return registry.dispatch(command, env, line); };
@@ -751,6 +882,291 @@ if (story) {
   } finally {
     performance.now = realNow;
   }
+}
+
+// ---- the board command line and the trace rules (phase 4b.3)
+{
+  console.log('\nboard command line');
+  const { createCaseFile } = await import(js('casefile.js'));
+  const { createBoardCommands } = await import(js('board-commands.js'));
+  const { registerHackingCommands } = await import(js('hacking-commands.js'));
+  const { registerSystemCommands } = await import(js('system-commands.js'));
+  const { createRegistry } = await import(js('commands.js'));
+  const hackingData = await import(js('story-data/hacking.js'));
+  const { CASE: TUNING } = await import(js('story-data/constants.js'));
+
+  let clock = 1000;
+  const realNow = performance.now.bind(performance);
+  performance.now = () => clock;
+  try {
+    const played = [];
+    const audio = { play: (cue) => played.push(cue) };
+    const trigger = {
+      hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
+    };
+    // `trace` is what the board sees: null (none), or { mode, secs }.
+    const setup = (route, trace) => {
+      clock = 1000;
+      played.length = 0;
+      const world = { trace, selected: [], closed: 0 };
+      const caseFile = createCaseFile({
+        trigger,
+        getTraceLeft: () => world.trace?.secs ?? null,
+        setTraceLeft: (n) => { world.trace.secs = n; },
+        getTraceMode: () => world.trace?.mode ?? null,
+        audio,
+      });
+      const session = {
+        async sleep(ms) {
+          clock += ms;
+          if (world.trace) {
+            world.trace.secs -= ms / 1000;
+            caseFile.tick(world.trace.secs);
+          }
+          world.onSleep?.();
+        },
+      };
+      const board = createBoardCommands({
+        caseFile, audio, session, motionReduced: () => false, random: world.random ?? (() => 1), getTrace: () => (world.trace ? { mode: () => world.trace.mode, left: () => world.trace.secs } : null),
+      });
+      caseFile.attachCommands(board);
+      caseFile.start(route);
+      caseFile.chooseTrust(route);
+      world.caseFile = caseFile;
+      world.board = board;
+      world.say = async (text) => { await board.submit(text); const rows = board.entries(); return rows.map((row) => row.text).join('\n'); };
+      world.out = () => board.entries().map((row) => row.text).join('\n');
+      // The shell side, for the shared job slot and the parity check.
+      const shellRows = [];
+      const shell = createRegistry();
+      registerHackingCommands(shell, { audio, session, caseFile, motionReduced: () => false }, {
+        line: (text = '') => { const row = { textContent: text }; shellRows.push(row); return row; }, hidePrompt() {}, over: () => false, group: 'game',
+      });
+      world.shell = (command) => shell.dispatch(command, {}, (text) => shellRows.push({ textContent: text }));
+      world.shellOut = () => shellRows.map((row) => row.textContent).join('\n');
+      return world;
+    };
+    const clear = (world) => world.board.reset();
+
+    // The words.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: TUNING.traceWindow });
+      const names = world.board.definitions().map((def) => def.name);
+      expect(JSON.stringify([...names].sort()) === JSON.stringify(['close', 'connect', 'decrypt', 'dump', 'help', 'intercept', 'list', 'open', 'scan'].sort()), `the board registers exactly help, list, open, scan, intercept, dump, decrypt, connect, close (${names.join(' ')})`);
+      expect(world.board.definitions().every((def) => def.group === 'board'), 'every board command is in the board group');
+      expect(world.board.definitions().filter((def) => ['scan', 'intercept', 'dump', 'decrypt', 'connect'].includes(def.name)).every((def) => def.needs === 'link')
+        && world.board.definitions().filter((def) => ['help', 'list', 'open', 'close'].includes(def.name)).every((def) => !def.needs), 'scan, intercept, dump, decrypt and connect need a link; help, list, open and close do not');
+      await world.say('help');
+      const help = world.out();
+      expect(help.includes('board commands:') && ['scan', 'intercept', 'dump <file>', 'decrypt <id>', 'connect <a> <b>', 'open <id>', 'list', 'close', 'help'].every((usage) => help.includes(usage)), 'help is generated from the registry and lists every board command');
+      expect(!/cat <|unlock <|\bhint\b|\bls\b|\bwhoami\b/.test(help), 'help lists no shell command');
+      clear(world);
+      for (const word of ['cat', 'ls', 'unlock', 'hint', 'trace', 'sudo', 'whoami', 'board', 'abort']) {
+        // eslint-disable-next-line no-await-in-loop
+        await world.say(word);
+      }
+      const answers = world.board.entries().filter((row) => !row.text.startsWith('board> ')).map((row) => row.text);
+      expect(answers.length === 9 && answers.every((text) => text === 'use the shell for that'), 'a shell-only word answers "use the shell for that"');
+      clear(world);
+      await world.say('frobnicate');
+      expect(world.out().includes('command not found: frobnicate') && world.out().includes('type help'), 'an unknown word is "command not found"');
+
+      // Every command the shell can register is either a board command or a shell word.
+      const level = await readFile(js('level01.js'), 'utf8');
+      const gameWords = [...level.matchAll(/name: '([\w.-]+)'(?:, aliases: \[([^\]]*)\])?/g)]
+        .flatMap((match) => [match[1], ...(match[2] ? [...match[2].matchAll(/'([\w.-]+)'/g)].map((m) => m[1]) : [])]);
+      const systemRegistry = createRegistry();
+      registerSystemCommands(systemRegistry, { line() {}, audio, out: {} });
+      const everyShellWord = [...new Set([...gameWords, ...systemRegistry.names()])].filter((word) => word !== 'help');
+      const covered = (word) => names.includes(word) || hackingData.BOARD_SHELL_WORDS.includes(word);
+      expect(everyShellWord.length > 20 && everyShellWord.every(covered), `every shell command word is a board command or a known shell word (${everyShellWord.filter((word) => !covered(word)).join(', ') || 'all'})`);
+    }
+
+    // (a) no trace at all.
+    {
+      const world = setup('unknown', null);
+      for (const command of ['scan', 'intercept', 'dump', 'decrypt e11', 'connect e10 e11']) {
+        // eslint-disable-next-line no-await-in-loop
+        await world.say(command);
+      }
+      const answers = world.board.entries().filter((row) => !row.text.startsWith('board> ')).map((row) => row.text);
+      expect(answers.length === 5 && answers.every((text) => text === 'no active link yet.'), 'with no trace the four evidence commands (and dump) answer "no active link yet."');
+      expect(clock === 1000 && world.caseFile.snapshot().scans === 0, 'a refused command takes no time and changes nothing');
+      clear(world);
+      await world.say('list');
+      expect(world.out().includes('no records yet.'), 'list works without a trace');
+      clear(world);
+      await world.say('open zz9');
+      expect(world.out().includes('open: zz9: no such node'), 'open names an unknown node');
+      world.caseFile.discover('page-script');
+      clear(world);
+      await world.say('list');
+      expect(/\s(read)\s/.test(world.out()), 'list shows the state of a record');
+    }
+
+    // (b) a pending trace: the commands work and take their time, nothing is charged, nothing is lost.
+    {
+      const world = setup('unknown', { mode: 'running', secs: 480 });
+      const before = clock;
+      await world.say('scan');
+      expect(world.out().includes('new nodes: 2') && clock - before >= TUNING.scanSeconds[0] * 1000, 'a pending trace lets scan run for its full time');
+      expect(world.caseFile.snapshot().scans === 1 && world.caseFile.snapshot().evidence['srv-ledger'] === 'locked', 'the board scan changed the shared case file');
+      await world.say('intercept');
+      await world.say('intercept');
+      await world.say('decrypt e11');
+      expect(world.caseFile.snapshot().evidence['net-relay-chain'] === 'decrypted', 'decrypt works from the board');
+      await world.say('dump relay/handshake.log');
+      const secs = world.trace.secs;
+      clear(world);
+      await world.say('connect e10 e12');
+      expect(world.out().includes('no relation between e10 and e12') && !world.out().includes('[trace -') && world.trace.secs === secs, 'rule b: a wrong connect costs no trace seconds while the trace is pending');
+      // (d) nothing is lost while the trace is not lethal, however low the clock reads.
+      world.trace.secs = 11;
+      const lost = world.caseFile.compromiseCheck();
+      const lostByTick = (world.caseFile.tick(11), Object.values(world.caseFile.snapshot().evidence).includes('compromised'));
+      expect(lost.length === 0 && !lostByTick, 'rule d: no record is lost while the trace is pending, even at the floor');
+      const view = world.caseFile.getView();
+      expect(view.traceState === 'pending' && view.traceLeft === null && view.items.every((item) => !item.atRisk), 'rule e: the board view reports a pending trace with no countdown and nothing at risk');
+    }
+
+    // (c) a lethal trace behaves as in phase 4: the cost is charged, a record is lost near its threshold.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: 200 });
+      await world.say('scan');
+      await world.say('intercept');
+      await world.say('dump relay/handshake.log');
+      const secs = world.trace.secs;
+      await world.say('connect e10 e12');
+      expect(world.out().includes('[trace -') && world.trace.secs === secs - TUNING.connectMissCost, `rule c: a wrong connect costs ${TUNING.connectMissCost} trace seconds when the trace is lethal`);
+      const view = world.caseFile.getView();
+      expect(view.traceState === 'lethal' && Number.isFinite(view.traceLeft), 'a lethal trace shows its countdown');
+      world.trace.secs = TUNING.compromiseAt.ledger;
+      world.caseFile.tick(world.trace.secs);
+      expect(world.caseFile.snapshot().evidence['srv-ledger'] === 'compromised', 'a lethal trace still overwrites an unread record at its threshold');
+    }
+
+    // Parity and the one job slot.
+    {
+      const world = setup('watcher', { mode: 'lethal', secs: TUNING.traceWindow });
+      await world.shell('scan');
+      await world.say('scan');
+      expect(world.shellOut().includes('new nodes: 2') && world.out().includes('deep scan') && world.caseFile.snapshot().scans === 2, 'a shell scan and a board scan are the same scan (the second is tier 2)');
+      // A board decrypt is running: a shell command must be refused, and the other way round.
+      world.onSleep = null;
+      let shellAnswer = '';
+      let started = false;
+      world.onSleep = () => {
+        if (started) return;
+        started = true;
+        world.shell('scan').then(() => { shellAnswer = world.shellOut(); });
+      };
+      await world.say('decrypt e13');
+      await Promise.resolve();
+      expect(shellAnswer.includes('another job is running.') || world.shellOut().includes('another job is running.'), 'a shell command is refused while a board job runs');
+      expect(world.caseFile.snapshot().evidence['srv-ledger'] === 'decrypted', 'the board decrypt finished');
+      expect(world.board.isBusy() === false, 'the board line is free again afterwards');
+    }
+
+    // The trace ends during a board job: it stops cleanly.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: TUNING.traceWindow });
+      await world.say('scan');
+      let sleeps = 0;
+      world.onSleep = () => { if (++sleeps === 3) world.trace.secs = 0; };
+      await world.say('decrypt e13');
+      expect(world.out().includes('decrypt: interrupted') && world.caseFile.snapshot().job === null && world.caseFile.snapshot().evidence['srv-ledger'] !== 'decrypted', 'a board decrypt stops when the trace ends');
+      expect(world.board.isBusy() === false, 'a stopped board job frees the line');
+    }
+
+    // An abort (reboot) leaves nothing behind.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: TUNING.traceWindow });
+      await world.say('scan');
+      const abort = new Error('aborted');
+      abort.name = 'AbortError';
+      let sleeps = 0;
+      world.onSleep = () => { if (++sleeps === 2) throw abort; };
+      await world.say('decrypt e13');
+      expect(world.caseFile.snapshot().job === null && world.board.isBusy() === false, 'an abort during a board decrypt clears the job and frees the line');
+      expect(!world.out().includes('that command failed'), 'an abort is not reported as an error');
+      // The next scan after the abort works: the job slot was released.
+      world.onSleep = null;
+      const again = world.caseFile.claim();
+      expect(typeof again === 'function', 'the job slot is free after an abort');
+      again();
+    }
+
+    // A new run clears the log, the history and the reminder.
+    {
+      const world = setup('unknown', { mode: 'running', secs: 480 });
+      world.board.introduce();
+      world.board.introduce();
+      expect(world.board.entries().filter((row) => row.text === hackingData.BOARD_HELP_HINT).length === 1, 'the help reminder is shown once per run');
+      await world.say('help');
+      world.caseFile.start('unknown');
+      expect(world.board.entries().length === 0 && world.board.history().length === 0, 'starting a new run clears the board log and history');
+      world.board.introduce();
+      expect(world.board.entries().length === 1, 'the reminder comes back in the next run');
+    }
+
+    // <???> now and then in the board terminal.
+    {
+      const pool = hackingData.BOARD_MYSTERY.lines;
+      expect(pool.length >= 6 && new Set(pool).size === pool.length, `<???> has a pool of different lines for the board terminal (${pool.length})`);
+      expect(pool.every((entry) => entry === entry.toLowerCase() && !entry.includes('!') && !/sdb9|ghost|shell|1337|key layer|meta|\bcss\b|console|robot|elliot|unknown|watcher/i.test(entry)),
+        'its board lines are lowercase, have no exclamation marks, and touch no key text or other character');
+      expect(pool.some((entry) => /agency/i.test(entry)) && pool.every((entry) => !/\bthe agency (is|was) (the|a)\b/i.test(entry)), 'the pool mentions the agency without defining it');
+      // Always speak: the first command ends with a line; then it rests; never the same line twice in a row.
+      const world = setup('unknown', { mode: 'running', secs: 480 });
+      const loud = createBoardCommands({
+        caseFile: world.caseFile, audio, session: { async sleep() {} }, motionReduced: () => false, random: () => 0, getTrace: () => null,
+      });
+      await loud.submit('list');
+      const said = () => loud.entries().filter((row) => row.cls === 'mystery').map((row) => row.text);
+      expect(said().length === 1 && said()[0].startsWith('<???> ') && pool.includes(said()[0].slice(6)), 'after a command <???> may say one line of its pool, tagged as <???>');
+      await loud.submit('list');
+      await loud.submit('list');
+      expect(said().length === 1, `it rests for ${hackingData.BOARD_MYSTERY.rest} commands afterwards`);
+      await loud.submit('list');
+      expect(said().length === 2 && said()[0] !== said()[1], 'then it may speak again, never the same line twice in a row');
+      await loud.submit('close');
+      expect(said().length === 2, 'closing the board is not followed by a line');
+      loud.reset();
+      expect(loud.entries().length === 0, 'a new run clears what it said');
+      // Never: a random number that is always too high keeps it silent.
+      const quiet = createBoardCommands({
+        caseFile: world.caseFile, audio, session: { async sleep() {} }, motionReduced: () => false, random: () => 0.99, getTrace: () => null,
+      });
+      await quiet.submit('list');
+      expect(quiet.entries().every((row) => row.cls !== 'mystery'), 'with a high random number it stays silent');
+    }
+
+    // The messages used by the new code exist, and nothing in the board code starts a timer of its own.
+    {
+      const source = await readFile(js('board-commands.js'), 'utf8');
+      expect(!/\b(setTimeout|setInterval|requestAnimationFrame)\b/.test(source), 'board-commands.js starts no timer of its own');
+      expect(hackingData.BOARD_USE_SHELL === 'use the shell for that' && hackingData.MESSAGES.noLink && hackingData.MESSAGES.jobBusy, 'the board and link messages exist');
+    }
+  } finally {
+    performance.now = realNow;
+  }
+}
+
+// ---- the trace window after the trust choice (phase 4b.0b)
+{
+  console.log('\ntrace window');
+  const { TRACE, CASE: WINDOW } = await import(js('story-data/constants.js'));
+  const { routes } = await import(js('story-data/routes.js'));
+  expect(WINDOW.traceWindow === TRACE.afterTrust, 'the map window follows the window after the trust choice');
+  expect(Object.keys(WINDOW.compromiseShare).every((key) => WINDOW.compromiseAt[key] === Math.round(WINDOW.compromiseShare[key] * TRACE.afterTrust)),
+    'the loss thresholds are a share of the window, not absolute seconds');
+  expect(Object.values(WINDOW.compromiseAt).every((secs) => secs > 10 && secs < TRACE.afterTrust),
+    'every loss threshold lies inside the window and above the TRACE PENDING floor');
+  // The spoken line must say what the constant says ("five minutes. no extensions." for 300 s).
+  const words = { two: 120, three: 180, four: 240, five: 300, six: 360 };
+  const spoken = routes.filter((node) => node.type === 'say' && /minutes\. no extensions\.$/.test(node.text))
+    .map((node) => words[node.text.split(' ')[0]]);
+  expect(spoken.length === 1 && spoken[0] === TRACE.afterTrust, `the line "N minutes. no extensions." names the real window (${TRACE.afterTrust} s)`);
 }
 
 // ---- the trace topology (phase 4.4)

@@ -32,7 +32,13 @@ const OUTCOME_LABELS = {
   'trace-complete': 'TRACE COMPLETE',
 };
 
-export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLeft = null, audio = null }) {
+// The trace decides what the evidence work costs (phase 4b.3). `getTraceMode()` is 'lethal' | 'running' | 'frozen' | null
+// (null: no trace yet). Evidence is lost and wrong connects are charged ONLY while the trace is lethal: before that the
+// board is a safe place to read and to try the commands. The default is lethal so a caller without a trace behaves as
+// in phase 4.
+export function createCaseFile({
+  trigger, getTraceLeft = () => null, setTraceLeft = null, getTraceMode = () => 'lethal', audio = null,
+}) {
   const state = {
     startedAt: 0,
     route: '',
@@ -42,6 +48,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     scans: 0,
     intercepts: 0,
     job: null, // the decrypt in progress: { id, seconds, lost }
+    busy: false, // a timed command (scan, intercept, decrypt) is running, from the shell or the board command line
     connected: new Set(), // 'idA|idB' pairs the player has connected
     scrambled: new Map(), // id -> the corrupted text of a lost record (made once, so it does not flicker)
     decisions: [],
@@ -53,6 +60,8 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     relayVerified: false,
     watcherIsolated: false,
   };
+
+  let commands = null; // the board command line (board-commands.js), attached by story.js
 
   const elapsed = () => state.startedAt ? Math.floor((performance.now() - state.startedAt) / 1000) : 0;
   const recordOf = (id) => RECORDS.find((item) => item.id === id) ?? null;
@@ -73,6 +82,13 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     notify('data');
   }
 
+  /** Plays the reveal animation of the CASE FILE button again (the class is removed first so it restarts). */
+  function revealTrigger() {
+    trigger.classList.remove('case-trigger--revealed');
+    void trigger.offsetWidth;
+    trigger.classList.add('case-trigger--revealed');
+  }
+
   function updateTrigger() {
     trigger.hidden = !state.boardUnlocked;
     trigger.querySelector('.case-count').textContent = pad2(state.discoveries.size);
@@ -88,6 +104,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     state.scans = 0;
     state.intercepts = 0;
     state.job = null;
+    state.busy = false;
     state.connected = new Set();
     state.scrambled = new Map();
     state.decisions = [];
@@ -96,6 +113,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     state.failedUnlocks = 0;
     state.outcome = '';
     trigger.classList.remove('case-trigger--revealed');
+    commands?.reset();
     state.ghostScriptInspected = false;
     state.relayVerified = false;
     state.watcherIsolated = false;
@@ -110,12 +128,24 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     else state.items.set(item.id, next);
     if (READABLE.includes(next)) state.discoveries.add(item.id);
     else state.discoveries.delete(item.id);
+    // The fallback of `makeAvailable`: the first record that leaves `hidden` opens the board when the story has not
+    // (a developer jump into the puzzle, a test that drives the case file alone).
     if (!state.boardUnlocked && next !== 'hidden') {
       state.boardUnlocked = true;
-      trigger.classList.remove('case-trigger--revealed');
-      void trigger.offsetWidth;
-      trigger.classList.add('case-trigger--revealed');
+      revealTrigger();
     }
+  }
+
+  /**
+   * The story's first mention of the case file (phase 4b): the CASE FILE button appears and can be used from here on.
+   * Before this the button stays hidden. Returns true when it was new. Safe to call twice; `start()` takes it away again.
+   */
+  function makeAvailable() {
+    if (state.boardUnlocked) return false;
+    state.boardUnlocked = true;
+    revealTrigger();
+    recordEvent('system', 'CASE FILE AVAILABLE', 'The board can be opened from the corner of the screen.');
+    return true;
   }
 
   /** Makes a record readable: `cat`, a story beat or the easter egg. Returns true when it was new. */
@@ -262,11 +292,12 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
 
   /**
    * Evidence the player does not hold yet (hidden or locked) is lost when the trace has `compromiseAtTrace` seconds
-   * left. Lost records become `compromised` for good. Called every trace second and before every evidence command.
+   * left, and only while the trace is lethal (a pending trace destroys nothing). Lost records become `compromised` for
+   * good. Called every trace second and before every evidence command.
    * Returns the records lost now.
    */
   function compromiseCheck(secsLeft = getTraceLeft()) {
-    if (!state.startedAt || !Number.isFinite(secsLeft)) return [];
+    if (!state.startedAt || !Number.isFinite(secsLeft) || getTraceMode() !== 'lethal') return [];
     const lost = RECORDS.filter((item) => item.compromiseAtTrace !== undefined && inRoute(item)
       && secsLeft <= item.compromiseAtTrace && ['hidden', 'locked'].includes(stateOf(item.id)));
     for (const item of lost) {
@@ -287,6 +318,38 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
   function tick(secsLeft) {
     compromiseCheck(secsLeft);
     notify('tick');
+  }
+
+  /** What the trace is doing for the commands: 'none' (no trace yet), 'pending' (running or held) or 'lethal'. */
+  function linkState() {
+    const mode = getTraceMode();
+    return mode === 'lethal' ? 'lethal' : mode ? 'pending' : 'none';
+  }
+
+  /**
+   * Takes `seconds` off the trace as the price of a mistake (a `connect` with no relation). Charged only while the
+   * trace is lethal; returns the seconds charged (0 otherwise). The floor of 5 s is the same as `hint`.
+   */
+  function chargeTrace(seconds) {
+    const left = getTraceLeft();
+    if (linkState() !== 'lethal' || !setTraceLeft || !Number.isFinite(left) || seconds <= 0) return 0;
+    setTraceLeft(Math.max(5, left - seconds));
+    return seconds;
+  }
+
+  /**
+   * One timed command at a time, whichever entry point it came from (the shell or the board command line).
+   * Returns a `release()` function, or null when a job is already running. Always release it in a `finally`.
+   */
+  function claim() {
+    if (state.busy) return null;
+    state.busy = true;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      state.busy = false;
+    };
   }
 
   function decide(id, title, detail) {
@@ -441,7 +504,8 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
    * captures, the timeline and the assessment.
    */
   function getView() {
-    const traceLeft = getTraceLeft();
+    // The clock is only real while the trace is lethal: before that the board says so instead of showing a countdown.
+    const traceLeft = linkState() === 'lethal' ? getTraceLeft() : null;
     const items = RECORDS.filter((item) => inRoute(item)
       && (stateOf(item.id) !== 'hidden' || ['cat', 'story', 'echo'].includes(item.found)))
       .map((item) => itemView(item, traceLeft));
@@ -462,6 +526,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
       failedUnlocks: state.failedUnlocks,
       elapsed: elapsed(),
       traceLeft,
+      traceState: linkState(),
       readable: items.filter((item) => READABLE.includes(item.state)).length,
       total: items.filter((item) => item.state !== 'sealed').length,
       items,
@@ -477,11 +542,8 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
   function connectFromBoard(idA, idB) {
     const result = connect(idA, idB);
     if (!result.ok && result.reason === 'none' && CASE.connectMissCost > 0) {
-      const left = getTraceLeft();
-      if (setTraceLeft && Number.isFinite(left)) {
-        setTraceLeft(Math.max(5, left - CASE.connectMissCost));
-        result.cost = CASE.connectMissCost;
-      }
+      const cost = chargeTrace(CASE.connectMissCost);
+      if (cost) result.cost = cost;
     }
     return result;
   }
@@ -496,12 +558,14 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
       return () => listeners.delete(listener);
     },
     isStarted: () => !!state.startedAt,
+    getCommands: () => commands,
   });
 
   updateTrigger();
 
   return {
     start,
+    makeAvailable,
     discover,
     chooseTrust,
     markHint,
@@ -526,6 +590,11 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     setFailureOutcome,
     open: ui.open,
     close: ui.close,
+    select: ui.select,
+    attachCommands: (runner) => { commands = runner; },
+    linkState,
+    chargeTrace,
+    claim,
     getView,
     snapshot: () => ({
       route: state.route,

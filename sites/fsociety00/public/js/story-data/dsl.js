@@ -13,7 +13,7 @@ export const type = (text, style, speed) => ({ ...withStyle({ type: 'type', text
 export const say = (who, text, options = {}) => ({ type: 'say', who, text, ...options });
 export const typing = (ms, who) => ({ type: 'typing', ms, ...(who ? { who } : {}) });
 export const cmd = (text, options = {}) => ({ type: 'cmd', text, ...options });
-export const bar = (label, ms) => ({ type: 'bar', label, ...(ms ? { ms } : {}) });
+export const bar = (label, ms, cls) => ({ type: 'bar', label, ...(ms ? { ms } : {}), ...(cls ? { cls } : {}) });
 /** A kernel log line with an explicit timestamp in seconds. */
 export const klog = (t, text, style) => ({ ...withStyle({ type: 'klog', t, text }, style) });
 export const svc = (text, state, ms) => ({ type: 'svc', text, ...(state ? { state } : {}), ...(ms ? { ms } : {}) });

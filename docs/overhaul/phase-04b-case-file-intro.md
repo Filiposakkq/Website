@@ -30,7 +30,7 @@ The evidence board stops being something the player stumbles on. A character int
 
 ### 4b.2 Explanation by a character
 
-- [ ] 2 to 5 short lines in the voice of the third character (**very cryptic, neutral in tone, but with the tone of someone who wants to take charge: short directive statements, not requests; confirmed by the owner: "šéfovat", to boss, to command**; it never says who it is, why it knows, or what it wants; it must not give away the key or contradict `unknown` or `watcher`). Keep the story bible's style (lowercase, short lines, no exclamation marks). The lines (lowercase, calm, no exclamation marks; see `docs/story/story-bible.md` sections 2 and 5) that say: what the board is, that evidence is not identity, that `scan` and `decrypt` cost trace time, and that it is optional. Lines live in story data, validated by `tools/validate-story.mjs`.
+- [ ] Short lines (2 to 5 at first; extended to 13 at the owner's request on 2026-10-15, the validator allows 2 to 12) in the voice of the third character (**very cryptic, neutral in tone, but with the tone of someone who wants to take charge: short directive statements, not requests; confirmed by the owner: "šéfovat", to boss, to command**; it never says who it is, why it knows, or what it wants; it must not give away the key or contradict `unknown` or `watcher`). Keep the story bible's style (lowercase, short lines, no exclamation marks). The lines (lowercase, calm, no exclamation marks; see `docs/story/story-bible.md` sections 2 and 5) that say: what the board is, that evidence is not identity, that `scan` and `decrypt` cost trace time, and that it is optional. Lines live in story data, validated by `tools/validate-story.mjs`.
 - [ ] **Its own typing sound** (decided: different from every other voice). Add a new cue (for example `key-tick-mystery`) to `js/audio/patches.js` that is clearly different from `key-tick` (a different timbre and pitch, quiet, rate limited like `key-tick`), register it so `tools/audio-lint.mjs` renders it, list it in `docs/overhaul/audio-cues.md`, and give the voice a field in `story-data/voices.js` (for example `tick: 'key-tick-mystery'`) that `output.js` uses instead of the default tick for that voice only. No other voice changes. The owner listens to it (it cannot be judged by a test). Speed of its typing is the owner's call; default: the same as `unknown`.
 - [ ] The explanation is played once, in the story, right after the first mention. On the first time the board is opened, a one-line reminder in the board's log pane points at `help` (no overlay).
 - [ ] Skip (the hold control) and reduced motion work as for any other dialogue.
@@ -82,14 +82,83 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 4b.0 Re-verify + start log | todo | | |
-| 4b.0b Trace window after trust = 300 s | todo | | re-tune `compromiseAt`, sound thresholds, `trace-warn`, smoke speed |
-| 4b.1 Availability at the first mention | todo | | |
-| 4b.2 Explanation by a character | todo | | needs the owner's answers above |
-| 4b.3 Board command pane | todo | | |
-| 4b.4 Tests | todo | | |
-| 4b.5 Docs | todo | | |
+| 4b.0 Re-verify + start log | done | `75d1266` | branch pushed; findings in "Re-verification (4b.0)" below; baseline smoke on `main` `bad4a0b`: 26 of 27 in the parallel run, the 27th (`reduced: typing ticks ...`, a known load flake) passes alone |
+| 4b.0b Trace window after trust = 300 s | done | `25bfc45` | window 300 s, loss thresholds as shares (113 / 88 / 225 s left), spoken line, docs, smoke serves a 120 s test window + one scenario for the shipped value. **last green commit: `25bfc45`**: full smoke 25/28 in the parallel run; the 3 failures (`reduced: typing ticks ...` and two real-time desktop scenarios that timed out in `reachTrustChoice` while other tools ran) all pass alone on the same snapshot; `validate-story`, `audio-lint` (0 problems) and `check-fonts` pass |
+| 4b.1 Availability at the first mention | done | `05a7fa9` | `makeAvailable()`, the story node (`caseBriefing`), developer routes, validator and 4 smoke scenarios; each passes alone on the snapshot; full smoke run again after 4b.2 (see its row) |
+| 4b.2 Explanation by a character | done | `5c43666` | third voice `<???>` (blue, `key-tick-mystery`), 5 draft lines, validator + 1 smoke scenario (passes alone), docs; wording and sound **unverified** (owner checklist); **last green commit: `5c43666`**: full smoke 33 of 33 (`--jobs=8`, snapshot) |
+| 4b.3 Board command pane | done | `bb599e7` | registry group `board`, `board-commands.js`, shared `hacking-commands.js` (one job slot, `needs: link`), pane in `board-ui.js`, lethal-only loss and charge, honest TRACE pane. **last green commit: `bb599e7`**: full smoke 38 of 38 (`--jobs=8`, snapshot), `validate-story`, `audio-lint` (0 problems), `check-fonts` pass; phone keyboard, screen reader and feel **unverified** | Re-run after the later owner requests: **last green commit: `db1b425`**, full smoke 38 of 38.
+| 4b.4 Tests | done | `bb599e7` | tests were written with the code: a `validate-story` block (registry, words, rules a to e, shared state, job slot, trace end, abort, reset, mutation-checked) and 5 smoke scenarios (pending trace, no trace, phone, keyboard only, reboot during a decrypt); see the handoff report |
+| 4b.5 Docs | done | see PR | state docs (`story`, `ui-and-css`, `tools`, `audio`), story bible, `audio-cues.md`, owner checklist, CHANGELOG, tracker, known issues, decisions log, this report |
 
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next step.)_
+
+### Resume point (session 1, 2026-10-15, written at the start) (historical)
+
+- Branch `overhaul/phase-4b-case-file`, created from `main` `bad4a0b` and pushed. Nothing is half edited.
+- `last green commit`: `bad4a0b` (baseline `main`, no 4b code yet): `node tools/smoke.mjs` 26 of 27 in the parallel run; the failing one (`reduced: typing ticks are rate limited ...`) passes alone (known load flake, see `tools/README.md`).
+- Step in progress: 4b.0 (this log), then 4b.0b, 4b.1, 4b.2, 4b.3, 4b.4, 4b.5 in that order.
+- Next command: `node tools/validate-story.mjs` after each change; `node tools/smoke.mjs --only=<name>` while developing.
+
+### Re-verification (4b.0): the "current state" claims against the code (`main` `bad4a0b`)
+
+- **Phase 4 is on `main`** (squash `c976821`, PR #12; `board-ui.js`, `hacking-commands.js`, `topology.js`, `story-data/evidence.js`, `story-data/hacking.js` exist). The master README tracker still said "in review": corrected in the same commit. The dependency "phases 1, 3, 4 merged" holds.
+- `casefile.js`: `boardUnlocked` is set only by the first record that leaves `hidden` (`setState`); `start()` resets it and `updateTrigger()` hides `#caseTrigger` (also `hidden` in `index.html`). `getTraceLeft()` is `null` before the trace exists (`activeTrace?.left() ?? null` in `story.js`).
+- The trace is created by the story data at the LEVEL 01 brief (`trace('start')`, mode `running`), **after** the inbox message; `trace.onTick` (which feeds `caseFile.tick`) is only set by the Level 01 shell, i.e. after the trust choice.
+- **Rule (d), answered from the code:** `compromiseCheck` does not look at the trace mode. Today nothing can call it before the trace is `lethal` (it runs from `caseFile.tick` and from the evidence commands, and both exist only inside the Level 01 shell, which starts after `trace('mode', 'lethal')`). Once the board and its commands are reachable earlier this protection disappears, so 4b.3 gates the check explicitly on the mode (`lethal` only).
+- `topologyState()` clamps `1 - secsLeft / CASE.traceWindow`; in `running` mode the clock counts 480 s down to the 10 s floor, so a map fed with it would read about 97 % at TRACE PENDING (a false countdown, rule (e)). The board must not feed it unless the trace is lethal.
+- `hacking-commands.js` prints through the shell's `line`, hides the shell prompt with `ctx.terminal.close`, reads `env.play.over` and sets time through `env.trace.set`. It has **no guard against two jobs at once**: with a second entry point (the board) a shell `scan` and a board `scan` could overlap, so the shared implementation gets one busy guard.
+- The shell command `board` opens the dialog and returns at once; the story and the prompt keep running behind the modal dialog. With the trigger visible from the inbox on, the player can also open the board during the intro.
+- The tests: `loseByTraceExpiry` and the "lost evidence" scenario assume a 120 s window (two hints, a 90 s threshold); with 300 s they would need minutes of real time. Plan (4b.0b): the smoke runner serves `constants.js` with a shorter `afterTrust` for the timing scenarios (Playwright route, no test hook in the shipped code) and one scenario checks the shipped value.
+
+### Resume point (session 1, final)
+
+- Branch `overhaul/phase-4b-case-file`, all sub-steps done and pushed; the PR to `main` is open and is **not merged** (the owner merges).
+- `last green commit`: `db1b425` (full smoke 38 of 38 with `--jobs=8` on a snapshot, after the later owner requests; earlier: `bb599e7`). Later commits change only documents.
+- Nothing is half-edited. If a review finds something, fix it on this branch, run `node tools/validate-story.mjs` and the affected `--only=` scenarios, then the full smoke.
+
+## Handoff report (phase 4b)
+
+**What was built** (the sub-steps, in order)
+
+- 4b.0b: the window after the trust choice is `TRACE.afterTrust = 300` s; the loss thresholds are shares of it (`CASE.compromiseShare`: 113 / 88 / 225 s left); the spoken line says five minutes. The smoke runner serves a 120 s test window (a Playwright route that rewrites `constants.js`, no hook in shipped code) and one scenario checks the shipped value.
+- 4b.1: `caseFile.makeAvailable()` and a story node right after the inbox message reveal the CASE FILE button; developer routes call it; the first record that leaves `hidden` is still a fallback.
+- 4b.2: the third voice `<???>` (blue `#4da6ff`, 8.21:1; own cue `key-tick-mystery`) says thirteen lines (`caseBriefing` in `story-data/intro.js`), validated for order, tone and forbidden words.
+- 4b.3: the board command line.
+  - `board-commands.js` has its own registry (group `board`): `help list open scan intercept dump decrypt connect close`. `scan intercept dump decrypt connect` are the shell's definitions (`registerHackingCommands(registry, deps, io)` is called by both).
+  - One job slot: `caseFile.claim()`; a second timed command answers `another job is running.`
+  - Trace rules (`caseFile.linkState()` and `getTraceMode`): (a) no trace: `no active link yet.`; (b) pending: commands work and take their time, nothing is charged; (c) lethal: as phase 4; (d) `compromiseCheck` returns nothing unless the trace is lethal; (e) the board's TRACE pane reads NO TRACE YET / TRACE PENDING and the path says `trace: not counting yet`, with no `atRisk` flags.
+  - The pane in `board-ui.js` (wide: a strip under the four panes; phone: the COMMANDS tab), `.case-cmd-*` CSS region. The log lives in `board-commands.js`, so a decrypt keeps its output when the dialog is closed.
+  - `BOARD_SHELL_WORDS` (in `story-data/hacking.js`) answers `use the shell for that`; `validate-story` checks it against the real shell registrations.
+- 4b.4 tests: see the checkpoint rows.
+
+**Later owner requests, done on the same branch** (2026-10-15, after the report above; each has a row in the decisions log of `README.md`)
+
+- The board command pane looks like a little terminal (`.case-term`: output above, the `board>` prompt as its last line, typed lines echoed as `board> ...`), is taller on a PC, and its output is visible on a phone (it collapsed to nothing before; the smoke test now checks the height).
+- `<???>` says thirteen lines in the briefing, including a faint hint of a secret agency ("this line is encrypted. the agency logs it anyway."; "the agency" is never named).
+- The case file is *uploaded* by `<???>`: "i am sending you the case file.", a blue `uploading case_file.agency` bar (`bar` nodes take an optional `cls`), a blue receipt "property of the agency", then the CASE FILE button. The board header reads `PROPERTY OF THE AGENCY // RESTRICTED // ACCESS LOGGED`.
+- `<???>` now and then drops a blue line into the board terminal (`BOARD_MYSTERY` in `story-data/hacking.js`: one chance in three after a command, a rest of two, never the same line twice, none after `close`; `random` is injectable for tests).
+- `<???>` returns once when sdb9 opens (`story-data/ghost.js`, `mysteryReturns`: "read it before you run it." and an exchange with the watcher) and at the end of the level (`story-data/ending.js`, `secureLine`): the watcher's last reconnect is met by a blue `establishing secure line` bar and BLOCKED, Mr. Robot says "i did not do that.", `<???>` closes the level ("that door is closed." / "sleep. we will call when it is time."). The validator allows `<???>` in exactly these three places.
+- Tests for these: `validate-story` (upload order and blue, the three appearances, the pool and the rest rule, the finale) and smoke checks in the third-voice, board, phone and victory scenarios. The wording, pace and odds of all of this are drafts for the owner (owner checklist).
+
+**Verified** (by me, headless): `node tools/validate-story.mjs` (with mutation checks that removing the lethal gate on loss or on the charge fails), `node tools/audio-lint.mjs` (0 problems, 112 rows), `bash tools/check-fonts.sh`, and the full `node tools/smoke.mjs --jobs=8` on a snapshot: 38 of 38.
+
+**Unverified** (needs the owner or a real device)
+
+- How the 5-minute window feels (easier than before, as intended).
+- The sound of `key-tick-mystery`, and the wording and typing speed of the `<???>` lines (a draft).
+- The command pane with an on-screen keyboard on a real phone (checked only at 390 x 844 in a headless browser) and with a screen reader (log region, silent progress line).
+- No separate review-only pass by a different Claude was done.
+
+**Decisions made without the owner** (also in the decisions log)
+
+- The board's `dump` needs a link like the other evidence commands (rule a lists only help, list, open and close as read-only).
+- A command from the board keeps running when the dialog is closed (its output waits in the log); the input is read-only while it runs.
+- `board` and `evidence` typed in the pane answer `use the shell for that`.
+- `frozen` and `running` both count as "pending" for the rules (no cost, no loss).
+
+**Known follow-ups**
+
+- The trace sound thresholds (warning at 120 s, critical at 60 s) are unchanged and absolute; with 300 s the warning now comes after 60 % of the window. Listen and tune.
+- `hint` still costs 30 s, which is now a smaller share of the window.

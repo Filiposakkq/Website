@@ -2,6 +2,13 @@
 // the case file with the terminal while the trace keeps running. Every one of them is optional: the key is still found
 // by reading the three page layers, and nothing here prints it.
 //
+// One implementation, two entry points (phase 4b.3): the Level 01 shell and the board's command line register the same
+// five commands. What differs is `io` (where the lines go, whether the shell prompt is hidden, how "the trace ended" is
+// known) and the registry (the shell's `game` group, the board's `board` group). The state is the case file's, so a
+// `scan` from either place is the same scan; a timed command takes the case file's single job slot (`caseFile.claim`),
+// so a shell command and a board command can never overlap. The trace decides the price: the commands need a link
+// (a trace that exists, `caseFile.linkState() !== 'none'`) and a wrong `connect` is charged only while it is lethal.
+//
 // How they run: a command that takes time (`scan`, `intercept`, `decrypt`) **blocks the shell** and shows live
 // output; the trace HUD keeps counting. They wait in real time with `session.sleep` (never the reduced-motion `wait`,
 // which would make them free), so a reboot or a developer jump cancels them cleanly, and they stop the moment the trace
@@ -24,13 +31,41 @@ const rowsOf = (rows, found = []) => rows
 
 /**
  * @param {ReturnType<typeof import('./commands.js').createRegistry>} registry
- * @param {import('./context.js').GameContext} ctx
+ * @param {{ audio: object, session: object, caseFile: object, motionReduced: () => boolean }} deps
+ * @param {{ line: Function, hidePrompt: () => void, over: (env: object) => boolean, group: string }} io
+ *   `line(text, cls, options)` prints (and returns an element-like with a settable `textContent`); `hidePrompt()` hides
+ *   the shell prompt while a timed command runs (a no-op on the board); `over(env)` is true when the trace has ended;
+ *   `group` is the registry group the commands are listed under.
  */
-export function registerHackingCommands(registry, ctx) {
+export function registerHackingCommands(registry, deps, io) {
   const {
-    line, audio, session, caseFile, motionReduced,
-  } = ctx;
-  const { close: hidePrompt } = ctx.terminal;
+    audio, session, caseFile, motionReduced,
+  } = deps;
+  const { line, hidePrompt, group } = io;
+  const over = (env) => !!io.over(env);
+
+  /** The commands need a link: with no trace at all the answer is one in-world line (rule a). */
+  function linked() {
+    if (caseFile.linkState() !== 'none') return true;
+    audio.play('cmd-fail');
+    line(msg('noLink'), 'warn');
+    return false;
+  }
+
+  /** Runs a timed command in the case file's one job slot; false (and a line) when another job is running. */
+  async function exclusive(task) {
+    const release = caseFile.claim();
+    if (!release) {
+      audio.play('cmd-fail');
+      line(msg('jobBusy'), 'warn');
+      return;
+    }
+    try {
+      await task();
+    } finally {
+      release();
+    }
+  }
 
   /**
    * One progress line `label [####......] 40%` that fills over `seconds` of real time. Resolves true when it reached
@@ -50,7 +85,7 @@ export function registerHackingCommands(registry, ctx) {
       row.textContent = `${label} [${'#'.repeat(filled)}${'.'.repeat(width - filled)}] ${Math.round(ratio * 100)}%`;
       audio.play(cue);
       if (ratio >= 1) return true;
-      if (env.play.over || stop()) return false;
+      if (over(env) || stop()) return false;
       await session.sleep(Math.min(step, total - elapsed));
     }
   }
@@ -60,71 +95,82 @@ export function registerHackingCommands(registry, ctx) {
     const gap = (seconds * 1000) / (rows.length + 1);
     for (const row of rows) {
       await session.sleep(gap);
-      if (env.play.over) return false;
+      if (over(env)) return false;
       line(row, 'dim');
       audio.play(cue);
     }
     await session.sleep(gap);
-    return !env.play.over;
+    return !over(env);
   }
 
   const stateOf = (item) => caseFile.snapshot().evidence[item.id] ?? 'hidden';
 
+  async function runScan(env) {
+    const tier = caseFile.snapshot().scans + 1;
+    const pass = SCAN_PASSES[tier - 1];
+    if (!pass) {
+      audio.play('cmd-fail');
+      SCAN_IDLE.forEach((text) => line(text, 'dim'));
+      return;
+    }
+    audio.play('cmd-run');
+    hidePrompt();
+    line(pass.title);
+    if (!(await progress('scan', CASE.scanSeconds[tier - 1] ?? 1, env))) return;
+    const { found } = caseFile.scan();
+    rowsOf(pass.rows, found).forEach((row) => line(row, 'dim'));
+    if (!found.length) {
+      line('no new nodes.', 'dim');
+      return;
+    }
+    line(`new nodes: ${found.length}`, 'ok');
+    found.forEach((item) => line(`  ${item.code}  ${item.file}${item.encrypted ? '  [enc]' : ''}`));
+    line('read with: dump <file> or decrypt <id>', 'dim');
+  }
+
   registry.register({
-    name: 'scan', usage: 'scan', summary: 'map the network',
+    name: 'scan', group, needs: 'link', usage: 'scan', summary: 'map the network',
     async run(_args, env) {
-      const tier = caseFile.snapshot().scans + 1;
-      const pass = SCAN_PASSES[tier - 1];
-      if (!pass) {
-        audio.play('cmd-fail');
-        SCAN_IDLE.forEach((text) => line(text, 'dim'));
-        return;
-      }
-      audio.play('cmd-run');
-      hidePrompt();
-      line(pass.title);
-      if (!(await progress('scan', CASE.scanSeconds[tier - 1] ?? 1, env))) return;
-      const { found } = caseFile.scan();
-      rowsOf(pass.rows, found).forEach((row) => line(row, 'dim'));
-      if (!found.length) {
-        line('no new nodes.', 'dim');
-        return;
-      }
-      line(`new nodes: ${found.length}`, 'ok');
-      found.forEach((item) => line(`  ${item.code}  ${item.file}${item.encrypted ? '  [enc]' : ''}`));
-      line('read with: dump <file> or decrypt <id>', 'dim');
+      if (!linked()) return;
+      await exclusive(() => runScan(env));
+    },
+  });
+
+  async function runIntercept(env) {
+    const tier = caseFile.snapshot().intercepts + 1;
+    const pass = INTERCEPT_PASSES[tier - 1];
+    if (!pass) {
+      audio.play('cmd-fail');
+      line(INTERCEPT_IDLE.title);
+      INTERCEPT_IDLE.rows.forEach((row) => line(row, 'dim'));
+      line(INTERCEPT_IDLE.nothing, 'dim');
+      return;
+    }
+    audio.play('cmd-run');
+    hidePrompt();
+    line(pass.title);
+    if (!(await trickle(pass.rows, CASE.interceptSeconds[tier - 1] ?? 1, env, 'packet-intercept'))) return;
+    const { found } = caseFile.intercept();
+    if (!found.length) {
+      line('captured: nothing of interest.', 'dim');
+      return;
+    }
+    found.forEach((item) => line(`captured: ${item.code}  ${item.title}${item.encrypted ? '  [enc]' : ''}`, 'ok'));
+    if (found.some((item) => item.encrypted)) line('read with: decrypt <id>', 'dim');
+  }
+
+  registry.register({
+    name: 'intercept', group, needs: 'link', usage: 'intercept', summary: 'capture packets',
+    async run(_args, env) {
+      if (!linked()) return;
+      await exclusive(() => runIntercept(env));
     },
   });
 
   registry.register({
-    name: 'intercept', usage: 'intercept', summary: 'capture packets',
-    async run(_args, env) {
-      const tier = caseFile.snapshot().intercepts + 1;
-      const pass = INTERCEPT_PASSES[tier - 1];
-      if (!pass) {
-        audio.play('cmd-fail');
-        line(INTERCEPT_IDLE.title);
-        INTERCEPT_IDLE.rows.forEach((row) => line(row, 'dim'));
-        line(INTERCEPT_IDLE.nothing, 'dim');
-        return;
-      }
-      audio.play('cmd-run');
-      hidePrompt();
-      line(pass.title);
-      if (!(await trickle(pass.rows, CASE.interceptSeconds[tier - 1] ?? 1, env, 'packet-intercept'))) return;
-      const { found } = caseFile.intercept();
-      if (!found.length) {
-        line('captured: nothing of interest.', 'dim');
-        return;
-      }
-      found.forEach((item) => line(`captured: ${item.code}  ${item.title}${item.encrypted ? '  [enc]' : ''}`, 'ok'));
-      if (found.some((item) => item.encrypted)) line('read with: decrypt <id>', 'dim');
-    },
-  });
-
-  registry.register({
-    name: 'dump', usage: 'dump <file>', summary: 'read a scanned file',
+    name: 'dump', group, needs: 'link', usage: 'dump <file>', summary: 'read a scanned file',
     run(args) {
+      if (!linked()) return;
       audio.play('file-read');
       if (!args[0]) {
         const files = caseFile.knownFiles();
@@ -164,9 +210,41 @@ export function registerHackingCommands(registry, ctx) {
     else line(msg('decryptPlain', item.code), 'warn');
   }
 
+  async function runDecrypt(token, env) {
+    const result = caseFile.startDecrypt(token);
+    if (!result.ok) {
+      refuseDecrypt(result, token);
+      return;
+    }
+    const { item, seconds } = result;
+    audio.play('cmd-run');
+    hidePrompt();
+    line(`decrypting ${item.code}: ${item.title} (${seconds} s)`);
+    let finished = false;
+    try {
+      finished = await progress(`decrypt ${item.code}`, seconds, env, { stop: () => caseFile.jobStatus()?.lost === true });
+    } finally {
+      // An abort (reboot), the end of the trace or a lost record all leave the job behind: clear it.
+      if (!finished) caseFile.cancelDecrypt();
+    }
+    if (!finished) {
+      line(msg(over(env) ? 'decryptStop' : 'decryptLostWhile', item.code), 'warn');
+      return;
+    }
+    const done = caseFile.finishDecrypt();
+    if (!done) {
+      line(msg('decryptLostWhile', item.code), 'warn');
+      return;
+    }
+    line(`[ok] decrypted: ${item.title}`, 'ok');
+    (DECRYPTED[item.id] ?? []).forEach((row) => line(`  ${row}`, 'dim'));
+    line(`[evidence] ${item.code}  ${item.title}`, 'ok');
+  }
+
   registry.register({
-    name: 'decrypt', usage: 'decrypt <id>', summary: 'open an encrypted node',
+    name: 'decrypt', group, needs: 'link', usage: 'decrypt <id>', summary: 'open an encrypted node',
     async run(args, env) {
+      if (!linked()) return;
       const token = args[0];
       if (!token) {
         audio.play('file-read');
@@ -179,40 +257,14 @@ export function registerHackingCommands(registry, ctx) {
         locked.forEach((item) => line(`  ${item.code}  ${item.title}  (${item.decryptSeconds} s)`, 'dim'));
         return;
       }
-      const result = caseFile.startDecrypt(token);
-      if (!result.ok) {
-        refuseDecrypt(result, token);
-        return;
-      }
-      const { item, seconds } = result;
-      audio.play('cmd-run');
-      hidePrompt();
-      line(`decrypting ${item.code}: ${item.title} (${seconds} s)`);
-      let finished = false;
-      try {
-        finished = await progress(`decrypt ${item.code}`, seconds, env, { stop: () => caseFile.jobStatus()?.lost === true });
-      } finally {
-        // An abort (reboot), the end of the trace or a lost record all leave the job behind: clear it.
-        if (!finished) caseFile.cancelDecrypt();
-      }
-      if (!finished) {
-        line(msg(env.play.over ? 'decryptStop' : 'decryptLostWhile', item.code), 'warn');
-        return;
-      }
-      const done = caseFile.finishDecrypt();
-      if (!done) {
-        line(msg('decryptLostWhile', item.code), 'warn');
-        return;
-      }
-      line(`[ok] decrypted: ${item.title}`, 'ok');
-      (DECRYPTED[item.id] ?? []).forEach((row) => line(`  ${row}`, 'dim'));
-      line(`[evidence] ${item.code}  ${item.title}`, 'ok');
+      await exclusive(() => runDecrypt(token, env));
     },
   });
 
   registry.register({
-    name: 'connect', usage: 'connect <a> <b>', summary: 'link two clues',
-    run(args, env) {
+    name: 'connect', group, needs: 'link', usage: 'connect <a> <b>', summary: 'link two clues',
+    run(args) {
+      if (!linked()) return;
       if (args.length < 2) {
         audio.play('file-read');
         line(msg('connectUsage'), 'dim');
@@ -239,10 +291,9 @@ export function registerHackingCommands(registry, ctx) {
       else if (result.reason === 'already') line(msg('connectAlready', result.a.code, result.b.code), 'dim');
       else {
         line(msg('connectNone', result.a.code, result.b.code), 'warn');
-        if (CASE.connectMissCost > 0) {
-          env.trace.set(Math.max(5, env.trace.left() - CASE.connectMissCost));
-          line(`[trace -${CASE.connectMissCost}s]`, 'warn');
-        }
+        // The price of guessing: charged only while the trace is lethal (rule b), and it says so.
+        const cost = caseFile.chargeTrace(CASE.connectMissCost);
+        if (cost) line(`[trace -${cost}s]`, 'warn');
       }
     },
   });

@@ -8,8 +8,8 @@
 import { rand } from '../util.js';
 import { TRACE } from './constants.js';
 import {
-  line, blank, type, say, typing, cmd, svc, wait, sfx, scene, gfx, flash, burst, corrupt, blackout, rain, logo,
-  wipe, trace, run, parts,
+  line, blank, type, say, typing, cmd, svc, bar, wait, sfx, scene, gfx, flash, burst, corrupt, blackout, rain, logo,
+  wipe, trace, caseFile, run, parts,
 } from './dsl.js';
 
 const transmission = [
@@ -91,6 +91,55 @@ const guestSession = [
   wait(1200),
   type('look closer.', 'warn', 90),
   wait(1200),
+  blank(),
+];
+
+// The first mention of the case file (phase 4b): right after the inbox message a third voice, a complete mystery,
+// opens a channel, names the case file (the CASE FILE button appears with the first line) and explains it in a few
+// short orders: what it is, that evidence is not identity, that scan and decrypt cost trace time, that it is optional.
+// It never says who it is, why it knows or what it wants (the story bible keeps that open on purpose), it does not
+// touch the key, and it does not contradict <unknown> or <watcher>. Lowercase, no exclamation marks.
+const caseBriefing = [
+  wait(700),
+  line('*** new connection: ??? ***', 'dim'),
+  burst(300),
+  wait(800),
+  typing(1500, 'mystery'),
+  say('mystery', 'i am sending you the case file.', { speed: 65 }),
+  wait(600),
+  // The upload, in the third voice's blue: a progress bar and the receipt, then the button appears.
+  bar('uploading case_file.agency', 2600, 'voice-blue'),
+  wait(300),
+  line('case_file.agency // upload complete // property of the agency', 'voice-blue'),
+  wait(700),
+  caseFile('makeAvailable'),
+  say('mystery', 'it is in the corner.', { speed: 65 }),
+  wait(900),
+  say('mystery', 'open it. record what you find.', { speed: 65 }),
+  wait(900),
+  say('mystery', 'every record is a piece. none of them is the whole.', { speed: 60 }),
+  wait(1000),
+  say('mystery', 'two pieces that belong together will say so. connect them.', { speed: 60 }),
+  wait(1000),
+  say('mystery', 'evidence is not identity.', { speed: 65 }),
+  wait(900),
+  say('mystery', 'a name on a screen is only a name.', { speed: 65 }),
+  wait(1000),
+  say('mystery', 'scan finds what is hidden. decrypt opens what is sealed.', { speed: 60 }),
+  wait(900),
+  say('mystery', 'both cost time. the trace does not wait.', { speed: 65 }),
+  wait(1000),
+  say('mystery', 'what you do not hold, the trace will take.', { speed: 65 }),
+  wait(1000),
+  say('mystery', 'this line is encrypted. the agency logs it anyway.', { speed: 65 }),
+  wait(1000),
+  say('mystery', 'the board has a line of its own. type help.', { speed: 65 }),
+  wait(900),
+  say('mystery', 'it is optional. use it.', { speed: 65 }),
+  wait(1100),
+  blank(),
+  line('*** ??? disconnected ***', 'dim'),
+  wait(900),
   blank(),
 ];
 
@@ -201,5 +250,5 @@ const watcherBreaksIn = [
 ];
 
 export const intro = [
-  ...transmission, ...hello, ...guestSession, ...brief, ...cutOff, ...watcherBreaksIn,
+  ...transmission, ...hello, ...guestSession, ...caseBriefing, ...brief, ...cutOff, ...watcherBreaksIn,
 ];

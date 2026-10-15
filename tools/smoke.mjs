@@ -179,6 +179,26 @@ async function winGame(page) {
   await ghost.waitFor({ timeout: 90000 });
   await ghost.click();
   await waitOutput(page, 'this is where the signal ends.', 240000);
+  // The third voice came back once when sdb9 opened, in order, on the open line (phase 4b).
+  const back = await page.evaluate(() => {
+    const texts = [...document.getElementById('output').children].map((row) => row.textContent.trim());
+    const at = (needle) => texts.findIndex((text) => text.includes(needle));
+    return [at('close it.'), at('<???> read it before you run it.'), at('this channel is not on my list.'), at('<???> it is not on any list.'), at('that was not me.'), at('this is where the signal ends.')];
+  });
+  if (back.some((index) => index < 0) || back.some((index, i) => i > 0 && index <= back[i - 1])) throw new Error(`the third voice should return in order when sdb9 opens: ${JSON.stringify(back)}`);
+  // The watcher's last retry is met by a blue secure line and the third voice (phase 4b).
+  const finale = await page.evaluate(() => {
+    const rows = [...document.getElementById('output').children];
+    const texts = rows.map((row) => row.textContent.trim());
+    const at = (needle) => texts.findIndex((text) => text.includes(needle));
+    const blue = (needle) => { const row = rows[at(needle)]; return row ? getComputedStyle(row).color : ''; };
+    return {
+      order: [at('=== LEVEL 01 COMPLETE ==='), at('retry attempt detected'), at('let me back in'), at('establishing secure line'), at('secure line established'), at('reconnect: BLOCKED'), at('i did not do that.'), at('<???> that door is closed.'), at('<???> sleep. we will call when it is time.'), at('this is where the signal ends.')],
+      colors: [blue('establishing secure line'), blue('secure line established'), blue('reconnect: BLOCKED')],
+    };
+  });
+  if (finale.order.some((index) => index < 0) || finale.order.some((index, i) => i > 0 && index <= finale.order[i - 1])) throw new Error(`the level should end with the watcher's retry, the secure line and <???>, in order: ${JSON.stringify(finale.order)}`);
+  if (finale.colors.some((color) => color !== 'rgb(77, 166, 255)')) throw new Error(`the secure line bar and its lines should be blue: ${JSON.stringify(finale.colors)}`);
   // The ghost script closed the trace request (phase 3.5): the HUD says so and the clock is stopped.
   const closed = await page.evaluate(() => document.querySelector('#hud .lbl')?.textContent);
   if (closed !== 'TRACE CLOSED') throw new Error(`after ghost.sh the HUD should read TRACE CLOSED, reads ${closed}`);
@@ -320,6 +340,127 @@ scenarios.push({
   },
 });
 
+// Phase 4b.0b: the real window after the trust choice is five minutes (the other scenarios run with TEST_WINDOW).
+scenarios.push({
+  name: 'reduced: the shipped trace window after the trust choice is five minutes',
+  contextOptions: REDUCED,
+  shippedWindow: true,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await waitOutput(page, 'ETA RESET: 05:00');
+    await waitOutput(page, 'five minutes. no extensions.');
+    const clock = await page.evaluate(() => document.querySelector('#hud .num')?.textContent ?? '');
+    const [minutes, seconds] = clock.split(':').map(Number);
+    const left = minutes * 60 + seconds;
+    if (!(left >= 285 && left <= 300)) throw new Error(`the HUD should read about 05:00 right after the trust choice, reads ${clock}`);
+  },
+});
+
+// Phase 4b.1: the CASE FILE button stays hidden until the story mentions the case file (right after the inbox message)
+// and is available from then on, on both routes. The real-time run proves it is hidden at the start and that the
+// node still runs when the intro is skipped; the reduced-motion run is the quick check of the whole path.
+for (const who of ['unknown', 'watcher']) {
+  scenarios.push({
+    name: `desktop: the CASE FILE button is hidden at the start and available after the skipped intro (trust ${who})`,
+    contextOptions: DESKTOP,
+    async run({ page }) {
+      await initialize(page);
+      const triggerHidden = () => page.evaluate(() => document.getElementById('caseTrigger').hidden);
+      if (!(await triggerHidden())) throw new Error('the CASE FILE button must be hidden before the story mentions the case file');
+      await reachTrustChoice(page, { reduced: false });
+      if (await triggerHidden()) throw new Error('the CASE FILE button must be visible once the intro (skipped) has passed the inbox message');
+      await chooseTrust(page, who, 'click');
+      await reachPuzzle(page);
+      await sendCommand(page, 'board');
+      await page.waitForSelector('dialog.case-dialog[open]');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    },
+  });
+}
+scenarios.push({
+  name: 'reduced: the CASE FILE button is available at the trust choice and opens the board',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    const shown = await page.evaluate(() => {
+      const button = document.getElementById('caseTrigger');
+      return !button.hidden && button.getAttribute('aria-label');
+    });
+    if (!shown) throw new Error('the CASE FILE button should be visible at the trust choice');
+    await page.locator('#caseTrigger').click();
+    await page.waitForSelector('dialog.case-dialog[open]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    await chooseTrust(page, 'unknown', 'click');
+    await reachPuzzle(page);
+  },
+});
+scenarios.push({
+  name: 'desktop: a developer jump into the puzzle makes the case file available',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await initialize(page);
+    await devRoute(page, 'puzzle');
+    await waitShown(page, '#caseTrigger', 30000);
+    await sendCommand(page, 'board');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    await page.keyboard.press('Escape');
+  },
+});
+
+// Phase 4b.2: the third voice explains the case file right after the inbox message, in blue, as <???>.
+scenarios.push({
+  name: 'reduced: the third voice <???> explains the case file after the inbox message',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    const log = await page.evaluate(() => {
+      const rows = [...document.getElementById('output').children];
+      const texts = rows.map((row) => row.textContent.trim());
+      const first = rows.find((row) => row.textContent.startsWith('<???> '));
+      const tag = first?.children[0];
+      return {
+        texts,
+        tagClass: tag?.className ?? '',
+        tagColor: tag ? getComputedStyle(tag).color : '',
+        textColor: first ? getComputedStyle(first.children[1]).color : '',
+        uploadColors: rows.filter((row) => /^uploading case_file\.agency|upload complete/.test(row.textContent.trim())).map((row) => getComputedStyle(row).color),
+      };
+    });
+    const at = (needle) => log.texts.findIndex((text) => text.includes(needle));
+    const lines = [
+      '<???> i am sending you the case file.',
+      'uploading case_file.agency',
+      'case_file.agency // upload complete // property of the agency',
+      '<???> it is in the corner.',
+      '<???> open it. record what you find.',
+      '<???> every record is a piece. none of them is the whole.',
+      '<???> two pieces that belong together will say so. connect them.',
+      '<???> evidence is not identity.',
+      '<???> a name on a screen is only a name.',
+      '<???> scan finds what is hidden. decrypt opens what is sealed.',
+      '<???> both cost time. the trace does not wait.',
+      '<???> what you do not hold, the trace will take.',
+      '<???> this line is encrypted. the agency logs it anyway.',
+      '<???> the board has a line of its own. type help.',
+      '<???> it is optional. use it.',
+    ];
+    const order = [at('cat ~/inbox/001.msg'), at('*** new connection: ??? ***'), ...lines.map((text) => at(text)), at('*** ??? disconnected ***'), at('=== LEVEL 01 :: THE KEY ===')];
+    if (order.some((index) => index < 0) || order.some((index, i) => i > 0 && index <= order[i - 1])) {
+      throw new Error(`the third voice should speak in order between the inbox message and the level brief: ${JSON.stringify(order)}`);
+    }
+    if (log.uploadColors.length !== 2 || log.uploadColors.some((color) => color !== 'rgb(77, 166, 255)')) {
+      throw new Error(`the upload progress bar and its receipt should both be blue: ${JSON.stringify(log.uploadColors)}`);
+    }
+    if (log.tagClass !== 'voice-blue' || log.tagColor !== 'rgb(77, 166, 255)' || log.textColor !== 'rgb(77, 166, 255)') {
+      throw new Error(`the <???> tag and text should be blue: ${JSON.stringify({ tagClass: log.tagClass, tagColor: log.tagColor, textColor: log.textColor })}`);
+    }
+  },
+});
+
 // Phase 4.3: the hacking commands build the case file in real time and the key is still solved afterwards.
 scenarios.push({
   name: 'desktop: scan, intercept, dump, decrypt, connect -> victory',
@@ -366,7 +507,168 @@ scenarios.push({
   },
 });
 
-// Phase 4.5: the evidence board is a native dialog with four panes (wide) or four tabs (phone).
+// Phase 4b.3: the board command line.
+const cmdLog = (page) => page.evaluate(() => document.querySelector('.case-cmd-log')?.textContent ?? '');
+const waitCmd = (page, text, timeout = 20000) => page.waitForFunction((needle) => (document.querySelector('.case-cmd-log')?.textContent ?? '').includes(needle), text, { timeout })
+  .catch(async () => { throw new Error(`the board log never showed "${text}": ${JSON.stringify((await cmdLog(page)).slice(-600))}`); });
+async function boardCmd(page, text) {
+  const input = page.locator('#caseCmdInput');
+  await input.fill(text);
+  await input.press('Enter');
+}
+const openBoardFromButton = async (page) => {
+  await page.locator('#caseTrigger').click();
+  await page.waitForSelector('dialog.case-dialog[open]');
+};
+
+scenarios.push({
+  name: 'reduced: the board command line works with a pending trace and shares its state with the shell',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    await openBoardFromButton(page);
+    await waitCmd(page, 'type help for the board commands.');
+    const owner = await page.locator('.case-owner').textContent();
+    if (!/PROPERTY OF THE AGENCY/.test(owner)) throw new Error(`the board should say it is property of the agency, says "${owner}"`);
+    const trace = await page.locator('.case-trace-time').textContent();
+    if (trace !== 'TRACE PENDING') throw new Error(`a pending trace must read TRACE PENDING on the board, reads "${trace}"`);
+    await boardCmd(page, 'help');
+    await waitCmd(page, 'board commands:');
+    await boardCmd(page, 'cat ghost.sh');
+    await waitCmd(page, 'use the shell for that');
+    await boardCmd(page, 'list');
+    await waitCmd(page, 'no records yet.');
+    await boardCmd(page, 'scan');
+    await page.waitForFunction(() => document.getElementById('caseCmdInput').readOnly, null, { timeout: 5000 });
+    await waitCmd(page, 'new nodes: 2');
+    await page.waitForFunction(() => !document.getElementById('caseCmdInput').readOnly, null, { timeout: 5000 });
+    await boardCmd(page, 'close');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    const focus = await page.evaluate(() => document.activeElement?.id);
+    if (focus !== 'caseTrigger') throw new Error(`closing the board from its command line should return focus to the CASE FILE button, is on ${focus}`);
+    await chooseTrust(page, 'unknown', 'click');
+    await reachPuzzle(page);
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'deep scan', 30000);
+  },
+});
+
+scenarios.push({
+  name: 'desktop: before the trace exists the evidence commands answer "no active link yet."',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await initialize(page);
+    await holdSkip(page, 'BOOT');
+    await waitShown(page, '#caseTrigger', 90000);
+    if (await page.evaluate(() => !!document.getElementById('hud'))) throw new Error('the trace already exists: the check must run between the mention and the level brief');
+    await openBoardFromButton(page);
+    const trace = await page.locator('.case-trace-time').textContent();
+    if (trace !== 'NO TRACE YET') throw new Error(`with no trace the board must say NO TRACE YET, says "${trace}"`);
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'no active link yet.');
+    await boardCmd(page, 'connect e10 e11');
+    await boardCmd(page, 'list');
+    await waitCmd(page, 'no records yet.');
+    const log = await cmdLog(page);
+    if ((log.match(/no active link yet\./g) ?? []).length !== 2) throw new Error(`scan and connect should both be refused: ${JSON.stringify(log)}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+  },
+});
+
+scenarios.push({
+  name: 'reduced: phone board command line, open selects a record, input stays visible',
+  contextOptions: { ...MOBILE, reducedMotion: 'reduce' },
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    await openBoardFromButton(page);
+    await page.locator('#caseTab-commands').click();
+    await page.waitForSelector('#casePane-commands:not([hidden])');
+    const tab = await page.locator('#caseTab-commands').boundingBox();
+    if (tab.height < 44) throw new Error(`the COMMANDS tab is ${tab.height}px high, below 44px`);
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'new nodes: 2');
+    await boardCmd(page, 'dump relay/handshake.log');
+    await waitCmd(page, '[evidence] e12');
+    await boardCmd(page, 'open e12');
+    await waitCmd(page, 'selected e12');
+    await page.waitForSelector('#casePane-evidence:not([hidden])');
+    const selected = await page.evaluate(() => document.querySelector('.case-row[aria-current="true"]')?.textContent ?? '');
+    if (!selected.includes('e12')) throw new Error(`open e12 should select the row, selected: ${JSON.stringify(selected)}`);
+    await page.locator('#caseTab-commands').click();
+    const logBox = await page.locator('.case-cmd-log').boundingBox();
+    if (!logBox || logBox.height < 120) throw new Error(`the command output area is ${logBox?.height}px high on a phone: the output must be visible`);
+    const box = await page.locator('#caseCmdInput').boundingBox();
+    const view = await page.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth, overflow: document.documentElement.scrollWidth > window.innerWidth }));
+    if (!box || box.y < 0 || box.y + box.height > view.height || box.x < 0 || box.x + box.width > view.width) throw new Error(`the command input is not fully visible: ${JSON.stringify({ box, view })}`);
+    if (box.height < 44) throw new Error(`the command input is ${box.height}px high, below 44px`);
+    const smallest = await page.evaluate(() => Math.min(...[...document.querySelectorAll('.case-pane--commands *')].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).map((el) => parseFloat(getComputedStyle(el).fontSize))));
+    if (smallest < 11 || view.overflow) throw new Error(`command pane text ${smallest}px, page overflow ${view.overflow}`);
+  },
+});
+
+scenarios.push({
+  name: 'reduced: board command line works with the keyboard only (history, close, focus return)',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    await page.locator('#caseTrigger').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    let reached = false;
+    for (let i = 0; i < 60 && !reached; i++) {
+      await page.keyboard.press('Tab');
+      reached = await page.evaluate(() => document.activeElement?.id === 'caseCmdInput');
+    }
+    if (!reached) throw new Error('the command input cannot be reached with the Tab key');
+    await page.keyboard.type('list');
+    await page.keyboard.press('Enter');
+    await waitCmd(page, 'no records yet.');
+    await page.keyboard.press('ArrowUp');
+    const recalled = await page.locator('#caseCmdInput').inputValue();
+    if (recalled !== 'list') throw new Error(`ArrowUp should recall the last command, input is "${recalled}"`);
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type('close');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    const focus = await page.evaluate(() => document.activeElement?.id);
+    if (focus !== 'caseTrigger') throw new Error(`focus should return to the CASE FILE button, is on ${focus}`);
+    const live = await page.evaluate(() => { const board = document.querySelector('.case-cmd-log'); return board; });
+    if (live) throw new Error('the board (and its command pane) should be gone after close');
+  },
+});
+
+scenarios.push({
+  name: 'reduced: a reboot during a board decrypt leaves no job, timer or log behind',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sendCommand(page, 'board');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'new nodes: 2');
+    await boardCmd(page, 'decrypt e13');
+    await page.waitForFunction(() => document.getElementById('caseCmdInput').readOnly, null, { timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    await devRoute(page, 'puzzle');
+    await waitShown(page, '#promptLine', 30000);
+    await page.locator('#caseTrigger').click();
+    await page.waitForSelector('dialog.case-dialog[open]');
+    const log = await cmdLog(page);
+    if (log.includes('decrypting') || log.includes('new nodes')) throw new Error(`the new run kept the old board log: ${JSON.stringify(log)}`);
+    const busy = await page.evaluate(() => document.getElementById('caseCmdInput').readOnly);
+    if (busy) throw new Error('the board input is still locked after the reboot');
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'new nodes: 2');
+  },
+});
+
+// Phase 4.5: the evidence board is a native dialog with four panes (wide) or four tabs (phone); phase 4b.3 adds the
+// board command line as a fifth pane (wide) or tab (phone).
 async function buildBoardEvidence(page) {
   await sendCommand(page, 'scan');
   await waitOutput(page, 'new nodes: 2', 30000);
@@ -412,7 +714,7 @@ for (const [label, contextOptions] of [['desktop', REDUCED], ['mobile', { ...MOB
       if (!board.rows.some((row) => row.includes('e13') && row.includes('DECRYPTED'))) throw new Error(`e13 should be listed as decrypted: ${JSON.stringify(board.rows)}`);
       await page.locator('.case-row', { hasText: 'e12' }).click();
       if (label === 'desktop') {
-        if (board.panes.length !== 4 || board.tabsVisible) throw new Error(`wide layout shows four panes and no tabs: ${JSON.stringify(board)}`);
+        if (board.panes.length !== 5 || board.tabsVisible) throw new Error(`wide layout shows five panes (four panels and the command line) and no tabs: ${JSON.stringify(board)}`);
       } else {
         if (board.panes.length !== 1 || !board.tabsVisible) throw new Error(`phone layout shows one pane and the tabs: ${JSON.stringify(board)}`);
         await page.locator('#caseTab-trace').click();
@@ -1044,6 +1346,24 @@ scenarios.push({
   },
 });
 
+// ---------------------------------------------------------------- the trace window in tests
+//
+// The shipped window after the trust choice is `TRACE.afterTrust` (300 s since phase 4b.0b). The timing scenarios (trace
+// expiry, lost evidence, hints) were written for 120 s and would need minutes of real time at 300 s, so the page is
+// served a `story-data/constants.js` whose `afterTrust` is TEST_WINDOW. Every other number follows from it
+// (`CASE.traceWindow`, the loss thresholds as a share of the window, `ETA RESET`). The shipped code has no test hook.
+// A scenario with `shippedWindow: true` is served the real file and checks the real value.
+const TEST_WINDOW = 120;
+const AFTER_TRUST = /afterTrust: \d+,/;
+
+async function serveTestWindow(page) {
+  await page.route('**/js/story-data/constants.js', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace(AFTER_TRUST, `afterTrust: ${TEST_WINDOW},`);
+    await route.fulfill({ response, body });
+  });
+}
+
 // --------------------------------------------------------------------- runner
 
 async function runScenario(browser, server, scenario) {
@@ -1054,6 +1374,7 @@ async function runScenario(browser, server, scenario) {
   page.setDefaultTimeout(45000);
   watch(page, problems, scenario.allowConsole);
   try {
+    if (!scenario.shippedWindow) await serveTestWindow(page);
     if (scenario.beforeLoad) await scenario.beforeLoad({ page, context });
     await page.goto(server.url);
     await scenario.run({ page, context, server });
@@ -1091,6 +1412,11 @@ const only = option('only');
 const selected = scenarios.filter((s) => !only || s.name.includes(only));
 if (!selected.length) {
   console.error(`No scenario matches "${only}".`);
+  process.exit(2);
+}
+
+if (!AFTER_TRUST.test(await readFile(path.join(siteDir, 'js/story-data/constants.js'), 'utf8'))) {
+  console.error('smoke: story-data/constants.js has no `afterTrust: <number>,` line: the test window cannot be applied.');
   process.exit(2);
 }
 

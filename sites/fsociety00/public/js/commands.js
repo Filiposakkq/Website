@@ -5,7 +5,10 @@
 // A definition:
 //   name       the lower-case command word
 //   aliases    other words for the same command
-//   group      'game' | 'system' (the order and headings of `help`)
+//   group      'game' | 'system' | 'board' (the order and headings of `help`). 'board' is the board command line
+//              (board-commands.js), a registry of its own: its `help` lists only that group.
+//   needs      optional: 'link' = the command needs a trace to exist (documentation and a validator check; the command
+//              itself answers "no active link yet", see hacking-commands.js)
 //   usage      what `help` prints on the left, e.g. 'cat <file>'
 //   summary    what `help` prints on the right
 //   available  (env) => boolean   false: the word is "command not found" (a command of the other route)
@@ -14,8 +17,9 @@
 //
 // `env` is whatever the caller passes to `dispatch`/`help` (the level gives it the route, the trace and its state).
 
-const GROUPS = ['game', 'system'];
-const GROUP_HEADING = { game: 'commands:', system: 'system:' };
+const GROUPS = ['game', 'system', 'board'];
+const GROUP_HEADING = { game: 'commands:', system: 'system:', board: 'board commands:' };
+const NEEDS = ['link'];
 
 export function createRegistry() {
   /** @type {Map<string, object>} */
@@ -28,6 +32,7 @@ export function createRegistry() {
     if (def.name !== def.name.toLowerCase()) throw new TypeError(`Command name "${def.name}" must be lower case.`);
     const group = def.group ?? 'game';
     if (!GROUPS.includes(group)) throw new TypeError(`Command "${def.name}": unknown group "${group}".`);
+    if (def.needs !== undefined && !NEEDS.includes(def.needs)) throw new TypeError(`Command "${def.name}": unknown needs "${def.needs}".`);
     const entry = { aliases: [], available: () => true, group, ...def };
     entry.listed ??= entry.available;
     for (const word of [entry.name, ...entry.aliases]) {
@@ -76,5 +81,8 @@ export function createRegistry() {
     return rows;
   }
 
-  return { register, find, dispatch, helpLines, names: () => [...byWord.keys()] };
+  /** The registered definitions (name, group, needs, ...), in order: for tests and the validator. */
+  const definitions = () => defs.map((def) => ({ ...def }));
+
+  return { register, find, definitions, dispatch, helpLines, names: () => [...byWord.keys()] };
 }

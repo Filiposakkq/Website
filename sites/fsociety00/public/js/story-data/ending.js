@@ -6,7 +6,7 @@
 
 import { rand } from '../util.js';
 import {
-  line, blank, say, typing, cmd, wait, sfx, scene, gfx, rain, caseFile, screenClass, run, label,
+  line, blank, say, typing, cmd, bar, burst, wait, sfx, scene, gfx, rain, caseFile, screenClass, run, label,
 } from './dsl.js';
 
 /**
@@ -90,6 +90,38 @@ const firstVoice = [
   wait(1100),
 ];
 
+// The watcher tries to get back in (phase 4b, owner request 2026-10-15). The third voice answers in blue: a secure line is
+// established, the retry is blocked and the watcher is sealed out, the first voice (now Mr. Robot) did not do it, and the
+// third voice closes the level. No name and no purpose are given (story bible, section 5). The upload of the case file
+// at the start of the story and this block are the two blue "machine" moments of the third voice.
+const secureLine = [
+  burst(300),
+  line('[watcher] reconnect: handshake started', 'warn'),
+  wait(700),
+  typing(900, 'watcher'),
+  say('watcher', 'let me back in. he is not what-', { speed: 40 }),
+  wait(500),
+  sfx('signal'),
+  bar('establishing secure line', 2800, 'voice-blue'),
+  wait(300),
+  line('secure line established // agency channel', 'voice-blue'),
+  wait(500),
+  burst(400),
+  line('[watcher] reconnect: BLOCKED // peer sealed', 'voice-blue'),
+  wait(900),
+  say('robot', 'i did not do that.', { speed: 60 }),
+  wait(900),
+  line('*** new connection: ??? ***', 'dim'),
+  wait(700),
+  typing(1300, 'mystery'),
+  say('mystery', 'that door is closed.', { speed: 65 }),
+  wait(1000),
+  say('mystery', 'sleep. we will call when it is time.', { speed: 65 }),
+  wait(1100),
+  line('*** ??? disconnected ***', 'dim'),
+  wait(900),
+];
+
 // "unknown" is rewritten to "Mr. Robot" everywhere on screen; he speaks in his own voice from here on.
 const reveal = [
   label('reveal'),
@@ -132,6 +164,7 @@ const reveal = [
   wait(900),
   line('[ALERT] watcher connection: retry attempt detected', 'warn'),
   wait(900),
+  ...secureLine,
   line('// you are a ghost. this is where the signal ends.', 'dim'),
 ];
 

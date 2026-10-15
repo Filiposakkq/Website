@@ -177,6 +177,8 @@ Defaults chosen without the owner (nobody was there to ask). Change them by edit
 
 ### Tuning notes (4.7, 2026-10-15)
 
+> **Superseded in part by phase 4b.0b:** the window after the trust choice is now 300 s and the loss thresholds are a share of it (113 / 88 / 225 s left instead of 45 / 35 / 90). The table below describes the 120 s tuning as it was built.
+
 All numbers are `CASE` in `js/story-data/constants.js`. **No human playtested them**: the figures below are arithmetic and scripted runs (unverified as a feel).
 
 | What | Number | Reasoning |

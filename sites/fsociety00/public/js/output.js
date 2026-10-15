@@ -23,7 +23,7 @@ const AUTO_TYPING = { gain: 0.6 };
  * @param {() => ReturnType<typeof import('./pace.js').createPace>} options.getPace
  * @param {() => boolean} options.motionReduced
  * @param {() => boolean} options.isAnnouncing  false while decorative output (the BIOS) scrolls past
- * @param {Record<string, { name: string, nameCls: string, cls: string, quiet: boolean }>} options.voices
+ * @param {Record<string, { name: string, nameCls: string, cls: string, quiet: boolean, tick?: string }>} options.voices
  */
 export function createOutput({ out, announcer, audio, getPace, motionReduced, isAnnouncing, voices }) {
   const wait = (ms) => getPace().wait(ms);
@@ -67,9 +67,9 @@ export function createOutput({ out, announcer, audio, getPace, motionReduced, is
     return d;
   }
 
-  async function bar(label, ms = 1500) {
+  async function bar(label, ms = 1500, cls = '') {
     play('progress-start');
-    const d = line();
+    const d = line('', cls);
     if (motionReduced()) {
       d.textContent = `${label} [################] 100%`;
       play('progress-complete');
@@ -213,7 +213,7 @@ export function createOutput({ out, announcer, audio, getPace, motionReduced, is
           seg.textContent = seg.textContent.slice(0, -1);
           await wait(140);
         }
-        if (!v.quiet && i % 3 === 0 && ch.trim()) play('key-tick', AUTO_TYPING);
+        if (!v.quiet && i % 3 === 0 && ch.trim()) play(v.tick ?? 'key-tick', AUTO_TYPING);
         seg.textContent += ch;
         scroll();
         let ms = motionReduced() ? 0 : (speed + rand(-20, 40)) * TEMPO;

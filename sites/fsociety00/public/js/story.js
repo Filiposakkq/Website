@@ -12,6 +12,7 @@ import { createTerminal } from './tty.js';
 import { installDeveloperMenu } from './developer-menu.js';
 import { createAudioController } from './audio.js';
 import { createCaseFile } from './casefile.js';
+import { createBoardCommands } from './board-commands.js';
 import { createRain } from './rain.js';
 import { chooseOption } from './story-choices.js';
 import { story as storyData } from './story-data/index.js';
@@ -45,6 +46,7 @@ const caseFile = createCaseFile({
   trigger: document.getElementById('caseTrigger'),
   getTraceLeft: () => activeTrace?.left() ?? null,
   setTraceLeft: (secs) => activeTrace?.set(secs),
+  getTraceMode: () => activeTrace?.mode() ?? null,
   audio,
 });
 // `mode` is the trace policy (trace.js): the story data starts it `running` (it cannot expire) and turns it
@@ -55,6 +57,14 @@ const createTrace = (seconds, mode = 'running') => {
   activeTrace = startTrace(seconds, { session, mode, onSecond: createTraceSound(audio) });
   return activeTrace;
 };
+// The board's command line (phase 4b.3). It waits on whichever session is current, so a reboot cancels its jobs.
+caseFile.attachCommands(createBoardCommands({
+  caseFile,
+  audio,
+  session: { sleep: (ms) => session.sleep(ms) },
+  motionReduced,
+  getTrace: () => activeTrace,
+}));
 document.body.classList.toggle('quiet-motion', motionPreference.matches);
 motionPreference.addEventListener('change', () => {
   document.body.classList.toggle('quiet-motion', motionPreference.matches);
