@@ -30,7 +30,8 @@ The evidence board stops being something the player stumbles on. A character int
 
 ### 4b.2 Explanation by a character
 
-- [ ] 2 to 5 short lines in the voice of the third character (a flat, strange, unexplained voice; it never says who it is, why it knows, or what it wants; it must not give away the key or contradict `unknown` or `watcher`). Keep the story bible's style (lowercase, short lines, no exclamation marks). The lines (lowercase, calm, no exclamation marks; see `docs/story/story-bible.md` sections 2 and 5) that say: what the board is, that evidence is not identity, that `scan` and `decrypt` cost trace time, and that it is optional. Lines live in story data, validated by `tools/validate-story.mjs`.
+- [ ] 2 to 5 short lines in the voice of the third character (**very cryptic, neutral in tone, but with the tone of someone who wants to take charge: short directive statements, not requests; my reading of "sefovat", owner to confirm**; it never says who it is, why it knows, or what it wants; it must not give away the key or contradict `unknown` or `watcher`). Keep the story bible's style (lowercase, short lines, no exclamation marks). The lines (lowercase, calm, no exclamation marks; see `docs/story/story-bible.md` sections 2 and 5) that say: what the board is, that evidence is not identity, that `scan` and `decrypt` cost trace time, and that it is optional. Lines live in story data, validated by `tools/validate-story.mjs`.
+- [ ] **Its own typing sound** (decided: different from every other voice). Add a new cue (for example `key-tick-mystery`) to `js/audio/patches.js` that is clearly different from `key-tick` (a different timbre and pitch, quiet, rate limited like `key-tick`), register it so `tools/audio-lint.mjs` renders it, list it in `docs/overhaul/audio-cues.md`, and give the voice a field in `story-data/voices.js` (for example `tick: 'key-tick-mystery'`) that `output.js` uses instead of the default tick for that voice only. No other voice changes. The owner listens to it (it cannot be judged by a test). Speed of its typing is the owner's call; default: the same as `unknown`.
 - [ ] The explanation is played once, in the story, right after the first mention. On the first time the board is opened, a one-line reminder in the board's log pane points at `help` (no overlay).
 - [ ] Skip (the hold control) and reduced motion work as for any other dialogue.
 
@@ -46,9 +47,9 @@ The evidence board stops being something the player stumbles on. A character int
 
 ## Open questions for the owner (answer before building 4b.2)
 
-- The third character: label `<???>` and colour blue are decided. Still open: its typing style (the sound and speed of its text; proposal: slightly slower than `unknown`, no typing ticks, like `Mr. Robot`'s quiet voice) and whether it speaks only here or may return later. It stays unexplained either way.
+- The third character: label `<???>`, blue, the cryptic-neutral-commanding tone and its own typing sound are decided. Still open: whether it speaks only here or may return later (it stays unexplained either way) and its typing speed (default: the same as `unknown`).
 - On the watcher route the same voice must still make sense (the sealed-branch evidence is shown as `SEALED // OTHER BRANCH`).
-- Answered: speaker is a third mystery character shown as `<???>` in blue; beat is right after the inbox message; board commands are new evidence-only commands (list above).
+- Answered: speaker is a third mystery character shown as `<???>` in blue with its own typing sound; beat is right after the inbox message; board commands are new evidence-only commands (list above).
 
 ## Tasks (checklist)
 
