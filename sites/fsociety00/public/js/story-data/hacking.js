@@ -130,6 +130,8 @@ export const MESSAGES = {
  * shell knows that is not one of them gets `BOARD_USE_SHELL`. The validator checks that this list covers every command
  * the shell registers (level01.js, system-commands.js), so a new shell command cannot slip through as "not found".
  */
+/** The prompt of the board's little terminal; a typed line is echoed behind it. */
+export const BOARD_PROMPT = 'board> ';
 export const BOARD_USE_SHELL = 'use the shell for that';
 export const BOARD_SHELL_WORDS = [
   'ls', 'cat', 'unlock', 'hint', 'trace', 'board', 'evidence', 'source', 'view-source', 'verify', 'isolate', 'abort',

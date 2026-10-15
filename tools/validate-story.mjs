@@ -944,7 +944,7 @@ if (story) {
         // eslint-disable-next-line no-await-in-loop
         await world.say(word);
       }
-      const answers = world.board.entries().filter((row) => !row.text.startsWith('>')).map((row) => row.text);
+      const answers = world.board.entries().filter((row) => !row.text.startsWith('board> ')).map((row) => row.text);
       expect(answers.length === 9 && answers.every((text) => text === 'use the shell for that'), 'a shell-only word answers "use the shell for that"');
       clear(world);
       await world.say('frobnicate');
@@ -968,7 +968,7 @@ if (story) {
         // eslint-disable-next-line no-await-in-loop
         await world.say(command);
       }
-      const answers = world.board.entries().filter((row) => !row.text.startsWith('>')).map((row) => row.text);
+      const answers = world.board.entries().filter((row) => !row.text.startsWith('board> ')).map((row) => row.text);
       expect(answers.length === 5 && answers.every((text) => text === 'no active link yet.'), 'with no trace the four evidence commands (and dump) answer "no active link yet."');
       expect(clock === 1000 && world.caseFile.snapshot().scans === 0, 'a refused command takes no time and changes nothing');
       clear(world);

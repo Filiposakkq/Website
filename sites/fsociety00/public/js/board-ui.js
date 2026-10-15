@@ -17,6 +17,7 @@
 
 import { formatClock, pad2 } from './util.js';
 import { createTopologyView } from './topology.js';
+import { BOARD_PROMPT } from './story-data/hacking.js';
 
 const STATE_LABEL = {
   hidden: 'UNOBSERVED', sealed: 'SEALED', locked: 'LOCKED', unlocked: 'READ', decrypted: 'DECRYPTED', compromised: 'LOST',
@@ -472,9 +473,11 @@ export function createBoardUI({
     log.setAttribute('aria-live', 'polite');
     log.setAttribute('aria-label', 'Board command output');
     log.tabIndex = 0;
+    // A little terminal: the output above and the prompt as its last line, on one black screen. A click anywhere on it
+    // puts the cursor in the prompt.
     const form = el('form', 'case-cmd-form');
     form.addEventListener('submit', (event) => event.preventDefault());
-    const label = el('label', 'case-cmd-label', 'BOARD COMMAND');
+    const label = el('label', 'case-cmd-label', BOARD_PROMPT);
     label.htmlFor = 'caseCmdInput';
     const input = el('input', 'case-cmd-input');
     input.id = 'caseCmdInput';
@@ -483,9 +486,14 @@ export function createBoardUI({
     input.autocapitalize = 'off';
     input.spellcheck = false;
     input.enterKeyHint = 'send';
-    input.setAttribute('aria-label', 'Board command. Type help for the list.');
+    input.setAttribute('aria-label', 'Board command line. Type help for the list.');
     form.append(label, input);
-    body.replaceChildren(log, form);
+    const term = el('div', 'case-term');
+    term.append(log, form);
+    term.addEventListener('click', () => {
+      if (!window.getSelection()?.toString()) input.focus();
+    });
+    body.replaceChildren(term);
     refs.cmd = { log, input, rows: new Map() };
     if (!commands) {
       input.disabled = true;

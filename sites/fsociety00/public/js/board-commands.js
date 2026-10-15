@@ -13,7 +13,7 @@
 
 import { createRegistry } from './commands.js';
 import { registerHackingCommands } from './hacking-commands.js';
-import { BOARD_USE_SHELL, BOARD_SHELL_WORDS, BOARD_HELP_HINT } from './story-data/hacking.js';
+import { BOARD_PROMPT, BOARD_USE_SHELL, BOARD_SHELL_WORDS, BOARD_HELP_HINT } from './story-data/hacking.js';
 
 const MAX_LINES = 300;
 const MAX_HISTORY = 50;
@@ -115,7 +115,7 @@ export function createBoardCommands({
     const text = String(raw ?? '').trim();
     if (!text || running) return;
     history = [...history.filter((item) => item !== text), text].slice(-MAX_HISTORY);
-    line(`> ${text}`, 'cmd');
+    line(`${BOARD_PROMPT}${text}`, 'cmd');
     running = true;
     notify('busy');
     try {

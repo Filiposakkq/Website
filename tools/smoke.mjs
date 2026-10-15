@@ -562,6 +562,8 @@ scenarios.push({
     const selected = await page.evaluate(() => document.querySelector('.case-row[aria-current="true"]')?.textContent ?? '');
     if (!selected.includes('e12')) throw new Error(`open e12 should select the row, selected: ${JSON.stringify(selected)}`);
     await page.locator('#caseTab-commands').click();
+    const logBox = await page.locator('.case-cmd-log').boundingBox();
+    if (!logBox || logBox.height < 120) throw new Error(`the command output area is ${logBox?.height}px high on a phone: the output must be visible`);
     const box = await page.locator('#caseCmdInput').boundingBox();
     const view = await page.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth, overflow: document.documentElement.scrollWidth > window.innerWidth }));
     if (!box || box.y < 0 || box.y + box.height > view.height || box.x < 0 || box.x + box.width > view.width) throw new Error(`the command input is not fully visible: ${JSON.stringify({ box, view })}`);
