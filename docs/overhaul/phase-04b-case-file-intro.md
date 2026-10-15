@@ -86,7 +86,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 4b.0b Trace window after trust = 300 s | done | `25bfc45` | window 300 s, loss thresholds as shares (113 / 88 / 225 s left), spoken line, docs, smoke serves a 120 s test window + one scenario for the shipped value. **last green commit: `25bfc45`**: full smoke 25/28 in the parallel run; the 3 failures (`reduced: typing ticks ...` and two real-time desktop scenarios that timed out in `reachTrustChoice` while other tools ran) all pass alone on the same snapshot; `validate-story`, `audio-lint` (0 problems) and `check-fonts` pass |
 | 4b.1 Availability at the first mention | done | `05a7fa9` | `makeAvailable()`, the story node (`caseBriefing`), developer routes, validator and 4 smoke scenarios; each passes alone on the snapshot; full smoke run again after 4b.2 (see its row) |
 | 4b.2 Explanation by a character | done | `5c43666` | third voice `<???>` (blue, `key-tick-mystery`), 5 draft lines, validator + 1 smoke scenario (passes alone), docs; wording and sound **unverified** (owner checklist); **last green commit: `5c43666`**: full smoke 33 of 33 (`--jobs=8`, snapshot) |
-| 4b.3 Board command pane | done | `bb599e7` | registry group `board`, `board-commands.js`, shared `hacking-commands.js` (one job slot, `needs: link`), pane in `board-ui.js`, lethal-only loss and charge, honest TRACE pane. **last green commit: `bb599e7`**: full smoke 38 of 38 (`--jobs=8`, snapshot), `validate-story`, `audio-lint` (0 problems), `check-fonts` pass; phone keyboard, screen reader and feel **unverified** |
+| 4b.3 Board command pane | done | `bb599e7` | registry group `board`, `board-commands.js`, shared `hacking-commands.js` (one job slot, `needs: link`), pane in `board-ui.js`, lethal-only loss and charge, honest TRACE pane. **last green commit: `bb599e7`**: full smoke 38 of 38 (`--jobs=8`, snapshot), `validate-story`, `audio-lint` (0 problems), `check-fonts` pass; phone keyboard, screen reader and feel **unverified** | Re-run after the later owner requests: **last green commit: `db1b425`**, full smoke 38 of 38.
 | 4b.4 Tests | done | `bb599e7` | tests were written with the code: a `validate-story` block (registry, words, rules a to e, shared state, job slot, trace end, abort, reset, mutation-checked) and 5 smoke scenarios (pending trace, no trace, phone, keyboard only, reboot during a decrypt); see the handoff report |
 | 4b.5 Docs | done | see PR | state docs (`story`, `ui-and-css`, `tools`, `audio`), story bible, `audio-cues.md`, owner checklist, CHANGELOG, tracker, known issues, decisions log, this report |
 
@@ -115,7 +115,7 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
 ### Resume point (session 1, final)
 
 - Branch `overhaul/phase-4b-case-file`, all sub-steps done and pushed; the PR to `main` is open and is **not merged** (the owner merges).
-- `last green commit`: `bb599e7` (full smoke 38 of 38). Later commits change only documents.
+- `last green commit`: `db1b425` (full smoke 38 of 38 with `--jobs=8` on a snapshot, after the later owner requests; earlier: `bb599e7`). Later commits change only documents.
 - Nothing is half-edited. If a review finds something, fix it on this branch, run `node tools/validate-story.mjs` and the affected `--only=` scenarios, then the full smoke.
 
 ## Handoff report (phase 4b)
@@ -132,6 +132,15 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
   - The pane in `board-ui.js` (wide: a strip under the four panes; phone: the COMMANDS tab), `.case-cmd-*` CSS region. The log lives in `board-commands.js`, so a decrypt keeps its output when the dialog is closed.
   - `BOARD_SHELL_WORDS` (in `story-data/hacking.js`) answers `use the shell for that`; `validate-story` checks it against the real shell registrations.
 - 4b.4 tests: see the checkpoint rows.
+
+**Later owner requests, done on the same branch** (2026-10-15, after the report above; each has a row in the decisions log of `README.md`)
+
+- The board command pane looks like a little terminal (`.case-term`: output above, the `board>` prompt as its last line, typed lines echoed as `board> ...`), is taller on a PC, and its output is visible on a phone (it collapsed to nothing before; the smoke test now checks the height).
+- `<???>` says thirteen lines in the briefing, including a faint hint of a secret agency ("this line is encrypted. the agency logs it anyway."; "the agency" is never named).
+- The case file is *uploaded* by `<???>`: "i am sending you the case file.", a blue `uploading case_file.agency` bar (`bar` nodes take an optional `cls`), a blue receipt "property of the agency", then the CASE FILE button. The board header reads `PROPERTY OF THE AGENCY // RESTRICTED // ACCESS LOGGED`.
+- `<???>` now and then drops a blue line into the board terminal (`BOARD_MYSTERY` in `story-data/hacking.js`: one chance in three after a command, a rest of two, never the same line twice, none after `close`; `random` is injectable for tests).
+- `<???>` returns once when sdb9 opens (`story-data/ghost.js`, `mysteryReturns`: "read it before you run it." and an exchange with the watcher) and at the end of the level (`story-data/ending.js`, `secureLine`): the watcher's last reconnect is met by a blue `establishing secure line` bar and BLOCKED, Mr. Robot says "i did not do that.", `<???>` closes the level ("that door is closed." / "sleep. we will call when it is time."). The validator allows `<???>` in exactly these three places.
+- Tests for these: `validate-story` (upload order and blue, the three appearances, the pool and the rest rule, the finale) and smoke checks in the third-voice, board, phone and victory scenarios. The wording, pace and odds of all of this are drafts for the owner (owner checklist).
 
 **Verified** (by me, headless): `node tools/validate-story.mjs` (with mutation checks that removing the lethal gate on loss or on the charge fails), `node tools/audio-lint.mjs` (0 problems, 112 rows), `bash tools/check-fonts.sh`, and the full `node tools/smoke.mjs --jobs=8` on a snapshot: 38 of 38.
 
