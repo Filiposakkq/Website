@@ -11,6 +11,8 @@
  * What `scan` prints, one pass per run (a pass is the table; the records it reveals come from evidence.js). A row may be
  * `{ text, when: '<record id>' }`: it is only printed when this run found that record.
  */
+import { DENIED, RESTRICTED } from './system.js';
+
 export const SCAN_PASSES = [
   {
     title: 'scan: 10.0.2.0/24',
@@ -119,7 +121,22 @@ export const MESSAGES = {
   connectLost: 'connect: {0}: data corrupted',
   connectNone: 'connect: no relation between {0} and {1}',
   connectAlready: 'connect: {0} and {1} are already linked',
+  noLink: 'no active link yet.',
+  jobBusy: 'another job is running.',
 };
+
+/**
+ * The board command line (phase 4b.3; board-commands.js). The board answers only evidence commands; every word the
+ * shell knows that is not one of them gets `BOARD_USE_SHELL`. The validator checks that this list covers every command
+ * the shell registers (level01.js, system-commands.js), so a new shell command cannot slip through as "not found".
+ */
+export const BOARD_USE_SHELL = 'use the shell for that';
+export const BOARD_SHELL_WORDS = [
+  'ls', 'cat', 'unlock', 'hint', 'trace', 'board', 'evidence', 'source', 'view-source', 'verify', 'isolate', 'abort',
+  'whoami', 'pwd', 'date', 'ps', 'netstat', 'ifconfig', 'history', 'uname', 'echo', 'clear',
+  ...Object.keys(RESTRICTED), ...DENIED,
+];
+export const BOARD_HELP_HINT = 'type help for the board commands.';
 
 /** Fills `{0}`, `{1}` in a message. */
 export const fill = (template, ...values) => template.replace(/\{(\d)\}/g, (_match, index) => values[Number(index)] ?? '');

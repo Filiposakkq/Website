@@ -1355,7 +1355,7 @@ body.quiet-motion .case-panel.is-opening [data-reveal-index] { animation: none; 
 .case-action.is-active { background: #14391e; border-color: #c2ffd0; }
 .case-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
 }
 .case-tab {
@@ -1372,7 +1372,7 @@ body.quiet-motion .case-panel.is-opening [data-reveal-index] { animation: none; 
 .case-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
-  grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr) auto;
   gap: 10px;
   min-height: 0;
 }
@@ -1409,6 +1409,39 @@ body.quiet-motion .case-panel.is-opening [data-reveal-index] { animation: none; 
   font-size: 11px;
   letter-spacing: 0.1em;
 }
+
+/* the board command line (phase 4b.3, js/board-commands.js): a log and one input, a full-width strip under the panes */
+.case-pane--commands { grid-column: 1 / -1; height: 168px; }
+.case-cmd-body { gap: 6px; }
+.case-cmd-log {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.case-cmd-log:focus-visible { outline: 2px solid #8bffa1; outline-offset: 1px; }
+.case-cmd-line { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #d8f1dc; }
+.case-cmd-line.is-dim { color: var(--case-muted); }
+.case-cmd-line.is-ok { color: var(--case-ok); }
+.case-cmd-line.is-warn { color: var(--case-warn); }
+.case-cmd-line.is-cmd { color: #eafff0; }
+.case-cmd-form { display: flex; align-items: center; gap: 8px; flex: none; }
+.case-cmd-label { color: var(--case-muted); font-size: 11px; letter-spacing: 0.1em; white-space: nowrap; }
+.case-cmd-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--case-line);
+  background: #040d06;
+  color: #eafff0;
+  font: inherit;
+  font-size: 14px;
+}
+.case-cmd-input:focus-visible { outline: 2px solid #8bffa1; outline-offset: 1px; border-color: #8bffa1; }
+.case-cmd-input.is-busy { color: var(--case-muted); }
 
 /* the evidence list and the detail card */
 .case-pane--evidence .case-pane-body { overflow: hidden; }
@@ -1581,6 +1614,8 @@ body.quiet-motion .case-panel.is-opening [data-reveal-index] { animation: none; 
   .case-dialog { width: 100vw; height: 100dvh; }
   .case-panel { padding: 10px; padding-top: max(10px, env(safe-area-inset-top)); gap: 8px; border-left: 0; border-right: 0; }
   .case-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .case-pane--commands { height: auto; }
+  .case-cmd-input { font-size: 16px; }
   .case-footer-note { display: none; }
   .case-network { min-height: 240px; }
   .case-row { grid-template-columns: 76px 28px minmax(0, 1fr); }

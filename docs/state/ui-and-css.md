@@ -16,4 +16,5 @@ Facts that bite:
 - Font size minimum 11px outside `.developer-*` (to fix in phase 7); `.case-*` (the board) is at 11px or more since phase 4.5.
 
 - `.output .voice-blue` (static colour `#4da6ff`, 8.21:1 on black, and a static glow) is the third voice `<???>`: name tag and text (`story-data/voices.js`). It does not animate.
+- The board command line (phase 4b.3): `.case-pane--commands` (a full-width strip, 168 px, under the 2 x 2 panes; auto height as a tab on a phone), `.case-cmd-log` (scrolling output), `.case-cmd-line` with `is-dim` / `is-ok` / `is-warn` / `is-cmd`, `.case-cmd-form` / `.case-cmd-label` / `.case-cmd-input` (44 px high, 16 px text on a phone so the page does not zoom); `.case-tabs` now has five columns. No animation.
 - The evidence board (phase 4.5): `.case-dialog` (native `<dialog>`, no backdrop blur), `.case-panel`, `.case-grid` / `.case-pane` (2 x 2 on a wide screen, tabs on a phone via `@media (max-width: 720px)`), `.case-node`, `.case-row`, `.case-detail`, `.topo-*` (trace path). Only opacity animates (`.case-panel.is-opening [data-reveal-index]`; off for reduced motion and `body.quiet-motion`).

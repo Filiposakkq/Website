@@ -731,6 +731,7 @@ if (story) {
     const line = (text = '', cls = '') => { const row = { textContent: text, cls }; rows.push(row); return row; };
     const output = () => rows.map((row) => row.textContent).join('\n');
     let secs = TUNING.traceWindow;
+    let mode = 'lethal'; // 'lethal' | 'running' | null (no trace): what the trace is doing
     let onSleep = () => {};
     const trigger = {
       hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
@@ -741,7 +742,10 @@ if (story) {
       rows.length = 0;
       played.length = 0;
       onSleep = () => {};
-      const caseFile = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => played.push(cue) } });
+      mode = 'lethal';
+      const caseFile = createCaseFile({
+        trigger, getTraceLeft: () => secs, setTraceLeft: (n) => { secs = n; }, getTraceMode: () => mode, audio: { play: (cue) => played.push(cue) },
+      });
       caseFile.start(route);
       caseFile.chooseTrust(route);
       const session = {
@@ -749,7 +753,9 @@ if (story) {
       };
       const registry = createRegistry();
       registerHackingCommands(registry, {
-        line, audio: { play: (cue) => played.push(cue) }, session, caseFile, motionReduced: () => false, terminal: { close() {} },
+        audio: { play: (cue) => played.push(cue) }, session, caseFile, motionReduced: () => false,
+      }, {
+        line, hidePrompt() {}, over: (env) => env.play.over, group: 'game',
       });
       const env = { trusted: route, trace: { left: () => secs, set: (n) => { secs = n; } }, play: { over: null } };
       const run = (command) => { rows.length = 0; return registry.dispatch(command, env, line); };
@@ -852,6 +858,242 @@ if (story) {
     const used = [...source.matchAll(/msg\('(\w+)'/g)].map((match) => match[1]);
     expect(used.every((key) => key in hackingData.MESSAGES), `every message the commands use exists (${used.filter((key) => !(key in hackingData.MESSAGES)).join(', ') || 'all'})`);
     expect(Object.keys(hackingData.DUMP_FILES).every((file) => hackingData.DUMP_FILES[file].length) && Object.keys(hackingData.DECRYPTED).length === 2, 'every dumped file and decrypted record has text');
+  } finally {
+    performance.now = realNow;
+  }
+}
+
+// ---- the board command line and the trace rules (phase 4b.3)
+{
+  console.log('\nboard command line');
+  const { createCaseFile } = await import(js('casefile.js'));
+  const { createBoardCommands } = await import(js('board-commands.js'));
+  const { registerHackingCommands } = await import(js('hacking-commands.js'));
+  const { registerSystemCommands } = await import(js('system-commands.js'));
+  const { createRegistry } = await import(js('commands.js'));
+  const hackingData = await import(js('story-data/hacking.js'));
+  const { CASE: TUNING } = await import(js('story-data/constants.js'));
+
+  let clock = 1000;
+  const realNow = performance.now.bind(performance);
+  performance.now = () => clock;
+  try {
+    const played = [];
+    const audio = { play: (cue) => played.push(cue) };
+    const trigger = {
+      hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
+    };
+    // `trace` is what the board sees: null (none), or { mode, secs }.
+    const setup = (route, trace) => {
+      clock = 1000;
+      played.length = 0;
+      const world = { trace, selected: [], closed: 0 };
+      const caseFile = createCaseFile({
+        trigger,
+        getTraceLeft: () => world.trace?.secs ?? null,
+        setTraceLeft: (n) => { world.trace.secs = n; },
+        getTraceMode: () => world.trace?.mode ?? null,
+        audio,
+      });
+      const session = {
+        async sleep(ms) {
+          clock += ms;
+          if (world.trace) {
+            world.trace.secs -= ms / 1000;
+            caseFile.tick(world.trace.secs);
+          }
+          world.onSleep?.();
+        },
+      };
+      const board = createBoardCommands({
+        caseFile, audio, session, motionReduced: () => false, getTrace: () => (world.trace ? { mode: () => world.trace.mode, left: () => world.trace.secs } : null),
+      });
+      caseFile.attachCommands(board);
+      caseFile.start(route);
+      caseFile.chooseTrust(route);
+      world.caseFile = caseFile;
+      world.board = board;
+      world.say = async (text) => { await board.submit(text); const rows = board.entries(); return rows.map((row) => row.text).join('\n'); };
+      world.out = () => board.entries().map((row) => row.text).join('\n');
+      // The shell side, for the shared job slot and the parity check.
+      const shellRows = [];
+      const shell = createRegistry();
+      registerHackingCommands(shell, { audio, session, caseFile, motionReduced: () => false }, {
+        line: (text = '') => { const row = { textContent: text }; shellRows.push(row); return row; }, hidePrompt() {}, over: () => false, group: 'game',
+      });
+      world.shell = (command) => shell.dispatch(command, {}, (text) => shellRows.push({ textContent: text }));
+      world.shellOut = () => shellRows.map((row) => row.textContent).join('\n');
+      return world;
+    };
+    const clear = (world) => world.board.reset();
+
+    // The words.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: TUNING.traceWindow });
+      const names = world.board.definitions().map((def) => def.name);
+      expect(JSON.stringify([...names].sort()) === JSON.stringify(['close', 'connect', 'decrypt', 'dump', 'help', 'intercept', 'list', 'open', 'scan'].sort()), `the board registers exactly help, list, open, scan, intercept, dump, decrypt, connect, close (${names.join(' ')})`);
+      expect(world.board.definitions().every((def) => def.group === 'board'), 'every board command is in the board group');
+      expect(world.board.definitions().filter((def) => ['scan', 'intercept', 'dump', 'decrypt', 'connect'].includes(def.name)).every((def) => def.needs === 'link')
+        && world.board.definitions().filter((def) => ['help', 'list', 'open', 'close'].includes(def.name)).every((def) => !def.needs), 'scan, intercept, dump, decrypt and connect need a link; help, list, open and close do not');
+      await world.say('help');
+      const help = world.out();
+      expect(help.includes('board commands:') && ['scan', 'intercept', 'dump <file>', 'decrypt <id>', 'connect <a> <b>', 'open <id>', 'list', 'close', 'help'].every((usage) => help.includes(usage)), 'help is generated from the registry and lists every board command');
+      expect(!/cat <|unlock <|\bhint\b|\bls\b|\bwhoami\b/.test(help), 'help lists no shell command');
+      clear(world);
+      for (const word of ['cat', 'ls', 'unlock', 'hint', 'trace', 'sudo', 'whoami', 'board', 'abort']) {
+        // eslint-disable-next-line no-await-in-loop
+        await world.say(word);
+      }
+      const answers = world.board.entries().filter((row) => !row.text.startsWith('>')).map((row) => row.text);
+      expect(answers.length === 9 && answers.every((text) => text === 'use the shell for that'), 'a shell-only word answers "use the shell for that"');
+      clear(world);
+      await world.say('frobnicate');
+      expect(world.out().includes('command not found: frobnicate') && world.out().includes('type help'), 'an unknown word is "command not found"');
+
+      // Every command the shell can register is either a board command or a shell word.
+      const level = await readFile(js('level01.js'), 'utf8');
+      const gameWords = [...level.matchAll(/name: '([\w.-]+)'(?:, aliases: \[([^\]]*)\])?/g)]
+        .flatMap((match) => [match[1], ...(match[2] ? [...match[2].matchAll(/'([\w.-]+)'/g)].map((m) => m[1]) : [])]);
+      const systemRegistry = createRegistry();
+      registerSystemCommands(systemRegistry, { line() {}, audio, out: {} });
+      const everyShellWord = [...new Set([...gameWords, ...systemRegistry.names()])].filter((word) => word !== 'help');
+      const covered = (word) => names.includes(word) || hackingData.BOARD_SHELL_WORDS.includes(word);
+      expect(everyShellWord.length > 20 && everyShellWord.every(covered), `every shell command word is a board command or a known shell word (${everyShellWord.filter((word) => !covered(word)).join(', ') || 'all'})`);
+    }
+
+    // (a) no trace at all.
+    {
+      const world = setup('unknown', null);
+      for (const command of ['scan', 'intercept', 'dump', 'decrypt e11', 'connect e10 e11']) {
+        // eslint-disable-next-line no-await-in-loop
+        await world.say(command);
+      }
+      const answers = world.board.entries().filter((row) => !row.text.startsWith('>')).map((row) => row.text);
+      expect(answers.length === 5 && answers.every((text) => text === 'no active link yet.'), 'with no trace the four evidence commands (and dump) answer "no active link yet."');
+      expect(clock === 1000 && world.caseFile.snapshot().scans === 0, 'a refused command takes no time and changes nothing');
+      clear(world);
+      await world.say('list');
+      expect(world.out().includes('no records yet.'), 'list works without a trace');
+      clear(world);
+      await world.say('open zz9');
+      expect(world.out().includes('open: zz9: no such node'), 'open names an unknown node');
+      world.caseFile.discover('page-script');
+      clear(world);
+      await world.say('list');
+      expect(/\s(read)\s/.test(world.out()), 'list shows the state of a record');
+    }
+
+    // (b) a pending trace: the commands work and take their time, nothing is charged, nothing is lost.
+    {
+      const world = setup('unknown', { mode: 'running', secs: 480 });
+      const before = clock;
+      await world.say('scan');
+      expect(world.out().includes('new nodes: 2') && clock - before >= TUNING.scanSeconds[0] * 1000, 'a pending trace lets scan run for its full time');
+      expect(world.caseFile.snapshot().scans === 1 && world.caseFile.snapshot().evidence['srv-ledger'] === 'locked', 'the board scan changed the shared case file');
+      await world.say('intercept');
+      await world.say('intercept');
+      await world.say('decrypt e11');
+      expect(world.caseFile.snapshot().evidence['net-relay-chain'] === 'decrypted', 'decrypt works from the board');
+      await world.say('dump relay/handshake.log');
+      const secs = world.trace.secs;
+      clear(world);
+      await world.say('connect e10 e12');
+      expect(world.out().includes('no relation between e10 and e12') && !world.out().includes('[trace -') && world.trace.secs === secs, 'rule b: a wrong connect costs no trace seconds while the trace is pending');
+      // (d) nothing is lost while the trace is not lethal, however low the clock reads.
+      world.trace.secs = 11;
+      const lost = world.caseFile.compromiseCheck();
+      const lostByTick = (world.caseFile.tick(11), Object.values(world.caseFile.snapshot().evidence).includes('compromised'));
+      expect(lost.length === 0 && !lostByTick, 'rule d: no record is lost while the trace is pending, even at the floor');
+      const view = world.caseFile.getView();
+      expect(view.traceState === 'pending' && view.traceLeft === null && view.items.every((item) => !item.atRisk), 'rule e: the board view reports a pending trace with no countdown and nothing at risk');
+    }
+
+    // (c) a lethal trace behaves as in phase 4: the cost is charged, a record is lost near its threshold.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: 200 });
+      await world.say('scan');
+      await world.say('intercept');
+      await world.say('dump relay/handshake.log');
+      const secs = world.trace.secs;
+      await world.say('connect e10 e12');
+      expect(world.out().includes('[trace -') && world.trace.secs === secs - TUNING.connectMissCost, `rule c: a wrong connect costs ${TUNING.connectMissCost} trace seconds when the trace is lethal`);
+      const view = world.caseFile.getView();
+      expect(view.traceState === 'lethal' && Number.isFinite(view.traceLeft), 'a lethal trace shows its countdown');
+      world.trace.secs = TUNING.compromiseAt.ledger;
+      world.caseFile.tick(world.trace.secs);
+      expect(world.caseFile.snapshot().evidence['srv-ledger'] === 'compromised', 'a lethal trace still overwrites an unread record at its threshold');
+    }
+
+    // Parity and the one job slot.
+    {
+      const world = setup('watcher', { mode: 'lethal', secs: TUNING.traceWindow });
+      await world.shell('scan');
+      await world.say('scan');
+      expect(world.shellOut().includes('new nodes: 2') && world.out().includes('deep scan') && world.caseFile.snapshot().scans === 2, 'a shell scan and a board scan are the same scan (the second is tier 2)');
+      // A board decrypt is running: a shell command must be refused, and the other way round.
+      world.onSleep = null;
+      let shellAnswer = '';
+      let started = false;
+      world.onSleep = () => {
+        if (started) return;
+        started = true;
+        world.shell('scan').then(() => { shellAnswer = world.shellOut(); });
+      };
+      await world.say('decrypt e13');
+      await Promise.resolve();
+      expect(shellAnswer.includes('another job is running.') || world.shellOut().includes('another job is running.'), 'a shell command is refused while a board job runs');
+      expect(world.caseFile.snapshot().evidence['srv-ledger'] === 'decrypted', 'the board decrypt finished');
+      expect(world.board.isBusy() === false, 'the board line is free again afterwards');
+    }
+
+    // The trace ends during a board job: it stops cleanly.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: TUNING.traceWindow });
+      await world.say('scan');
+      let sleeps = 0;
+      world.onSleep = () => { if (++sleeps === 3) world.trace.secs = 0; };
+      await world.say('decrypt e13');
+      expect(world.out().includes('decrypt: interrupted') && world.caseFile.snapshot().job === null && world.caseFile.snapshot().evidence['srv-ledger'] !== 'decrypted', 'a board decrypt stops when the trace ends');
+      expect(world.board.isBusy() === false, 'a stopped board job frees the line');
+    }
+
+    // An abort (reboot) leaves nothing behind.
+    {
+      const world = setup('unknown', { mode: 'lethal', secs: TUNING.traceWindow });
+      await world.say('scan');
+      const abort = new Error('aborted');
+      abort.name = 'AbortError';
+      let sleeps = 0;
+      world.onSleep = () => { if (++sleeps === 2) throw abort; };
+      await world.say('decrypt e13');
+      expect(world.caseFile.snapshot().job === null && world.board.isBusy() === false, 'an abort during a board decrypt clears the job and frees the line');
+      expect(!world.out().includes('that command failed'), 'an abort is not reported as an error');
+      // The next scan after the abort works: the job slot was released.
+      world.onSleep = null;
+      const again = world.caseFile.claim();
+      expect(typeof again === 'function', 'the job slot is free after an abort');
+      again();
+    }
+
+    // A new run clears the log, the history and the reminder.
+    {
+      const world = setup('unknown', { mode: 'running', secs: 480 });
+      world.board.introduce();
+      world.board.introduce();
+      expect(world.board.entries().filter((row) => row.text === hackingData.BOARD_HELP_HINT).length === 1, 'the help reminder is shown once per run');
+      await world.say('help');
+      world.caseFile.start('unknown');
+      expect(world.board.entries().length === 0 && world.board.history().length === 0, 'starting a new run clears the board log and history');
+      world.board.introduce();
+      expect(world.board.entries().length === 1, 'the reminder comes back in the next run');
+    }
+
+    // The messages used by the new code exist, and nothing in the board code starts a timer of its own.
+    {
+      const source = await readFile(js('board-commands.js'), 'utf8');
+      expect(!/\b(setTimeout|setInterval|requestAnimationFrame)\b/.test(source), 'board-commands.js starts no timer of its own');
+      expect(hackingData.BOARD_USE_SHELL === 'use the shell for that' && hackingData.MESSAGES.noLink && hackingData.MESSAGES.jobBusy, 'the board and link messages exist');
+    }
   } finally {
     performance.now = realNow;
   }

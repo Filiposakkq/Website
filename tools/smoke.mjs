@@ -473,7 +473,164 @@ scenarios.push({
   },
 });
 
-// Phase 4.5: the evidence board is a native dialog with four panes (wide) or four tabs (phone).
+// Phase 4b.3: the board command line.
+const cmdLog = (page) => page.evaluate(() => document.querySelector('.case-cmd-log')?.textContent ?? '');
+const waitCmd = (page, text, timeout = 20000) => page.waitForFunction((needle) => (document.querySelector('.case-cmd-log')?.textContent ?? '').includes(needle), text, { timeout })
+  .catch(async () => { throw new Error(`the board log never showed "${text}": ${JSON.stringify((await cmdLog(page)).slice(-600))}`); });
+async function boardCmd(page, text) {
+  const input = page.locator('#caseCmdInput');
+  await input.fill(text);
+  await input.press('Enter');
+}
+const openBoardFromButton = async (page) => {
+  await page.locator('#caseTrigger').click();
+  await page.waitForSelector('dialog.case-dialog[open]');
+};
+
+scenarios.push({
+  name: 'reduced: the board command line works with a pending trace and shares its state with the shell',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    await openBoardFromButton(page);
+    await waitCmd(page, 'type help for the board commands.');
+    const trace = await page.locator('.case-trace-time').textContent();
+    if (trace !== 'TRACE PENDING') throw new Error(`a pending trace must read TRACE PENDING on the board, reads "${trace}"`);
+    await boardCmd(page, 'help');
+    await waitCmd(page, 'board commands:');
+    await boardCmd(page, 'cat ghost.sh');
+    await waitCmd(page, 'use the shell for that');
+    await boardCmd(page, 'list');
+    await waitCmd(page, 'no records yet.');
+    await boardCmd(page, 'scan');
+    await page.waitForFunction(() => document.getElementById('caseCmdInput').readOnly, null, { timeout: 5000 });
+    await waitCmd(page, 'new nodes: 2');
+    await page.waitForFunction(() => !document.getElementById('caseCmdInput').readOnly, null, { timeout: 5000 });
+    await boardCmd(page, 'close');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    const focus = await page.evaluate(() => document.activeElement?.id);
+    if (focus !== 'caseTrigger') throw new Error(`closing the board from its command line should return focus to the CASE FILE button, is on ${focus}`);
+    await chooseTrust(page, 'unknown', 'click');
+    await reachPuzzle(page);
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'deep scan', 30000);
+  },
+});
+
+scenarios.push({
+  name: 'desktop: before the trace exists the evidence commands answer "no active link yet."',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await initialize(page);
+    await holdSkip(page, 'BOOT');
+    await waitShown(page, '#caseTrigger', 90000);
+    if (await page.evaluate(() => !!document.getElementById('hud'))) throw new Error('the trace already exists: the check must run between the mention and the level brief');
+    await openBoardFromButton(page);
+    const trace = await page.locator('.case-trace-time').textContent();
+    if (trace !== 'NO TRACE YET') throw new Error(`with no trace the board must say NO TRACE YET, says "${trace}"`);
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'no active link yet.');
+    await boardCmd(page, 'connect e10 e11');
+    await boardCmd(page, 'list');
+    await waitCmd(page, 'no records yet.');
+    const log = await cmdLog(page);
+    if ((log.match(/no active link yet\./g) ?? []).length !== 2) throw new Error(`scan and connect should both be refused: ${JSON.stringify(log)}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+  },
+});
+
+scenarios.push({
+  name: 'reduced: phone board command line, open selects a record, input stays visible',
+  contextOptions: { ...MOBILE, reducedMotion: 'reduce' },
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    await openBoardFromButton(page);
+    await page.locator('#caseTab-commands').click();
+    await page.waitForSelector('#casePane-commands:not([hidden])');
+    const tab = await page.locator('#caseTab-commands').boundingBox();
+    if (tab.height < 44) throw new Error(`the COMMANDS tab is ${tab.height}px high, below 44px`);
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'new nodes: 2');
+    await boardCmd(page, 'dump relay/handshake.log');
+    await waitCmd(page, '[evidence] e12');
+    await boardCmd(page, 'open e12');
+    await waitCmd(page, 'selected e12');
+    await page.waitForSelector('#casePane-evidence:not([hidden])');
+    const selected = await page.evaluate(() => document.querySelector('.case-row[aria-current="true"]')?.textContent ?? '');
+    if (!selected.includes('e12')) throw new Error(`open e12 should select the row, selected: ${JSON.stringify(selected)}`);
+    await page.locator('#caseTab-commands').click();
+    const box = await page.locator('#caseCmdInput').boundingBox();
+    const view = await page.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth, overflow: document.documentElement.scrollWidth > window.innerWidth }));
+    if (!box || box.y < 0 || box.y + box.height > view.height || box.x < 0 || box.x + box.width > view.width) throw new Error(`the command input is not fully visible: ${JSON.stringify({ box, view })}`);
+    if (box.height < 44) throw new Error(`the command input is ${box.height}px high, below 44px`);
+    const smallest = await page.evaluate(() => Math.min(...[...document.querySelectorAll('.case-pane--commands *')].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).map((el) => parseFloat(getComputedStyle(el).fontSize))));
+    if (smallest < 11 || view.overflow) throw new Error(`command pane text ${smallest}px, page overflow ${view.overflow}`);
+  },
+});
+
+scenarios.push({
+  name: 'reduced: board command line works with the keyboard only (history, close, focus return)',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    await page.locator('#caseTrigger').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    let reached = false;
+    for (let i = 0; i < 60 && !reached; i++) {
+      await page.keyboard.press('Tab');
+      reached = await page.evaluate(() => document.activeElement?.id === 'caseCmdInput');
+    }
+    if (!reached) throw new Error('the command input cannot be reached with the Tab key');
+    await page.keyboard.type('list');
+    await page.keyboard.press('Enter');
+    await waitCmd(page, 'no records yet.');
+    await page.keyboard.press('ArrowUp');
+    const recalled = await page.locator('#caseCmdInput').inputValue();
+    if (recalled !== 'list') throw new Error(`ArrowUp should recall the last command, input is "${recalled}"`);
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type('close');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    const focus = await page.evaluate(() => document.activeElement?.id);
+    if (focus !== 'caseTrigger') throw new Error(`focus should return to the CASE FILE button, is on ${focus}`);
+    const live = await page.evaluate(() => { const board = document.querySelector('.case-cmd-log'); return board; });
+    if (live) throw new Error('the board (and its command pane) should be gone after close');
+  },
+});
+
+scenarios.push({
+  name: 'reduced: a reboot during a board decrypt leaves no job, timer or log behind',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sendCommand(page, 'board');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'new nodes: 2');
+    await boardCmd(page, 'decrypt e13');
+    await page.waitForFunction(() => document.getElementById('caseCmdInput').readOnly, null, { timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    await devRoute(page, 'puzzle');
+    await waitShown(page, '#promptLine', 30000);
+    await page.locator('#caseTrigger').click();
+    await page.waitForSelector('dialog.case-dialog[open]');
+    const log = await cmdLog(page);
+    if (log.includes('decrypting') || log.includes('new nodes')) throw new Error(`the new run kept the old board log: ${JSON.stringify(log)}`);
+    const busy = await page.evaluate(() => document.getElementById('caseCmdInput').readOnly);
+    if (busy) throw new Error('the board input is still locked after the reboot');
+    await boardCmd(page, 'scan');
+    await waitCmd(page, 'new nodes: 2');
+  },
+});
+
+// Phase 4.5: the evidence board is a native dialog with four panes (wide) or four tabs (phone); phase 4b.3 adds the
+// board command line as a fifth pane (wide) or tab (phone).
 async function buildBoardEvidence(page) {
   await sendCommand(page, 'scan');
   await waitOutput(page, 'new nodes: 2', 30000);
@@ -519,7 +676,7 @@ for (const [label, contextOptions] of [['desktop', REDUCED], ['mobile', { ...MOB
       if (!board.rows.some((row) => row.includes('e13') && row.includes('DECRYPTED'))) throw new Error(`e13 should be listed as decrypted: ${JSON.stringify(board.rows)}`);
       await page.locator('.case-row', { hasText: 'e12' }).click();
       if (label === 'desktop') {
-        if (board.panes.length !== 4 || board.tabsVisible) throw new Error(`wide layout shows four panes and no tabs: ${JSON.stringify(board)}`);
+        if (board.panes.length !== 5 || board.tabsVisible) throw new Error(`wide layout shows five panes (four panels and the command line) and no tabs: ${JSON.stringify(board)}`);
       } else {
         if (board.panes.length !== 1 || !board.tabsVisible) throw new Error(`phone layout shows one pane and the tabs: ${JSON.stringify(board)}`);
         await page.locator('#caseTab-trace').click();

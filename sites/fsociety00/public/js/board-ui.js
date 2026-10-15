@@ -12,7 +12,8 @@
 // button when that opened it). Every map node is a real button in the page's tab order, and the map can be panned and
 // zoomed with the keyboard (arrows, + / -, Home), the mouse (drag, wheel) and two fingers (pinch). Connecting two
 // nodes works by selecting them (CONNECT on the detail card, then the second node); `connect e1 e2` does the same in
-// the terminal. Animation: opacity only (the reveal fade), switched off by reduced motion and `body.quiet-motion`.
+// the terminal, and in the BOARD COMMANDS pane (board-commands.js: the evidence commands typed inside the board; the pane
+// is a log with its own live region and one input, built once per opening and never redrawn by `refresh`). Animation: opacity only (the reveal fade), switched off by reduced motion and `body.quiet-motion`.
 
 import { formatClock, pad2 } from './util.js';
 import { createTopologyView } from './topology.js';
@@ -42,8 +43,17 @@ const button = (className, text, label) => {
 /** A record the player can see something about (not an unobserved placeholder, not a sealed stub of the other branch). */
 const isKnown = (item) => item.state !== 'hidden' && item.state !== 'sealed';
 const clock = (secs) => (secs === null || !Number.isFinite(secs) ? 'NOT TRACKED' : formatClock(secs));
+/** The trace clock as the board may show it: a countdown only while the trace is lethal; otherwise it says what it is. */
+const traceText = (view) => {
+  if (view.outcome) return view.outcome === 'trace-complete' ? 'COMPLETE' : 'CLOSED';
+  if (view.traceState === 'none') return 'NO TRACE YET';
+  if (view.traceState === 'pending') return 'TRACE PENDING';
+  return clock(view.traceLeft);
+};
 
-export function createBoardUI({ trigger, audio, getView, connect, subscribe, isStarted }) {
+export function createBoardUI({
+  trigger, audio, getView, connect, subscribe, isStarted, getCommands = () => null,
+}) {
   let dialog = null;
   let refs = null;
   let unsubscribe = null;
@@ -54,6 +64,8 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
   let seenEvents = 0;
   let riskKey = '';
   let fitted = false;
+  let unsubscribeCommands = null;
+  let historyIndex = -1;
   const ui = {
     selected: '',
     tab: 'evidence',
@@ -65,6 +77,7 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
     ['map', 'MAP', 'NETWORK MAP'],
     ['intercept', 'INTERCEPT', 'PACKET INTERCEPT LOG'],
     ['trace', 'TRACE', 'TRACE STATUS'],
+    ['commands', 'COMMANDS', 'BOARD COMMANDS'],
   ];
 
   const play = (cue) => audio?.play(cue);
@@ -430,10 +443,8 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
   function refreshLive() {
     if (!refs) return;
     const left = view.traceLeft;
-    refs.traceTime.textContent = view.outcome
-      ? (view.outcome === 'trace-complete' ? 'COMPLETE' : 'CLOSED')
-      : clock(left);
-    if (Number.isFinite(left)) topology.update(left);
+    refs.traceTime.textContent = traceText(view);
+    topology.update(view.traceState === 'lethal' && Number.isFinite(left) ? left : null);
     refs.age.textContent = `SESSION AGE ${clock(view.elapsed)}`;
   }
 
@@ -441,6 +452,91 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
     refs.status.textContent = view.outcome
       ? `CASE CLOSED // ${view.outcomeLabel}`
       : `LIVE // ${view.routeLabel || 'NO ROUTE YET'} // ${view.hintsUsed} HINTS // ${view.failedUnlocks} REJECTS`;
+  }
+
+  // ---- the command line ------------------------------------------------------------------------------------------------
+
+  function commandLine(entry) {
+    const row = el('p', `case-cmd-line${entry.cls ? ` is-${entry.cls}` : ''}`, entry.text);
+    // A progress line redraws several times a second: the screen reader hears the first and last lines, not the bar.
+    if (entry.silent) row.setAttribute('aria-hidden', 'true');
+    return row;
+  }
+
+  function buildCommands() {
+    const commands = getCommands();
+    const { body } = refs.panes.commands;
+    body.classList.add('case-cmd-body');
+    const log = el('div', 'case-cmd-log');
+    log.setAttribute('role', 'log');
+    log.setAttribute('aria-live', 'polite');
+    log.setAttribute('aria-label', 'Board command output');
+    log.tabIndex = 0;
+    const form = el('form', 'case-cmd-form');
+    form.addEventListener('submit', (event) => event.preventDefault());
+    const label = el('label', 'case-cmd-label', 'BOARD COMMAND');
+    label.htmlFor = 'caseCmdInput';
+    const input = el('input', 'case-cmd-input');
+    input.id = 'caseCmdInput';
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.autocapitalize = 'off';
+    input.spellcheck = false;
+    input.enterKeyHint = 'send';
+    input.setAttribute('aria-label', 'Board command. Type help for the list.');
+    form.append(label, input);
+    body.replaceChildren(log, form);
+    refs.cmd = { log, input, rows: new Map() };
+    if (!commands) {
+      input.disabled = true;
+      return;
+    }
+    const append = (entry) => {
+      const row = commandLine(entry);
+      refs.cmd.rows.set(entry, row);
+      log.append(row);
+      log.scrollTop = log.scrollHeight;
+    };
+    commands.introduce();
+    commands.entries().forEach(append);
+    const sync = () => {
+      const busy = commands.isBusy();
+      input.readOnly = busy;
+      input.classList.toggle('is-busy', busy);
+      input.setAttribute('aria-busy', String(busy));
+      input.placeholder = busy ? 'running ...' : '';
+      if (!busy && refs.dialog.open && document.activeElement === document.body) input.focus();
+    };
+    unsubscribeCommands = commands.subscribe((kind, entry) => {
+      if (!refs?.cmd) return;
+      if (kind === 'reset') {
+        log.replaceChildren();
+        refs.cmd.rows.clear();
+      } else if (kind === 'line') {
+        append(entry);
+      } else if (kind === 'update') {
+        refs.cmd.rows.get(entry)?.replaceChildren(document.createTextNode(entry.text));
+      } else if (kind === 'busy') sync();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const text = input.value;
+        input.value = '';
+        historyIndex = -1;
+        commands.submit(text);
+        return;
+      }
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      const past = commands.history();
+      if (!past.length) return;
+      event.preventDefault();
+      historyIndex = event.key === 'ArrowUp'
+        ? Math.min(past.length - 1, historyIndex + 1)
+        : Math.max(-1, historyIndex - 1);
+      input.value = historyIndex === -1 ? '' : past[past.length - 1 - historyIndex];
+    });
+    sync();
   }
 
   // ---- actions -----------------------------------------------------------------------------------------------------
@@ -481,6 +577,14 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
     } else announce('Those two nodes cannot be connected.');
     // The case file notified 'data' while connecting (a success), but the mode must end in every case.
     refresh();
+  }
+
+  /** `open <id>` in the command line: select a record, and show the list when the panes are tabs. */
+  function select(id) {
+    if (!refs || !byId(id)) return false;
+    if (layout.matches) setTab('evidence');
+    choose(id);
+    return true;
   }
 
   function setTab(id) {
@@ -614,12 +718,16 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
     });
     dialog.addEventListener('close', cleanup);
     refs = { dialog, panel, status, live, tabs: tablist, tabButtons, panes, age };
+    buildCommands();
   }
 
   function cleanup() {
     if (!dialog) return;
     unsubscribe?.();
     unsubscribe = null;
+    unsubscribeCommands?.();
+    unsubscribeCommands = null;
+    historyIndex = -1;
     const focusTarget = lastFocus && document.contains(lastFocus) ? lastFocus : trigger;
     dialog.remove();
     dialog = null;
@@ -654,6 +762,7 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
       else cleanup();
     },
     isOpen: () => !!dialog,
+    select,
   };
 
   trigger.addEventListener('click', api.open);

@@ -74,6 +74,9 @@ Play once on a phone and once on a desktop on the preview. Agents did not hear a
 - [ ] **The introduction (4b.1, 4b.2):** right after the inbox message a blue `<???>` says five short lines, and the CASE FILE button appears in the corner with its first line. Does it feel natural? Is the wording right (it is a draft, cryptic on purpose, and never says who it is)? Does anything contradict what `unknown` or the watcher say?
 - [ ] **Its typing sound (nobody has heard it yet):** `key-tick-mystery` should sound clearly different from the clicks of every other voice (a soft, round blip), quiet, not annoying. Is the typing speed right (it is the same as `unknown`)?
 - [ ] **Skip:** hold the skip control through the intro: the button still appears (you just do not see the lines).
+- [ ] **The board command line (4b.3):** open the board right after the `<???>` lines (before the level brief): the TRACE pane says NO TRACE YET and `scan` answers "no active link yet." Open it at the trust choice: it says TRACE PENDING, `scan` and `decrypt` work and a wrong `connect` costs nothing. After the choice (lethal) a wrong `connect` costs 3 seconds, unread records can be lost, and `scan` from the board is the same scan as in the shell (the second one is the deep scan). `cat`, `ls`, `unlock`, `hint` typed in the board answer "use the shell for that".
+- [ ] **Board command line on a phone:** tab COMMANDS, the input stays above the on-screen keyboard (check this on a real phone; it is only checked at 390 x 844 in a headless browser), `open e12` shows the record, Up recalls the last command.
+- [ ] **Screen reader (unverified):** the command output is a log region; the progress bar is silent, the start and the result are read. Is that enough?
 - [ ] **Trace sounds:** with the longer window the first three minutes only tick; the first warning comes at two minutes left, the critical one at one minute. Does that build well?
 
 ## C. Report format

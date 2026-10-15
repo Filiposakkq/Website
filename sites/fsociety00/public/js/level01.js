@@ -231,7 +231,9 @@ export function createLevel01(ctx) {
   });
 
   // scan, intercept, dump, decrypt, connect: the evidence mechanics (hacking-commands.js). All optional.
-  registerHackingCommands(registry, ctx);
+  registerHackingCommands(registry, ctx, {
+    line, hidePrompt: closePrompt, over: (env) => env.play.over, group: 'game',
+  });
 
   // The two routes each get their own command; the other route sees them as unknown or as a usage line.
   registry.register({

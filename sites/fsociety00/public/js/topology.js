@@ -48,6 +48,8 @@ export function topologyLines(secsLeft) {
 /**
  * The live view for the board: builds the elements once inside `container` and returns `{ update(secsLeft), state }`.
  * Reached nodes get the class `is-reached`; the markup is a list so a screen reader reads the path in order.
+ * `update(null)` is the honest idle state (no lethal trace yet): nothing is reached but you, and the meter says the
+ * trace is not counting, instead of a countdown that is not real (phase 4b.3, rule e).
  */
 export function createTopologyView(container) {
   const doc = container.ownerDocument;
@@ -71,6 +73,16 @@ export function createTopologyView(container) {
   let last = null;
   return {
     update(secsLeft) {
+      if (secsLeft === null) {
+        if (last === 'idle') return null;
+        last = 'idle';
+        for (const { row, mark, index } of rows) {
+          row.classList.toggle('is-reached', index === 0);
+          mark.textContent = index === 0 ? '[x]' : '[ ]';
+        }
+        meter.textContent = 'trace: not counting yet';
+        return null;
+      }
       const state = topologyState(secsLeft);
       const key = `${state.reached}:${state.percent}`;
       if (key === last) return state;
