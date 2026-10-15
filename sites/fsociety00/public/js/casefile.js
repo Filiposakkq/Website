@@ -1,9 +1,25 @@
-import { formatClock, pad2 } from './util.js';
-import { EVIDENCE as ALL_EVIDENCE, ORIGINAL_IDS, ROUTE_LABELS } from './story-data/evidence.js';
+import { formatClock, pad2, scrambleText } from './util.js';
+import { EVIDENCE as RECORDS, ORIGINAL_IDS, ROUTE_LABELS } from './story-data/evidence.js';
+import { CASE } from './story-data/constants.js';
 
-// Phase 4.1: the records live in story-data/evidence.js (new schema). Until the new board (4.5) can show the new
-// kinds of evidence, this view keeps rendering the original nine, so the game plays exactly as before.
-const EVIDENCE = ALL_EVIDENCE.filter((item) => ORIGINAL_IDS.includes(item.id));
+// The case file: the evidence state machine and the board that shows it.
+//
+// Evidence records are data (story-data/evidence.js). Every tuning number (scan, intercept and decrypt times, the
+// trace thresholds at which evidence is lost, the cost of a wrong connect) is `CASE` in story-data/constants.js.
+//
+// Each record is in one state per run:
+//   hidden       not seen yet
+//   locked       seen (a scan or an intercept found it) but its content is sealed: read it with `dump`, or, when it
+//                is encrypted, with `decrypt` (which takes time while the trace keeps running)
+//   unlocked     readable (collected with cat, dump, intercept, a story beat or connect)
+//   decrypted    readable, after a decrypt
+//   compromised  lost: the trace got close before the player held it (see `compromiseAtTrace`); never comes back
+// A record the player already holds is never taken away.
+//
+// Phase 4.1/4.2: the board below still renders only the original nine records through a temporary filter
+// (LEGACY_VIEW). The new board (4.5) replaces it.
+const LEGACY_VIEW = RECORDS.filter((item) => ORIGINAL_IDS.includes(item.id));
+const READABLE = ['unlocked', 'decrypted'];
 
 const OUTCOME_LABELS = {
   'verified-handoff': 'VERIFIED HANDOFF',
@@ -22,12 +38,18 @@ const create = (tag, className, text) => {
   return element;
 };
 
-export function createCaseFile({ trigger, getTraceLeft = () => null }) {
+export function createCaseFile({ trigger, getTraceLeft = () => null, audio = null }) {
   const state = {
     startedAt: 0,
     route: '',
     boardUnlocked: false,
-    discoveries: new Set(),
+    items: new Map(), // record id -> state (anything not in the map is hidden)
+    discoveries: new Set(), // the readable ids (derived from `items`; kept for the board and for callers)
+    scans: 0,
+    intercepts: 0,
+    job: null, // the decrypt in progress: { id, seconds, lost }
+    connected: new Set(), // 'idA|idB' pairs the player has connected
+    scrambled: new Map(), // id -> the corrupted text of a lost record (made once, so it does not flicker)
     decisions: [],
     events: [],
     hintsUsed: 0,
@@ -49,7 +71,13 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
     if (seconds === null || !Number.isFinite(seconds)) return 'NOT TRACKED';
     return formatClock(seconds);
   };
-  const visibleEvidence = () => EVIDENCE.filter((item) => !item.route || item.route === state.route);
+  const recordOf = (id) => RECORDS.find((item) => item.id === id) ?? null;
+  const inRoute = (item) => !item.route || item.route === state.route;
+  const stateOf = (id) => state.items.get(id) ?? 'hidden';
+  const isReadable = (id) => READABLE.includes(stateOf(id));
+  const play = (cue) => audio?.play(cue);
+  // The temporary board (see LEGACY_VIEW above) lists the original nine records only.
+  const visibleEvidence = () => LEGACY_VIEW.filter(inRoute);
   const discoveredEvidence = () => visibleEvidence().filter((item) => state.discoveries.has(item.id));
 
   function recordEvent(kind, title, detail = '') {
@@ -68,7 +96,13 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
     state.startedAt = performance.now();
     state.route = route;
     state.boardUnlocked = false;
+    state.items = new Map();
     state.discoveries = new Set();
+    state.scans = 0;
+    state.intercepts = 0;
+    state.job = null;
+    state.connected = new Set();
+    state.scrambled = new Map();
     state.decisions = [];
     state.events = [];
     state.hintsUsed = 0;
@@ -85,17 +119,189 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
     updateTrigger();
   }
 
-  function discover(id, detail = '') {
-    const item = EVIDENCE.find((entry) => entry.id === id);
-    if (!item || (item.route && item.route !== state.route) || state.discoveries.has(id)) return;
-    state.discoveries.add(id);
-    if (!state.boardUnlocked) {
+  // ---- the state machine (see the header for the states) -----------------------------------------------------
+
+  function setState(item, next) {
+    if (next === 'hidden') state.items.delete(item.id);
+    else state.items.set(item.id, next);
+    if (READABLE.includes(next)) state.discoveries.add(item.id);
+    else state.discoveries.delete(item.id);
+    if (!state.boardUnlocked && next !== 'hidden') {
       state.boardUnlocked = true;
       trigger.classList.remove('case-trigger--revealed');
       void trigger.offsetWidth;
       trigger.classList.add('case-trigger--revealed');
     }
+  }
+
+  /** Makes a record readable: `cat`, a story beat or the easter egg. Returns true when it was new. */
+  function discover(id, detail = '') {
+    const item = recordOf(id);
+    if (!item || !inRoute(item) || !['cat', 'story', 'echo'].includes(item.found)) return false;
+    if (stateOf(id) !== 'hidden') return false;
+    setState(item, 'unlocked');
+    play('evidence-unlock');
     recordEvent('evidence', `EVIDENCE ADDED // ${item.title}`, detail || item.source);
+    return true;
+  }
+
+  /**
+   * The result of one finished `scan` (the command paces it): reveals, as `locked`, the scan records of this tier
+   * (and the earlier ones that are still hidden). Returns { tier, found: [record] }.
+   */
+  function scan() {
+    compromiseCheck();
+    const tier = ++state.scans;
+    const found = RECORDS.filter((item) => item.found === 'scan' && item.tier <= tier && inRoute(item)
+      && stateOf(item.id) === 'hidden' && (item.requires ?? []).every(isReadable));
+    found.forEach((item) => setState(item, 'locked'));
+    recordEvent('scan', `SCAN ${tier} COMPLETE`, found.length
+      ? `${found.length} new node${found.length === 1 ? '' : 's'}: ${found.map((item) => item.code).join(', ')}`
+      : 'No new nodes on this segment.');
+    return { tier, found };
+  }
+
+  /** The result of one finished `intercept`: captured packets are readable, an encrypted frame is `locked`. */
+  function intercept() {
+    compromiseCheck();
+    const tier = ++state.intercepts;
+    const found = RECORDS.filter((item) => item.found === 'intercept' && item.tier <= tier && inRoute(item)
+      && stateOf(item.id) === 'hidden' && (item.requires ?? []).every(isReadable));
+    found.forEach((item) => setState(item, item.encrypted ? 'locked' : 'unlocked'));
+    if (found.some((item) => !item.encrypted)) play('evidence-unlock');
+    recordEvent('intercept', `CAPTURE ${tier} COMPLETE`, found.length
+      ? `${found.length} item${found.length === 1 ? '' : 's'}: ${found.map((item) => item.code).join(', ')}`
+      : 'No packets of interest.');
+    return { tier, found };
+  }
+
+  /** `dump <file>`: reads a file a scan found. { ok, reason?, item? } with reason unknown | encrypted | already | compromised. */
+  function dump(path) {
+    compromiseCheck();
+    const file = String(path ?? '').trim().replace(/^\.?\/+/, '');
+    const item = RECORDS.find((entry) => entry.file === file && inRoute(entry));
+    if (!item || stateOf(item.id) === 'hidden') return { ok: false, reason: 'unknown' };
+    const current = stateOf(item.id);
+    if (current === 'compromised') return { ok: false, reason: 'compromised', item };
+    if (READABLE.includes(current)) return { ok: false, reason: 'already', item };
+    if (item.encrypted) return { ok: false, reason: 'encrypted', item };
+    setState(item, 'unlocked');
+    play('evidence-unlock');
+    recordEvent('evidence', `EVIDENCE ADDED // ${item.title}`, `dump ${item.file}`);
+    return { ok: true, item };
+  }
+
+  /** The files a scan has found so far (for `dump` without an argument). */
+  const knownFiles = () => RECORDS.filter((item) => item.file && inRoute(item) && stateOf(item.id) !== 'hidden')
+    .map((item) => ({ file: item.file, code: item.code, state: stateOf(item.id), encrypted: !!item.encrypted }));
+
+  /**
+   * The record a typed word names: its id, its short code (e11) or an unambiguous start of its id. Only records the
+   * player has already seen can be named (a hidden record is "no such node").
+   */
+  function find(token) {
+    const word = String(token ?? '').trim().toLowerCase();
+    if (!word) return null;
+    const seen = RECORDS.filter((item) => inRoute(item) && stateOf(item.id) !== 'hidden');
+    const exact = seen.find((item) => item.id === word || item.code === word);
+    if (exact) return exact;
+    const starts = seen.filter((item) => item.id.startsWith(word));
+    return starts.length === 1 ? starts[0] : null;
+  }
+
+  /**
+   * Begins a decrypt (the command paces it and calls finishDecrypt). One at a time.
+   * { ok, item, seconds } or { ok: false, reason: unknown | compromised | done | not-encrypted | busy, item? }.
+   */
+  function startDecrypt(token) {
+    compromiseCheck();
+    const item = find(token);
+    if (!item) return { ok: false, reason: 'unknown' };
+    const current = stateOf(item.id);
+    if (current === 'compromised') return { ok: false, reason: 'compromised', item };
+    if (current === 'decrypted') return { ok: false, reason: 'done', item };
+    if (!item.encrypted || current !== 'locked') return { ok: false, reason: 'not-encrypted', item };
+    if (state.job) return { ok: false, reason: 'busy', item: recordOf(state.job.id) };
+    state.job = { id: item.id, seconds: item.decryptSeconds, lost: false };
+    recordEvent('action', `DECRYPT STARTED // ${item.title}`, `${item.code} // ${item.decryptSeconds} s`);
+    return { ok: true, item, seconds: item.decryptSeconds };
+  }
+
+  /** The decrypt in progress: { id, lost } (lost: the trace destroyed the record meanwhile), or null. */
+  const jobStatus = () => (state.job ? { id: state.job.id, lost: state.job.lost } : null);
+
+  /** The decrypt ran its full time: the record becomes `decrypted`. Returns the record, or null when it was lost. */
+  function finishDecrypt() {
+    const job = state.job;
+    if (!job) return null;
+    state.job = null;
+    const item = recordOf(job.id);
+    if (job.lost || stateOf(job.id) !== 'locked') return null;
+    setState(item, 'decrypted');
+    play('evidence-decrypt');
+    recordEvent('evidence', `EVIDENCE DECRYPTED // ${item.title}`, item.source);
+    return item;
+  }
+
+  /** The decrypt stopped before its time (the trace ended, or the record was lost). */
+  function cancelDecrypt() {
+    if (!state.job) return;
+    const item = recordOf(state.job.id);
+    state.job = null;
+    recordEvent('action', `DECRYPT STOPPED // ${item.title}`, 'The job did not finish.');
+  }
+
+  /**
+   * Connects two readable records. { ok, intel, a, b } reveals an INTEL record; otherwise { ok: false, reason: unknown |
+   * same | compromised | locked | none | already }. `none` (no relation) is the one the command charges trace time for.
+   */
+  function connect(tokenA, tokenB) {
+    compromiseCheck();
+    const a = find(tokenA);
+    const b = find(tokenB);
+    if (!a || !b) return { ok: false, reason: 'unknown' };
+    if (a.id === b.id) return { ok: false, reason: 'same' };
+    for (const item of [a, b]) {
+      if (stateOf(item.id) === 'compromised') return { ok: false, reason: 'compromised', item };
+      if (!isReadable(item.id)) return { ok: false, reason: 'locked', item };
+    }
+    const intel = RECORDS.find((item) => item.type === 'INTEL' && inRoute(item)
+      && item.connects.some(([x, y]) => (x === a.id && y === b.id) || (x === b.id && y === a.id)));
+    if (!intel) return { ok: false, reason: 'none', a, b };
+    if (isReadable(intel.id)) return { ok: false, reason: 'already', intel, a, b };
+    state.connected.add([a.id, b.id].sort().join('|'));
+    setState(intel, 'unlocked');
+    play('relay-connect');
+    recordEvent('intel', `INTEL // ${intel.title}`, `${a.code} + ${b.code}`);
+    return { ok: true, intel, a, b };
+  }
+
+  /**
+   * Evidence the player does not hold yet (hidden or locked) is lost when the trace has `compromiseAtTrace` seconds
+   * left. Lost records become `compromised` for good. Called every trace second and before every evidence command.
+   * Returns the records lost now.
+   */
+  function compromiseCheck(secsLeft = getTraceLeft()) {
+    if (!state.startedAt || !Number.isFinite(secsLeft)) return [];
+    const lost = RECORDS.filter((item) => item.compromiseAtTrace !== undefined && inRoute(item)
+      && secsLeft <= item.compromiseAtTrace && ['hidden', 'locked'].includes(stateOf(item.id)));
+    for (const item of lost) {
+      setState(item, 'compromised');
+      state.scrambled.set(item.id, {
+        title: scrambleText(item.title, { intensity: 0.45 }),
+        summary: scrambleText(item.summary, { intensity: 0.4 }),
+        detail: scrambleText(item.detail, { intensity: 0.4 }),
+      });
+      if (state.job?.id === item.id) state.job.lost = true;
+      recordEvent('alert', `EVIDENCE LOST // ${state.scrambled.get(item.id).title}`, 'The trace overwrote it before it could be read.');
+    }
+    if (lost.length) play('breach-alert');
+    return lost;
+  }
+
+  /** Called once per trace second by the level shell (the one timer; the case file never starts its own). */
+  function tick(secsLeft) {
+    compromiseCheck(secsLeft);
   }
 
   function decide(id, title, detail) {
@@ -433,7 +639,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
   }
 
   function renderSelectedEvidence() {
-    const item = EVIDENCE.find((entry) => entry.id === state.selected) || visibleEvidence()[0];
+    const item = LEGACY_VIEW.find((entry) => entry.id === state.selected) || visibleEvidence()[0];
     if (!item) return create('div', 'case-analysis');
     const found = state.discoveries.has(item.id);
     const analysis = create('article', `case-analysis${found ? ' verified' : ' sealed'}`);
@@ -583,6 +789,18 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
     inspectGhostScript,
     verifyRelay,
     isolateWatcher,
+    scan,
+    intercept,
+    dump,
+    knownFiles,
+    find,
+    startDecrypt,
+    jobStatus,
+    finishDecrypt,
+    cancelDecrypt,
+    connect,
+    compromiseCheck,
+    tick,
     decide,
     setOutcome,
     setFailureOutcome,
@@ -591,6 +809,11 @@ export function createCaseFile({ trigger, getTraceLeft = () => null }) {
     snapshot: () => ({
       route: state.route,
       discoveries: [...state.discoveries],
+      evidence: Object.fromEntries(state.items),
+      scans: state.scans,
+      intercepts: state.intercepts,
+      connected: [...state.connected],
+      job: state.job ? { ...state.job } : null,
       decisions: [...state.decisions],
       hintsUsed: state.hintsUsed,
       failedUnlocks: state.failedUnlocks,

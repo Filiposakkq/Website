@@ -274,6 +274,9 @@ export function createLevel01(ctx) {
       play.over = 'TRACE COMPLETE';
       abortCommand();
     };
+    // The case file loses evidence the player has not collected when the trace gets close (once per trace second:
+    // the case file starts no timer of its own).
+    trace.onTick = (secs) => caseFile.tick(secs);
     // The trace sound (tick, warn, critical) is attached where the trace is created (story.js, trace-sound.js).
 
     while (!play.solved && !play.over) {
@@ -282,12 +285,14 @@ export function createLevel01(ctx) {
       if (play.over) break;
       if (raw === null) {
         trace.onEnd = null;
+        trace.onTick = null;
         return false;
       }
       await registry.dispatch(raw, env, line);
     }
 
     trace.onEnd = null;
+    trace.onTick = null;
     if (play.over) {
       await gameOver(trace, play.over);
       return false;

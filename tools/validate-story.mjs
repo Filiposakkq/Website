@@ -467,5 +467,117 @@ if (story) {
   expect(ids.size === data.EVIDENCE.length && data.ORIGINAL_IDS.every((id) => ids.has(id)), 'the original nine records are still there');
 }
 
+// ---- the evidence state machine of the case file (phase 4.2), without a DOM
+{
+  console.log('\ncase file state machine');
+  const { createCaseFile } = await import(js('casefile.js'));
+  const { CASE: CASEQ } = await import(js('story-data/constants.js'));
+  const cues = [];
+  let secs = 120;
+  const trigger = {
+    hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
+  };
+  const make = (route) => {
+    const file = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => cues.push(cue) } });
+    file.start(route);
+    file.chooseTrust(route);
+    secs = 120;
+    cues.length = 0;
+    return file;
+  };
+  const codes = (list) => list.map((item) => item.code).join(',');
+
+  {
+    const file = make('unknown');
+    expect(file.discover('lock-header') === true && file.discover('lock-header') === false, 'discover returns true once, then false');
+    expect(trigger.hidden === false, 'the first evidence reveals the CASE FILE trigger');
+    expect(file.discover('watcher-log') === false, 'the other route\'s record cannot be discovered');
+    expect(file.discover('net-beacon') === false && file.discover('srv-ledger') === false, 'a plain discover cannot open intercept or scan records');
+    expect(file.snapshot().discoveries.join() === 'lock-header' && cues.join() === 'evidence-unlock', 'a discovery is readable and plays evidence-unlock once');
+
+    const first = file.scan();
+    expect(first.tier === 1 && codes(first.found) === 'e12,e13', `scan 1 reveals the relay files (${codes(first.found)})`);
+    expect(file.snapshot().evidence['srv-handshake'] === 'locked' && file.snapshot().evidence['srv-ledger'] === 'locked' && !('ram-residue' in file.snapshot().evidence), 'scan 1 leaves them locked and the deep record hidden');
+    const second = file.scan();
+    expect(codes(second.found) === 'e14' && file.scan().found.length === 0, 'scan 2 (deep) reveals the volatile record, scan 3 finds nothing');
+    expect(file.find('e13')?.id === 'srv-ledger' && file.find('SRV-LEDGER')?.code === 'e13' && file.find('ram-res')?.id === 'ram-residue', 'find accepts a code, an id in any case and a unique prefix');
+    expect(file.find('net-beacon') === null && file.find('e10') === null, 'a record that is still hidden cannot be named');
+
+    expect(codes(file.intercept().found) === 'e10' && file.snapshot().evidence['net-beacon'] === 'unlocked', 'intercept 1 captures the beacon (readable)');
+    const frame = file.intercept();
+    expect(codes(frame.found) === 'e11' && file.snapshot().evidence['net-relay-chain'] === 'locked', 'intercept 2 captures the encrypted frame (locked)');
+    expect(file.intercept().found.length === 0, 'intercept 3 finds nothing');
+
+    expect(file.dump('relay/ledger.enc').reason === 'encrypted' && file.dump('nope.txt').reason === 'unknown', 'dump refuses an encrypted file and an unknown path');
+    const dumped = file.dump('relay/handshake.log');
+    expect(dumped.ok && file.snapshot().evidence['srv-handshake'] === 'unlocked' && file.dump('relay/handshake.log').reason === 'already', 'dump reads a plain scan file once');
+
+    expect(file.startDecrypt('e10').reason === 'not-encrypted', 'decrypt refuses a record that is not encrypted');
+    const job = file.startDecrypt('e11');
+    expect(job.ok && job.seconds === CASEQ.decryptSeconds.relayChain, `decrypt starts with the configured duration (${job.seconds} s)`);
+    expect(file.startDecrypt('e13').reason === 'busy' && file.jobStatus()?.id === 'net-relay-chain', 'only one decrypt runs at a time');
+    expect(file.finishDecrypt()?.id === 'net-relay-chain' && file.snapshot().evidence['net-relay-chain'] === 'decrypted' && file.jobStatus() === null, 'finishDecrypt makes the record decrypted and ends the job');
+    expect(file.startDecrypt('e11').reason === 'done', 'a decrypted record cannot be decrypted again');
+
+    expect(file.connect('e10', 'e11').ok && file.snapshot().evidence['intel-chain'] === 'unlocked', 'connect reveals the INTEL record of a related pair');
+    expect(file.connect('e11', 'e10').reason === 'already', 'connecting the same pair again says so');
+    expect(file.connect('e10', 'e12').reason === 'none', 'unrelated records have no relation');
+    expect(file.connect('e1', 'e2').reason === 'locked' || file.connect('e1', 'e2').reason === 'unknown', 'a pair with a record the player does not hold is refused');
+    file.discover('page-markup');
+    expect(file.connect('lock-header', 'page-markup').ok && file.connect('e1', 'e3').reason === 'unknown', 'connect accepts the original records (and refuses one that was not found yet)');
+    expect(file.connect('e13', 'e12').reason === 'locked', 'a locked record cannot be connected until it is opened');
+    expect(file.connect('route-note', 'ghost-script').reason === 'unknown', 'the other route\'s records cannot be named');
+    expect(cues.includes('relay-connect') && cues.includes('evidence-decrypt'), 'connect and decrypt play their cues');
+    file.start('unknown');
+    expect(Object.keys(file.snapshot().evidence).length === 0 && file.snapshot().scans === 0 && file.jobStatus() === null, 'start() resets the evidence, the counters and the job');
+  }
+
+  {
+    const file = make('unknown');
+    file.discover('route-note');
+    file.discover('ghost-script');
+    expect(file.connect('e5', 'e7').ok && file.snapshot().evidence['intel-cleanup-unknown'] === 'unlocked', 'the unknown route gets its own intel');
+    const watcher = make('watcher');
+    watcher.discover('watcher-log');
+    watcher.discover('ghost-script');
+    expect(watcher.connect('e6', 'e7').ok && watcher.snapshot().evidence['intel-cleanup-watcher'] === 'unlocked' && watcher.find('route-note') === null, 'the watcher route gets its own intel and cannot see the other route\'s');
+  }
+
+  {
+    // Evidence the player does not hold yet is lost at its threshold; evidence they hold never is.
+    const file = make('unknown');
+    file.scan();
+    file.tick(CASEQ.compromiseAt.residue + 1);
+    expect(!('ram-residue' in file.snapshot().evidence), 'nothing is lost above the first threshold');
+    file.tick(CASEQ.compromiseAt.residue);
+    expect(file.snapshot().evidence['ram-residue'] === 'compromised' && cues.includes('breach-alert'), 'the volatile record is lost at its threshold (even though it was never seen) with a breach-alert');
+    expect(file.scan().found.length === 0 && file.dump('mem/trace-agent.bin').reason === 'compromised', 'a lost record is not revealed by a later scan and cannot be dumped');
+    file.intercept();
+    file.intercept();
+    secs = CASEQ.compromiseAt.ledger + 10;
+    const started = file.startDecrypt('e13');
+    expect(started.ok, 'a decrypt can start before the threshold');
+    file.tick(CASEQ.compromiseAt.relayChain);
+    expect(file.snapshot().evidence['net-relay-chain'] === 'compromised', 'the locked relay frame is lost at its threshold');
+    file.tick(CASEQ.compromiseAt.ledger);
+    expect(file.jobStatus()?.lost === true && file.finishDecrypt() === null && file.snapshot().evidence['srv-ledger'] === 'compromised', 'a decrypt of a record that is lost meanwhile fails and the record is compromised');
+    expect(file.startDecrypt('e13').reason === 'compromised' && file.connect('e13', 'e12').reason === 'compromised' || file.connect('e13', 'e12').reason === 'locked', 'a lost record cannot be decrypted or connected');
+
+    const keep = make('unknown');
+    keep.scan();
+    secs = 100;
+    keep.startDecrypt('e13');
+    expect(keep.finishDecrypt()?.id === 'srv-ledger', 'a record decrypted in time is kept');
+    keep.tick(1);
+    expect(keep.snapshot().evidence['srv-ledger'] === 'decrypted', 'a record the player holds is never taken away');
+    expect(keep.compromiseCheck(Number.NaN).length === 0 && keep.compromiseCheck(null).length === 0, 'compromiseCheck ignores a missing trace');
+    // The original puzzle records are never fragile: a tick at 1 s changes none of them.
+    const orig = make('unknown');
+    ['lock-header', 'page-markup', 'page-style', 'page-script'].forEach((id) => orig.discover(id));
+    orig.tick(1);
+    expect(['lock-header', 'page-markup', 'page-style', 'page-script'].every((id) => orig.snapshot().evidence[id] === 'unlocked'), 'the key layer records stay readable at 1 s');
+  }
+}
+
 console.log(failures ? `\n${failures} problem(s)` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

@@ -134,8 +134,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 4.1 EVIDENCE schema migration + validator | todo | | |
-| 4.2 State machine + casefile methods | todo | | |
+| 4.1 EVIDENCE schema migration + validator | done | `864dd72` | records in `story-data/evidence.js` (19: original 9, 5 network, 5 INTEL), `CASE` constants, evidence validator with 17 mutations; smoke 21/21 on a snapshot (**last green commit: `864dd72`**) |
+| 4.2 State machine + casefile methods | done | (next push) | hidden/locked/unlocked/decrypted/compromised, `scan intercept dump find startDecrypt finishDecrypt connect compromiseCheck tick`; 45 Node checks in `validate-story`; `trace.onTick` feeds the loss rule; board still the legacy view until 4.5 |
 | 4.3 Commands scan / intercept / dump / decrypt / connect | todo | | |
 | 4.4 Topology module (extra 8) + trace --status | todo | | |
 | 4.5 Board layout + native dialog + mobile + a11y + fonts | todo | | |
@@ -153,3 +153,18 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
 - Step in progress: 4.1 (schema migration + validator). Nothing half-edited.
 - Next command: `node tools/validate-story.mjs` after the schema move, then `node --check` on the changed files.
 - The old "Current state (baseline `8ea680b`)" section above is stale (casefile.js is 707 lines, `level01.js` registers commands through `commands.js`, the story is data). Re-derived state: `docs/state/story.md` and the code.
+
+### Decisions made in phase 4 (2026-10-15)
+
+Defaults chosen without the owner (nobody was there to ask). Change them by editing the data, not the code.
+
+| Decision | Why |
+|---|---|
+| **The evidence records are data** in `js/story-data/evidence.js`; **every tuning number** (scan, intercept and decrypt times, loss thresholds, hop count, cost of a wrong `connect`) is `CASE` in `js/story-data/constants.js`, not "at the top of `casefile.js`" as this phase file said | Since phase 3 the repo keeps text and numbers in `story-data/`; `validate-story` imports both in Node. `casefile.js` points there in its header |
+| `decrypt` **blocks the shell** (progress line, no other command while it runs) and the trace keeps running; it stops cleanly when the trace expires; it uses real time (`session.sleep`), not the reduced-motion `wait`, so the cost is the same for everybody | Background jobs need a job id, `abort` handling and concurrency with the read loop; blocking keeps the loop single-threaded and phone friendly. The tension comes from the HUD ticking |
+| **`COMPROMISED` is both a type and a state.** The type marks volatile records (`ram-residue`); any record may have `compromiseAtTrace`. A record that the player does **not hold yet** (hidden or locked) is **lost for good** when the trace reaches the threshold; a record they already read is never taken away. No repair command | Stakes without ever removing information the player has; the plan allowed "simply lost" |
+| Evidence can have a **short code** (`e1`..`e19`); every command accepts the code, the id, or a unique id prefix. Only records already seen can be named | Typing `decrypt e11` on a phone is easy; naming a hidden record would leak it |
+| **The key layers are untouched.** The three original page records and the original nine are never encrypted and never fragile (validator-enforced); INTEL only points toward the page (`source map`), never prints a layer; the board is optional for the win | CLAUDE.md "Do not break" |
+| `scan` has two tiers (local network, then a deep scan); `intercept` has two tiers; later runs find nothing and are instant. A `connect` with no relation costs `CASE.connectMissCost` trace seconds | The plan's "limited re-scans or increasing cost" knobs; the penalty stops brute-forcing pairs |
+| The other route's records are shown as **sealed stubs** ("SEALED // OTHER BRANCH"), not hidden completely | The plan: "hidden or suspiciously incomplete"; the story bible already promised this label |
+| The case file starts **no timer**: the level shell calls `caseFile.tick(secs)` from `trace.onTick` | Phase 4 rule "do not start a second timer"; the session owns the trace interval |

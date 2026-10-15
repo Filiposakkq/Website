@@ -78,7 +78,7 @@ Notes from the audit:
 - `typing` and `ghost` have no caller today. They stay (names are never removed).
 - Before phase 2.5 `trace-tick` was not called once per second: `level01.js` played it once at 60 s and 30 s and `trace-critical` once at 10 s. Phase 2.5 moved this to `trace-sound.js` (every second, reactive).
 - `tty.js` fires the `onKeyPress` hook only for a single character, Backspace or Enter, never for `event.repeat` and never with Ctrl, Cmd or Alt held (shortcuts; added in phase 2 after the review), so modifier, navigation and shortcut keys are silent.
-- Nothing in `casefile.js`, `trace.js`, `tty.js` or `developer-menu.js` calls the audio controller directly.
+- Nothing in `trace.js`, `tty.js` or `developer-menu.js` calls the audio controller directly. Since phase 4.2 `casefile.js` does (it receives `audio` and plays the evidence state-change cues).
 
 ## New cues added in phase 2 (registered, wired later unless noted)
 
@@ -95,8 +95,12 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `trust-choice` | story | **phase 3.5, wired**: `story-data/routes.js`, right after the player picks |
 | `trace-start` | trace | **phase 3.5, wired**: `story.js` engine host, when the trace turns `lethal` (after the trust choice) |
 | `trace-warn` | trace | **phase 2, wired**: `trace-sound.js` when the trace crosses 120 s |
-| `evidence-unlock`, `evidence-decrypt`, `board-open`, `node-select` | evidence | phase 4 |
-| `decrypt-progress` (12 per second max), `packet-intercept`, `relay-connect`, `breach-alert` | hacking | phase 4 |
+| `evidence-unlock` | evidence | **phase 4.2, wired**: `casefile.js` when a record becomes readable (`discover`, `dump`, an `intercept` capture) |
+| `evidence-decrypt` | evidence | **phase 4.2, wired**: `casefile.js` `finishDecrypt` |
+| `board-open`, `node-select` | evidence | phase 4.5 |
+| `relay-connect` | hacking | **phase 4.2, wired**: `casefile.js` `connect` (a pair revealed INTEL) |
+| `breach-alert` | hacking | **phase 4.2, wired**: `casefile.js` `compromiseCheck` (evidence lost to the trace) |
+| `decrypt-progress` (12 per second max), `packet-intercept` | hacking | phase 4.3 (the `decrypt`, `scan` and `intercept` commands) |
 | `traced-alert`, `system-takeover`, `session-kill` | game over | phase 6 |
 
 Aliases (different name, same sound; `audio.list()` marks them `kind: 'alias'`): `trace-expire` is `trace-expired`, `identity-reveal` is `identity`.
