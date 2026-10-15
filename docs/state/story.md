@@ -1,6 +1,6 @@
 # Story, level and evidence code
 
-Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15; the case file rows are being updated by phase 4 (branch `overhaul/phase-4-evidence`, 4.1 done). The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
+Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15; updated by phase 4 (branch `overhaul/phase-4-evidence`, all rows done, in review; the case file, evidence data, hacking commands, topology and board rows describe that branch). The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
 
 | File | Role |
 |---|---|

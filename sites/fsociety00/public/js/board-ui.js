@@ -18,7 +18,7 @@ import { formatClock, pad2 } from './util.js';
 import { createTopologyView } from './topology.js';
 
 const STATE_LABEL = {
-  hidden: 'UNOBSERVED', locked: 'LOCKED', unlocked: 'READ', decrypted: 'DECRYPTED', compromised: 'LOST',
+  hidden: 'UNOBSERVED', sealed: 'SEALED', locked: 'LOCKED', unlocked: 'READ', decrypted: 'DECRYPTED', compromised: 'LOST',
 };
 const READABLE = ['unlocked', 'decrypted'];
 const ANNOUNCED = ['evidence', 'intel', 'alert', 'scan', 'intercept', 'outcome'];
@@ -39,6 +39,8 @@ const button = (className, text, label) => {
   if (label) element.setAttribute('aria-label', label);
   return element;
 };
+/** A record the player can see something about (not an unobserved placeholder, not a sealed stub of the other branch). */
+const isKnown = (item) => item.state !== 'hidden' && item.state !== 'sealed';
 const clock = (secs) => (secs === null || !Number.isFinite(secs) ? 'NOT TRACKED' : formatClock(secs));
 
 export function createBoardUI({ trigger, audio, getView, connect, subscribe, isStarted }) {
@@ -92,7 +94,7 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
     heading.textContent = `EVIDENCE LIST ${pad2(view.readable)} / ${pad2(view.total)}`;
     const list = el('ul', 'case-list');
     // Known records first, the unobserved placeholders last.
-    const ordered = [...view.items].sort((a, b) => (a.state === 'hidden') - (b.state === 'hidden'));
+    const ordered = [...view.items].sort((a, b) => (!isKnown(a)) - (!isKnown(b)));
     ordered.forEach((item, index) => {
       const row = el('li');
       const entry = button(`case-row is-${item.state}${item.id === ui.selected ? ' is-selected' : ''}${item.atRisk ? ' is-risk' : ''}`);
@@ -100,11 +102,11 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
       entry.dataset.revealIndex = String(index);
       entry.style.setProperty('--i', String(index));
       if (item.id === ui.selected) entry.setAttribute('aria-current', 'true');
-      const known = item.state !== 'hidden';
+      const known = isKnown(item);
       entry.append(
         el('span', 'case-row-state', item.atRisk ? 'AT RISK' : STATE_LABEL[item.state]),
         el('span', 'case-row-code', known ? item.code : '--'),
-        el('span', 'case-row-title', known && item.title ? item.title : 'UNOBSERVED SIGNAL'),
+        el('span', 'case-row-title', known && item.title ? item.title : item.state === 'sealed' ? 'SEALED // OTHER BRANCH' : 'UNOBSERVED SIGNAL'),
         el('span', 'case-row-type', known ? item.type : '')
       );
       entry.addEventListener('click', () => {
@@ -128,11 +130,11 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
       detail.replaceChildren(el('p', 'case-empty', 'Select a node or a row to inspect it.'));
       return;
     }
-    const known = item.state !== 'hidden';
+    const known = isKnown(item);
     detail.className = `case-detail is-${item.state}`;
     const top = el('div', 'case-detail-top');
-    top.append(el('span', 'case-tag', known ? `${item.type} // ${item.group}` : 'UNOBSERVED'), el('span', 'case-tag case-tag-state', item.atRisk ? 'AT RISK' : STATE_LABEL[item.state]));
-    const parts = [top, el('h4', '', known && item.title ? item.title : 'Signal not yet observed')];
+    top.append(el('span', 'case-tag', known ? `${item.type} // ${item.group}` : item.state === 'sealed' ? 'SEALED // OTHER BRANCH' : 'UNOBSERVED'), el('span', 'case-tag case-tag-state', item.atRisk ? 'AT RISK' : STATE_LABEL[item.state]));
+    const parts = [top, el('h4', '', known && item.title ? item.title : item.state === 'sealed' ? 'Sealed signal' : 'Signal not yet observed')];
 
     if (item.state === 'compromised') {
       parts.push(el('p', 'case-warn', 'DATA CORRUPTED // lost to the trace'));
@@ -153,6 +155,8 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
       parts.push(el('p', 'case-copy', how));
       if (item.decrypting) parts.push(el('p', 'case-note', 'DECRYPT RUNNING // watch the terminal'));
       if (item.atRisk) parts.push(el('p', 'case-warn', 'The trace is about to overwrite this record. Open it now.'));
+    } else if (item.state === 'sealed') {
+      parts.push(el('p', 'case-copy', 'This signal belongs to the branch you did not take. It stays sealed on this run: its source answers only to the operator you did not trust.'));
     } else {
       parts.push(el('p', 'case-copy', 'This record is still outside the evidence chain. Find and inspect its source in the terminal.'));
       parts.push(el('p', 'case-summary', 'No conclusion drawn. Missing artifacts remain unknown, not false.'));
@@ -219,7 +223,7 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
     }));
     world.append(svg);
     placed.forEach((item, index) => {
-      const known = item.state !== 'hidden';
+      const known = isKnown(item);
       const node = button(`case-node is-${item.state}${item.id === ui.selected ? ' is-selected' : ''}${item.id === ui.connectFrom ? ' is-source' : ''}${item.atRisk ? ' is-risk' : ''}`);
       node.dataset.focusKey = `node-${item.id}`;
       node.dataset.revealIndex = String(index);
@@ -228,10 +232,10 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
       node.style.top = `${item.y}%`;
       node.setAttribute('aria-label', known
         ? `${item.code} ${item.title}, ${item.atRisk ? 'at risk, ' : ''}${STATE_LABEL[item.state].toLowerCase()}. Select to ${ui.connectFrom && ui.connectFrom !== item.id ? 'connect' : 'inspect'}.`
-        : 'Unobserved signal. Select to inspect.');
+        : item.state === 'sealed' ? 'Sealed signal of the other branch. Select to inspect.' : 'Unobserved signal. Select to inspect.');
       node.append(
         el('span', 'case-node-code', known ? item.code : '--'),
-        el('span', 'case-node-title', known && item.title ? item.title : 'UNOBSERVED'),
+        el('span', 'case-node-title', known && item.title ? item.title : item.state === 'sealed' ? 'SEALED' : 'UNOBSERVED'),
         el('span', 'case-node-state', item.atRisk ? 'AT RISK' : STATE_LABEL[item.state])
       );
       node.addEventListener('click', () => {
@@ -455,7 +459,7 @@ export function createBoardUI({ trigger, audio, getView, connect, subscribe, isS
     renderDetail();
     const item = byId(id);
     refs.reveal?.(item);
-    announce(item && item.state !== 'hidden' ? `${item.code} ${item.title}, ${STATE_LABEL[item.state].toLowerCase()}.` : 'Unobserved signal.');
+    announce(item && isKnown(item) ? `${item.code} ${item.title}, ${STATE_LABEL[item.state].toLowerCase()}.` : item?.state === 'sealed' ? 'Sealed signal of the other branch.' : 'Unobserved signal.');
   }
 
   function tryConnect(idA, idB) {

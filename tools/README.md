@@ -10,6 +10,7 @@ node tools/smoke.mjs                 # every scenario
 node tools/smoke.mjs --only=victory  # scenarios whose name contains "victory"
 node tools/smoke.mjs --list          # print scenario names
 node tools/smoke.mjs --serial        # run one scenario at a time (easier to read logs)
+node tools/smoke.mjs --jobs=8        # at most 8 scenarios at once (default 14; all 27 at once exhausted the audio device)
 ```
 
 Starts its own static server on a free port (serving `sites/fsociety00/public` on `127.0.0.1`,
@@ -115,6 +116,7 @@ as text on light hover fills (`#000`) show up as LOW and can be ignored.
 
 ## Known flakiness and cost (added 2026-10-13)
 
+- Phase 4 (27 scenarios): all at once, two scenarios failed with `AudioContext encountered an error from the audio device` and two real-time ones timed out in `reachTrustChoice`; the runner now caps the parallel scenarios (`--jobs`, default 14) and the full run then failed only `reduced: typing ticks are rate limited ...` (it also failed on baseline `main` in a parallel run and passes alone: its 30 instant keystrokes are spread over time under load).
 - In a **parallel** run two scenarios (`reduced: log role...` and `desktop: trust unknown -> victory`) once timed out (14/16); run alone (`--only=...` or `--serial`) they passed 16/16. If a full run shows 1-2 failures, rerun just those scenarios before concluding anything. Do not "fix" a timeout by deleting an assertion.
 - A full run takes minutes because the story runs in real time. On a limited usage budget: run `node --check` on changed files for wip commits, run the relevant `--only=` scenarios while developing, and the full suite when a sub-step is finished and before the handoff. Save the output to a file and show only the summary (`tail`).
 - The suite does not check that no `AudioContext` exists before the launch click, nor `body.quiet-motion` without the media query (phase 2 adds both).

@@ -51,6 +51,23 @@ Agents cannot hear. Use headphones first, then the phone speaker, and play boot,
 - [ ] No sound at all before the first click on the launch screen
 - [ ] New cues that nothing plays yet (boot-fail, trust-choice, traced-alert, system-takeover, ...) are listed in `docs/overhaul/audio-cues.md`; phase 7's sound preview panel will let you hear them
 
+## Phase 4 only: the evidence board and the hacking commands
+
+Play once on a phone and once on a desktop on the preview. Agents did not hear any sound and did not use a real touch screen or screen reader.
+
+- [ ] In the shell type `help`: `scan`, `intercept`, `dump`, `decrypt`, `connect`, `trace` are listed
+- [ ] `scan` and `intercept` run for a few seconds with a progress line and a sound, the clock keeps counting, and you can still solve the key afterwards
+- [ ] `decrypt e13` blocks the prompt for about 8 s; letting the trace run out during it ends the game cleanly and REBOOT works
+- [ ] `trace --status` shows a path with relays and a redacted target that fits the phone screen without wrapping
+- [ ] CASE FILE opens as a dialog; Escape and CLOSE close it and focus returns to the CASE FILE button
+- [ ] Desktop: four panes at once. Phone: four tabs (EVIDENCE, MAP, INTERCEPT, TRACE), big enough to tap, no sideways scrolling of the page
+- [ ] Map: drag, wheel or two-finger pinch zoom, FIT button, nodes tappable; selecting a row highlights the node and the other way round
+- [ ] CONNECT: select a readable record, press CONNECT TO ..., pick a second one: a good pair reveals an INTEL record, a bad pair costs 3 s of trace
+- [ ] Evidence you did not read yet turns `AT RISK` and then `LOST` (scrambled) as the trace runs down (try waiting after `scan` without decrypting)
+- [ ] The other trust route's signal shows as `SEALED // OTHER BRANCH`, not as text
+- [ ] The board text is readable on the phone (nothing below about 11 px) and the sounds (`board-open`, node select, packets, decrypt progress, breach alert) fit the scene: note which ones are too loud or annoying
+- [ ] Tuning feel: could a careful player finish and still use one decrypt; does a lazy player feel the pressure? Numbers are `CASE` in `js/story-data/constants.js`
+
 ## C. Report format
 
 For each problem: device and OS, browser and version, the steps, what you expected, what happened, screenshot or screen recording. Put it in the PR as a comment or give it to the Claude that fixes it with prompt 4 in `prompts.md`.

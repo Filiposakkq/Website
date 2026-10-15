@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // End-to-end smoke test for the fsociety00 game. See tools/README.md.
 //
-//   node tools/smoke.mjs [--only=<substring>] [--list] [--serial] [--headed]
+//   node tools/smoke.mjs [--only=<substring>] [--list] [--serial] [--jobs=<n>] [--headed]
 
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -430,7 +430,6 @@ for (const [label, contextOptions] of [['desktop', REDUCED], ['mobile', { ...MOB
         await page.locator('#caseTab-evidence').click();
         await page.waitForSelector('#casePane-evidence:not([hidden])');
       }
-      if (process.env.SMOKE_DEBUG) console.log(JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.case-row')].map((el) => { const r = el.getBoundingClientRect(); const c = getComputedStyle(el); return [el.textContent, Math.round(r.top), Math.round(r.height), c.opacity, c.color, c.display]; }))));
       if (process.env.SMOKE_SHOTS) await page.screenshot({ path: path.join(process.env.SMOKE_SHOTS, `board-${label}.png`) });
       // Connect on the board: handshake log + decrypted ledger -> intel (rows on the phone, nodes on a wide screen).
       await page.locator('.case-action').click();
@@ -452,6 +451,87 @@ for (const [label, contextOptions] of [['desktop', REDUCED], ['mobile', { ...MOB
     },
   });
 }
+
+// Phase 4.6: evidence the trace overwrites is shown corrupted; the branch not taken stays as a sealed stub.
+scenarios.push({
+  name: 'reduced: board shows lost evidence and the sealed branch',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'new nodes: 2', 30000);
+    await sendCommand(page, 'hint'); // -30 s: the volatile memory record (threshold 90 s) is overwritten
+    await waitOutput(page, 'markup, styles, and script.', 30000);
+    await sleep(1500);
+    await page.locator('#caseTrigger').click();
+    await page.waitForSelector('dialog.case-dialog[open]');
+    const rows = await page.evaluate(() => [...document.querySelectorAll('.case-row')].map((el) => el.textContent));
+    if (!rows.some((row) => row.includes('LOST'))) throw new Error(`a lost record should be listed: ${JSON.stringify(rows)}`);
+    if (!rows.some((row) => row.includes('SEALED // OTHER BRANCH'))) throw new Error(`the other branch should show as a sealed stub: ${JSON.stringify(rows)}`);
+    await page.locator('.case-row', { hasText: 'LOST' }).first().click();
+    const detail = await page.evaluate(() => ({
+      text: document.querySelector('.case-detail').textContent,
+      hiddenCopy: document.querySelector('.case-lost')?.getAttribute('aria-hidden'),
+      spoken: document.querySelector('.case-detail .sr-only')?.textContent,
+    }));
+    if (!detail.text.includes('DATA CORRUPTED') || detail.hiddenCopy !== 'true' || !detail.spoken) throw new Error(`a lost record must say so and hide its scrambled text from screen readers: ${JSON.stringify(detail)}`);
+    await page.locator('.case-row', { hasText: 'SEALED' }).first().click();
+    const sealed = await page.evaluate(() => document.querySelector('.case-detail').textContent);
+    if (!sealed.includes('branch you did not take')) throw new Error(`the sealed stub should explain itself: ${sealed}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+  },
+});
+
+// Phase 4.7: the board can be used with the keyboard alone, and its accessibility tree names the dialog, list and map.
+scenarios.push({
+  name: 'reduced: board keyboard-only run and accessibility tree',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await buildBoardEvidence(page);
+    await sleep(300);
+    await page.locator('#caseTrigger').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    const focusKind = () => page.evaluate(() => {
+      const el = document.activeElement;
+      return el?.className?.split?.(' ')[0] || el?.tagName;
+    });
+    // Tab from the close button to a list row, select the second row with Enter.
+    for (let i = 0; i < 6 && (await focusKind()) !== 'case-row'; i++) await page.keyboard.press('Tab');
+    if ((await focusKind()) !== 'case-row') throw new Error(`Tab should reach the evidence list, is on ${await focusKind()}`);
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    const selected = await page.evaluate(() => document.querySelector('.case-row[aria-current="true"]')?.textContent ?? '');
+    if (!selected.includes('e13')) throw new Error(`Enter on the second row should select e13, selected: "${selected}"`);
+    const synced = await page.evaluate(() => document.querySelector('.case-node.is-selected')?.textContent ?? '');
+    if (!synced.includes('e13')) throw new Error(`the map node should follow the list selection: "${synced}"`);
+    // The map: arrows pan, + and - zoom, Home fits.
+    await page.locator('.case-network').focus();
+    const transform = () => page.evaluate(() => document.querySelector('.case-map-world').style.transform);
+    const before = await transform();
+    await page.keyboard.press('+');
+    const zoomed = await transform();
+    if (zoomed === before) throw new Error('+ should zoom the map');
+    await page.keyboard.press('ArrowLeft');
+    if ((await transform()) === zoomed) throw new Error('ArrowLeft should pan the zoomed map');
+    await page.keyboard.press('Home');
+    if ((await transform()) !== before) throw new Error('Home should fit the map again');
+    // The accessibility tree (when this Playwright has ariaSnapshot).
+    const dialog = page.locator('dialog.case-dialog');
+    if (typeof dialog.ariaSnapshot === 'function') {
+      const tree = await dialog.ariaSnapshot();
+      for (const needle of ['dialog', 'heading "CASE FILE // INTELLIGENCE DASHBOARD"', 'button "Close the evidence board"', 'list', 'group "Evidence map']) {
+        if (!tree.includes(needle)) throw new Error(`the accessibility tree misses ${needle}:\n${tree.slice(0, 600)}`);
+      }
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    const focus = await page.evaluate(() => document.activeElement?.id);
+    if (focus !== 'caseTrigger') throw new Error(`focus should return to the CASE FILE button, is on ${focus}`);
+  },
+});
 
 // The third hint reveals the console part. It used to throw (revealSourcePart was never passed in).
 scenarios.push({
@@ -1027,7 +1107,17 @@ if (flag('serial')) {
   results = [];
   for (const scenario of selected) results.push(await runScenario(browser, server, scenario));
 } else {
-  results = await Promise.all(selected.map((scenario) => runScenario(browser, server, scenario)));
+  // A pool of at most `--jobs` (default 14) scenarios at a time: with 27 in parallel the audio device and the CPU
+  // run out (AudioContext errors, real-time scenarios past their timeouts), which is load, not a regression.
+  const jobs = Math.max(1, Number(option('jobs')) || 14);
+  results = new Array(selected.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(jobs, selected.length) }, async () => {
+    while (next < selected.length) {
+      const index = next++;
+      results[index] = await runScenario(browser, server, selected[index]);
+    }
+  }));
 }
 await browser.close();
 server.close();

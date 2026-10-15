@@ -577,6 +577,36 @@ if (story) {
     orig.tick(1);
     expect(['lock-header', 'page-markup', 'page-style', 'page-script'].every((id) => orig.snapshot().evidence[id] === 'unlocked'), 'the key layer records stay readable at 1 s');
   }
+
+  {
+    // What the board is given (phase 4.5/4.6): getView() is plain data and never carries text the player may not read.
+    for (const [route, other] of [['unknown', 'watcher-log'], ['watcher', 'route-note']]) {
+      const file = make(route);
+      file.scan();
+      secs = CASEQ.compromiseAt.ledger + 10;
+      const view = file.getView();
+      const stub = view.items.find((item) => item.id === other);
+      expect(stub?.state === 'sealed' && !stub.title && !stub.summary && !stub.detail && stub.code === '--', `route ${route}: the other branch shows as a sealed stub without text`);
+      expect(!view.items.some((item) => item.type === 'INTEL' && item.state === 'sealed'), `route ${route}: INTEL of the other branch is not shown at all`);
+      expect(view.total === view.items.filter((item) => item.state !== 'sealed').length, `route ${route}: sealed stubs are not counted`);
+      const locked = view.items.find((item) => item.id === 'srv-ledger');
+      expect(locked.state === 'locked' && !locked.summary && !locked.detail && !locked.source && locked.title, 'a locked record shows its title and no content');
+      const hidden = view.items.find((item) => item.id === 'page-markup');
+      expect(hidden.state === 'hidden' && !hidden.title && !hidden.detail, 'a story record that was not found shows as an unobserved placeholder');
+      expect(!view.items.some((item) => item.id === 'net-beacon' || item.id === 'intel-layers'), 'scan and intel records appear only once seen');
+    }
+    const file = make('unknown');
+    file.scan();
+    secs = CASEQ.compromiseAt.ledger + 25;
+    expect(file.getView().items.find((item) => item.id === 'srv-ledger').atRisk === false, 'a record far from its threshold is not at risk');
+    secs = CASEQ.compromiseAt.ledger + 15;
+    expect(file.getView().items.find((item) => item.id === 'srv-ledger').atRisk === true, 'a locked record within 20 s of its threshold is at risk');
+    file.tick(CASEQ.compromiseAt.ledger);
+    const lost = file.getView().items.find((item) => item.id === 'srv-ledger');
+    const real = (await import(js('story-data/evidence.js'))).EVIDENCE.find((item) => item.id === 'srv-ledger');
+    expect(lost.state === 'compromised' && lost.atRisk === false && lost.detail && lost.detail !== real.detail && lost.title !== real.title, 'a lost record is shown scrambled, not as its real text');
+    expect(lost.source === '', 'a lost record shows no provenance');
+  }
 }
 
 // ---- the hacking commands (phase 4.3), driven with a fake clock and the real registry and case file

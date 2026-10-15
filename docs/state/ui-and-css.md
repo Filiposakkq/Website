@@ -1,6 +1,6 @@
 # UI, CSS and the developer panel
 
-Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15.
+Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15; the board rows updated by phase 4.5 (branch `overhaul/phase-4-evidence`).
 
 | File | Role |
 |---|---|

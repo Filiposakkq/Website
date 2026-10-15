@@ -445,6 +445,14 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     const items = RECORDS.filter((item) => inRoute(item)
       && (stateOf(item.id) !== 'hidden' || ['cat', 'story', 'echo'].includes(item.found)))
       .map((item) => itemView(item, traceLeft));
+    // The ghost trail: the signals of the branch the player did not take stay on the board as sealed stubs (no text, no
+    // lines of their own), so the map looks incomplete in a way that invites a second run. INTEL has no position: skipped.
+    if (ROUTE_LABELS[state.route]) {
+      RECORDS.filter((item) => item.route && item.route !== state.route && Number.isFinite(item.x)).forEach((item) => items.push({
+        id: item.id, code: '--', type: item.type, group: '', state: 'sealed', encrypted: false, decryptSeconds: 0, file: '',
+        x: item.x, y: item.y, links: [], title: '', source: '', summary: '', detail: '', decrypting: false, atRisk: false,
+      }));
+    }
     return {
       route: state.route,
       routeLabel: ROUTE_LABELS[state.route] ?? '',
@@ -455,7 +463,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
       elapsed: elapsed(),
       traceLeft,
       readable: items.filter((item) => READABLE.includes(item.state)).length,
-      total: items.length,
+      total: items.filter((item) => item.state !== 'sealed').length,
       items,
       connected: [...state.connected].map((pair) => pair.split('|')),
       packets: INTERCEPT_PASSES.slice(0, state.intercepts).map((pass) => ({ title: pass.title, rows: pass.rows })),
