@@ -71,7 +71,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 | 1 | Foundation & bug fixes | merged | — | `overhaul/phase-1-foundation` | PR #4, squash commit `841cad0` | all rows done, smoke 16/16, owner tested the preview on phone and PC; review findings carried over, see "Known issues carried over" |
 | 2 | Audio | merged | 1 | `overhaul/phase-02-audio` | PR #7, squash commit `b0ea8ee` | all rows done, smoke 20/20, audio-lint 0 problems; **not yet listened to**: owner checklist "Phase 2 only" |
 | 3 | Story & boot | merged | 1 | `overhaul/phase-3-story` | PR #10, squash commit `1bbc40d` | all rows 3.1–3.10 done, smoke 21/21, validate-story ok; **not heard/seen**: new boot sounds and length (~38 s est.), phone layout of the new boot; see the handoff report |
-| 4 | Evidence board | in review | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | PR (see GitHub; not merged by Claude) | rows 4.1 to 4.7 done; handoff report in the phase file; owner test on the preview pending (touch, sounds, screen reader, tuning feel) |
+| 4 | Evidence board | in review | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | PR #12 (not merged by Claude) | rows 4.1 to 4.7 done; handoff report in the phase file; owner test on the preview pending (touch, sounds, screen reader, tuning feel) |
 | 5 | Animations | todo | 1 (3 recommended) | `overhaul/phase-5-animations` | | |
 | 6 | TRACED game over | todo | 1, 2, 3, 5 | `overhaul/phase-6-traced` | | |
 | 7 | Developer panel | todo | 1; best after 2–6 | `overhaul/phase-7-devpanel` | | |
