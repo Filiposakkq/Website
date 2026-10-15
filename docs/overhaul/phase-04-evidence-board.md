@@ -145,3 +145,11 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
+
+### Resume point (session 1, started 2026-10-15)
+
+- Branch `overhaul/phase-4-evidence`, created from `main` `872407f` (phase 3 merged, PR #10/#11). Head at the time of writing: `872407f` plus this docs commit.
+- `last green commit`: none yet. Baseline on unmodified `main` (`872407f`): `validate-story` ok, `check-fonts.sh --all` fails with the 26 known `.case-*`/`.developer-*` declarations. Full smoke baseline: 20 of 21 passed, `reduced: typing ticks are rate limited ...` failed in the parallel run (`tools/README.md` lists two scenarios that were flaky once under parallel load; re-run alone before treating it as a regression, result in the log below).
+- Step in progress: 4.1 (schema migration + validator). Nothing half-edited.
+- Next command: `node tools/validate-story.mjs` after the schema move, then `node --check` on the changed files.
+- The old "Current state (baseline `8ea680b`)" section above is stale (casefile.js is 707 lines, `level01.js` registers commands through `commands.js`, the story is data). Re-derived state: `docs/state/story.md` and the code.
