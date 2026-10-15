@@ -179,6 +179,13 @@ async function winGame(page) {
   await ghost.waitFor({ timeout: 90000 });
   await ghost.click();
   await waitOutput(page, 'this is where the signal ends.', 240000);
+  // The third voice came back once when sdb9 opened, in order, on the open line (phase 4b).
+  const back = await page.evaluate(() => {
+    const texts = [...document.getElementById('output').children].map((row) => row.textContent.trim());
+    const at = (needle) => texts.findIndex((text) => text.includes(needle));
+    return [at('close it.'), at('<???> read it before you run it.'), at('this channel is not on my list.'), at('<???> it is not on any list.'), at('that was not me.'), at('this is where the signal ends.')];
+  });
+  if (back.some((index) => index < 0) || back.some((index, i) => i > 0 && index <= back[i - 1])) throw new Error(`the third voice should return in order when sdb9 opens: ${JSON.stringify(back)}`);
   // The ghost script closed the trace request (phase 3.5): the HUD says so and the clock is stopped.
   const closed = await page.evaluate(() => document.querySelector('#hud .lbl')?.textContent);
   if (closed !== 'TRACE CLOSED') throw new Error(`after ghost.sh the HUD should read TRACE CLOSED, reads ${closed}`);

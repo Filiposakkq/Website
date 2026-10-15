@@ -280,16 +280,25 @@ if (story) {
 
   const lines = flat.map((node, index) => ({ node, index })).filter(({ node }) => node.type === 'say' && node.who === 'mystery');
   const spoken = lines.map(({ node }) => node.text);
-  expect(lines.length >= 2 && lines.length <= 12, `the third voice has 2 to 12 lines (${lines.length})`);
+  // Two appearances: the briefing (between the inbox message and the trace start) and one return when sdb9 opens.
+  const unlockAt = at((node) => node.type === 'label' && node.name === 'unlock');
+  const briefing = lines.filter(({ index }) => index < traceStart);
+  const returns = lines.filter(({ index }) => index > unlockAt && unlockAt >= 0);
+  expect(briefing.length + returns.length === lines.length, 'the third voice speaks only in the briefing and once when sdb9 opens');
+  expect(briefing.length >= 2 && briefing.length <= 12, `the briefing has 2 to 12 lines (${briefing.length})`);
+  expect(returns.length >= 1 && returns.length <= 3, `the return has 1 to 3 lines (${returns.length})`);
+  expect(returns.every(({ index }) => flat.slice(Math.max(0, index - 3), index).some((node) => node.type === 'say' && node.who === 'watcher' || node.type === 'typing')),
+    'the return happens in a conversation: another voice is on the line');
   expect(spoken.every((text) => typeof text === 'string'), 'its lines are plain text');
   const text = spoken.filter((entry) => typeof entry === 'string');
   expect(text.every((entry) => entry === entry.toLowerCase() && !entry.includes('!')), 'its lines are lowercase and have no exclamation marks');
   expect(!text.some((entry) => /sdb9-part|--sdb9|ghost|shell|1337|key layer|meta|\bcss\b|console/i.test(entry)), 'its lines do not touch the key or its layers');
   expect(!text.some((entry) => /robot|elliot|unknown|watcher/i.test(entry)), 'its lines name no other character and no real name');
-  expect(lines.every(({ index }) => index > inbox && index < traceStart), 'the third voice speaks only between the inbox message and the trace start');
+  expect(briefing.every(({ index }) => index > inbox), 'the briefing comes after the inbox message');
   expect(all.filter((node) => (node.type === 'say' || node.type === 'typing') && node.who === 'mystery').length === lines.length + all.filter((node) => node.type === 'typing' && node.who === 'mystery').length,
     'nothing but its lines and its typing indicator names the third voice');
   expect(lines.length > 0 && lines[0].index < available[0] && available[0] - lines[0].index <= 2, 'the board appears with the first mention: the case file node follows the first line');
+  expect(lines.every(({ index }) => flat[index - 1]?.type === 'typing' || flat[index - 1]?.type === 'wait' || flat[index - 1]?.type === 'say'), 'every line of the third voice follows its typing indicator or another line');
   expect(lines.length > 0 && flat[lines[0].index - 1]?.type === 'typing' && flat[lines[0].index - 1].who === 'mystery', 'the first line is preceded by its typing indicator');
 }
 

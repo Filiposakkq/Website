@@ -41,6 +41,28 @@ export const GHOST_PROMPT = {
 
 const step = (index) => run((host) => host.ghost.panel.setStep(index), `ghost panel step ${index}`);
 
+// The third voice comes back (phase 4b, owner request 2026-10-15), once, on the open line between the watcher and the
+// first voice. It advises, the watcher does not know the channel, and the first voice says it is not his. No name, no
+// backstory (story bible, section 5). `read it before you run it` points at `cat ghost.sh` (the verified ending).
+const mysteryReturns = [
+  line('*** new connection: ??? ***', 'dim'),
+  burst(300),
+  wait(700),
+  typing(1200, 'mystery'),
+  say('mystery', 'read it before you run it.', { speed: 65 }),
+  wait(800),
+  typing(900, 'watcher'),
+  say('watcher', 'this channel is not on my list.', { speed: 45 }),
+  wait(700),
+  typing(900, 'mystery'),
+  say('mystery', 'it is not on any list.', { speed: 65 }),
+  wait(900),
+  line('*** ??? disconnected ***', 'dim'),
+  wait(600),
+  say('unknown', 'that was not me.', { speed: 55 }),
+  wait(700),
+];
+
 // sdb9 unlocks. The watcher is still in the session and tries to stop the player; the first voice says run it.
 const unlock = [
   label('unlock'),
@@ -63,6 +85,7 @@ const unlock = [
   wait(700),
   say('watcher', 'you do not know what is in there.', { speed: 40 }),
   wait(600),
+  ...mysteryReturns,
   line('[ALERT] watcher remote session still active (pts/1)', 'warn'),
   line(() => `[ALERT] trace request ETA ${formatClock(TRACE.afterUnlock)}`, 'warn'),
   trace('slow'),
