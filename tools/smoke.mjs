@@ -320,6 +320,22 @@ scenarios.push({
   },
 });
 
+// Phase 4b.0b: the real window after the trust choice is five minutes (the other scenarios run with TEST_WINDOW).
+scenarios.push({
+  name: 'reduced: the shipped trace window after the trust choice is five minutes',
+  contextOptions: REDUCED,
+  shippedWindow: true,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await waitOutput(page, 'ETA RESET: 05:00');
+    await waitOutput(page, 'five minutes. no extensions.');
+    const clock = await page.evaluate(() => document.querySelector('#hud .num')?.textContent ?? '');
+    const [minutes, seconds] = clock.split(':').map(Number);
+    const left = minutes * 60 + seconds;
+    if (!(left >= 285 && left <= 300)) throw new Error(`the HUD should read about 05:00 right after the trust choice, reads ${clock}`);
+  },
+});
+
 // Phase 4.3: the hacking commands build the case file in real time and the key is still solved afterwards.
 scenarios.push({
   name: 'desktop: scan, intercept, dump, decrypt, connect -> victory',
@@ -1044,6 +1060,24 @@ scenarios.push({
   },
 });
 
+// ---------------------------------------------------------------- the trace window in tests
+//
+// The shipped window after the trust choice is `TRACE.afterTrust` (300 s since phase 4b.0b). The timing scenarios (trace
+// expiry, lost evidence, hints) were written for 120 s and would need minutes of real time at 300 s, so the page is
+// served a `story-data/constants.js` whose `afterTrust` is TEST_WINDOW. Every other number follows from it
+// (`CASE.traceWindow`, the loss thresholds as a share of the window, `ETA RESET`). The shipped code has no test hook.
+// A scenario with `shippedWindow: true` is served the real file and checks the real value.
+const TEST_WINDOW = 120;
+const AFTER_TRUST = /afterTrust: \d+,/;
+
+async function serveTestWindow(page) {
+  await page.route('**/js/story-data/constants.js', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace(AFTER_TRUST, `afterTrust: ${TEST_WINDOW},`);
+    await route.fulfill({ response, body });
+  });
+}
+
 // --------------------------------------------------------------------- runner
 
 async function runScenario(browser, server, scenario) {
@@ -1054,6 +1088,7 @@ async function runScenario(browser, server, scenario) {
   page.setDefaultTimeout(45000);
   watch(page, problems, scenario.allowConsole);
   try {
+    if (!scenario.shippedWindow) await serveTestWindow(page);
     if (scenario.beforeLoad) await scenario.beforeLoad({ page, context });
     await page.goto(server.url);
     await scenario.run({ page, context, server });
@@ -1091,6 +1126,11 @@ const only = option('only');
 const selected = scenarios.filter((s) => !only || s.name.includes(only));
 if (!selected.length) {
   console.error(`No scenario matches "${only}".`);
+  process.exit(2);
+}
+
+if (!AFTER_TRUST.test(await readFile(path.join(siteDir, 'js/story-data/constants.js'), 'utf8'))) {
+  console.error('smoke: story-data/constants.js has no `afterTrust: <number>,` line: the test window cannot be applied.');
   process.exit(2);
 }
 

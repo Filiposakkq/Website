@@ -32,6 +32,7 @@ Notes:
   the game calls `setPointerCapture`, which throws for pointer ids that do not exist.
 - Set `SMOKE_SITE_DIR=<copy of sites/fsociety00/public>` to test a snapshot while you keep editing; set `SMOKE_SHOTS=<dir>` to get a screenshot when a scenario fails.
 - Audio cannot be heard in headless runs. The smoke only checks that nothing throws, that no `AudioContext` exists before the launch click, and that a reboot leaves no source node running (a test-only probe installed with `addInitScript`; the game exposes no global). Levels and tails are in `audio-lint.mjs`.
+- **Trace window in tests (phase 4b.0b).** The shipped window after the trust choice is 300 s (`TRACE.afterTrust`). The timing scenarios (trace expiry, lost evidence, hints) would need minutes of real time at 300 s, so the runner serves the page a `story-data/constants.js` whose `afterTrust` is `TEST_WINDOW` (120 s) through a Playwright route; every other number follows from it (map, loss thresholds as a share of the window, `ETA RESET`). The shipped code has no test hook. A scenario with `shippedWindow: true` is served the real file (`reduced: the shipped trace window ... is five minutes`). If you rename or reformat the `afterTrust:` line the runner stops at startup instead of silently testing the wrong window.
 - A full run takes a few minutes because the story runs in real time (scenarios run in parallel).
 
 ## `validate-story.mjs` — story data and engine check (phase 3)

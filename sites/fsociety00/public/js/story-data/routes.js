@@ -62,7 +62,7 @@ const watcherRoute = [
   goto('trace-reset'),
 ];
 
-// Both routes end here: the clock restarts at two minutes and from now on it can end the game.
+// Both routes end here: the clock restarts at five minutes (TRACE.afterTrust) and from now on it can end the game.
 const traceReset = [
   label('trace-reset'),
   wait(1200),
@@ -75,7 +75,7 @@ const traceReset = [
   line(() => `ETA RESET: ${formatClock(TRACE.afterTrust)}`, 'dim'),
   wait(900),
   typing(1500),
-  say('unknown', 'two minutes. no extensions.', { cls: 'warn', speed: 70 }),
+  say('unknown', 'five minutes. no extensions.', { cls: 'warn', speed: 70 }),
   wait(900),
   say('unknown', 'type help.', { speed: 90 }),
   wait(600),

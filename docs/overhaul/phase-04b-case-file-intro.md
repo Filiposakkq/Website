@@ -82,8 +82,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 4b.0 Re-verify + start log | in progress | | branch pushed; findings in "Re-verification (4b.0)" below; baseline smoke on `main` `bad4a0b`: 26 of 27 in the parallel run, the 27th (`reduced: typing ticks ...`, a known load flake) passes alone |
-| 4b.0b Trace window after trust = 300 s | todo | | re-tune `compromiseAt`, sound thresholds, `trace-warn`, smoke speed |
+| 4b.0 Re-verify + start log | done | `75d1266` | branch pushed; findings in "Re-verification (4b.0)" below; baseline smoke on `main` `bad4a0b`: 26 of 27 in the parallel run, the 27th (`reduced: typing ticks ...`, a known load flake) passes alone |
+| 4b.0b Trace window after trust = 300 s | in progress | | code and docs committed, full smoke running on a snapshot (result recorded in the next commit) |
 | 4b.1 Availability at the first mention | todo | | |
 | 4b.2 Explanation by a character | todo | | needs the owner's answers above |
 | 4b.3 Board command pane | todo | | |

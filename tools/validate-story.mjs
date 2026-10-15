@@ -473,7 +473,7 @@ if (story) {
   const { createCaseFile } = await import(js('casefile.js'));
   const { CASE: CASEQ } = await import(js('story-data/constants.js'));
   const cues = [];
-  let secs = 120;
+  let secs = CASEQ.traceWindow;
   const trigger = {
     hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
   };
@@ -481,7 +481,7 @@ if (story) {
     const file = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => cues.push(cue) } });
     file.start(route);
     file.chooseTrust(route);
-    secs = 120;
+    secs = CASEQ.traceWindow;
     cues.length = 0;
     return file;
   };
@@ -626,13 +626,13 @@ if (story) {
     const played = [];
     const line = (text = '', cls = '') => { const row = { textContent: text, cls }; rows.push(row); return row; };
     const output = () => rows.map((row) => row.textContent).join('\n');
-    let secs = 120;
+    let secs = TUNING.traceWindow;
     let onSleep = () => {};
     const trigger = {
       hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
     };
     const setup = (route) => {
-      secs = 120;
+      secs = TUNING.traceWindow;
       clock = 1000;
       rows.length = 0;
       played.length = 0;
@@ -751,6 +751,23 @@ if (story) {
   } finally {
     performance.now = realNow;
   }
+}
+
+// ---- the trace window after the trust choice (phase 4b.0b)
+{
+  console.log('\ntrace window');
+  const { TRACE, CASE: WINDOW } = await import(js('story-data/constants.js'));
+  const { routes } = await import(js('story-data/routes.js'));
+  expect(WINDOW.traceWindow === TRACE.afterTrust, 'the map window follows the window after the trust choice');
+  expect(Object.keys(WINDOW.compromiseShare).every((key) => WINDOW.compromiseAt[key] === Math.round(WINDOW.compromiseShare[key] * TRACE.afterTrust)),
+    'the loss thresholds are a share of the window, not absolute seconds');
+  expect(Object.values(WINDOW.compromiseAt).every((secs) => secs > 10 && secs < TRACE.afterTrust),
+    'every loss threshold lies inside the window and above the TRACE PENDING floor');
+  // The spoken line must say what the constant says ("five minutes. no extensions." for 300 s).
+  const words = { two: 120, three: 180, four: 240, five: 300, six: 360 };
+  const spoken = routes.filter((node) => node.type === 'say' && /minutes\. no extensions\.$/.test(node.text))
+    .map((node) => words[node.text.split(' ')[0]]);
+  expect(spoken.length === 1 && spoken[0] === TRACE.afterTrust, `the line "N minutes. no extensions." names the real window (${TRACE.afterTrust} s)`);
 }
 
 // ---- the trace topology (phase 4.4)

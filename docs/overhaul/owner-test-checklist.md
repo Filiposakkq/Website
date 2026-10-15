@@ -68,6 +68,11 @@ Play once on a phone and once on a desktop on the preview. Agents did not hear a
 - [ ] The board text is readable on the phone (nothing below about 11 px) and the sounds (`board-open`, node select, packets, decrypt progress, breach alert) fit the scene: note which ones are too loud or annoying
 - [ ] Tuning feel: could a careful player finish and still use one decrypt; does a lazy player feel the pressure? Numbers are `CASE` in `js/story-data/constants.js`
 
+## Phase 4b only: the case file introduction, the board command line and the 5-minute window
+
+- [ ] **The window:** after you choose who to trust, the clock reads about `05:00` and the voice says "five minutes. no extensions." Does it still feel like pressure? (It is easier than before: tell me if it is too easy. The numbers are `TRACE` and `CASE` in `js/story-data/constants.js`.)
+- [ ] **Trace sounds:** with the longer window the first three minutes only tick; the first warning comes at two minutes left, the critical one at one minute. Does that build well?
+
 ## C. Report format
 
 For each problem: device and OS, browser and version, the steps, what you expected, what happened, screenshot or screen recording. Put it in the PR as a comment or give it to the Claude that fixes it with prompt 4 in `prompts.md`.

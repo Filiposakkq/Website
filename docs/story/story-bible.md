@@ -19,7 +19,7 @@ Use it to keep the story consistent in phases 3 (story data), 4 (evidence), 6 (T
 11. **Cut-off and lost connection** (S:1473-1506): unknown starts "sdb9 holds a list. everyone they have erased. and the key to open it is-" and is cut off; `*** connection lost ***`; IDS alerts; trace rate doubles; "you are on your own now."
 12. **Watcher breaks in** (S:1512-1541): `*** new connection: watcher ***`: "i see you.", "<unknown> has been lying to you.", "there is no key.", "there is only the trace." Trace speed x3. Unknown reconnects: "don't listen to him. he wants you to stop looking."
 13. **Trust choice** (S:1542-1553; `story-choices.js`): "who do you trust?" `trust <unknown>` (key 1) or `trust <watcher>` (key 2).
-14. **Route dialogue and trace reset** (S:1557-1601): branch text (section 3), `ETA RESET: 02:00`, "two minutes. no extensions."
+14. **Route dialogue and trace reset** (S:1557-1601): branch text (section 3), `ETA RESET: 05:00`, "five minutes. no extensions."
 15. **Level 01 puzzle** (L:106-355): shell with `help`, `ls`, `cat`, `unlock`, `hint`, `trace`, `board`, `source map` (+ route commands).
 16. **Victory** (S:1016-1221): sdb9 unlocks and mounts (`erased.list`, `ghost.sh`); the watcher says "close it. you do not know what is in there."; trace resets to 120 s; the player runs `./ghost.sh`; `cat erased.list` shows redacted rows 0001-0009, `...`, `4096 ERASED`, `4097 PENDING` which becomes GHOSTED; identity reveal (`unknown` is rewritten to `Mr. Robot` everywhere), `<Mr. Robot> hello, friend.` and "bonsoir."; `=== LEVEL 01 COMPLETE ===`, `[ALERT] watcher connection: retry attempt detected`, "you are a ghost. this is where the signal ends."
 17. **Endings that fail:** `TRACE COMPLETE` (T:52-62, S:619-676: SIGNAL LOCATED, four phases, power down), `LOCKED OUT` (3 wrong keys, L:332), `SESSION COMPROMISED` (watcher route only, `abort`, S:678-717), `DEVELOPER SHUTDOWN TEST` (dev panel only; the case file records no outcome for it).
@@ -52,7 +52,7 @@ The other route's evidence appears as "SEALED // OTHER BRANCH".
 - **ghost.sh:** steps CLOSE TRACE REQUEST, END REMOTE SESSION, REVOKE GUEST TOKEN, CLOSE LOCAL SHELL; label `FSOCIETY // CONTAINMENT ROUTINE`.
 - **The list:** erased people; the player is record **4097** ("SESSION DOSSIER 4097"); "that is how they find people." (S:1180).
 - **Fictional data only:** all IPs are `203.0.113.x`; E Corp, build date 2015, relay id 0515, `guest@fsociety00`, relays `n / 4` (the real hop count from `topology.js`, `CASE.hops`). Never real IPs, locations or identities.
-- **Timers:** 480 s at the start, 120 s after the trust choice, 120 s after the unlock; `hint` costs 30 s; watcher takeover sets 60 s at 8x speed.
+- **Timers:** 480 s at the start, 300 s after the trust choice (was 120 s until phase 4b.0b), 120 s after the unlock; `hint` costs 30 s; watcher takeover sets 60 s at 8x speed.
 - **Case file items** (C:3-105): `lock-header`, `page-markup`, `page-style`, `page-script`, `route-note`, `watcher-log`, `ghost-script`, `erased-list`, `elliot-echo`. Outcomes: VERIFIED HANDOFF, UNVERIFIED HANDOFF, CONTAINED EXIT, OPEN RELAY EXIT, SESSION COMPROMISED, LOCKED OUT, TRACE COMPLETE. Footer: "EVIDENCE IS NOT IDENTITY // VERIFY EVERY CHANNEL".
 
 ## 5. Voice and tone rules (derived from the code)
@@ -67,13 +67,13 @@ These are **open**: do not "fix" one silently, ask the owner (they may be delibe
 
 1. The first speaker is never named before the reveal, and the reveal gives a name but no backstory ("the one they gave me-" is never completed).
 2. The watcher says "there is no key" (S:1521) but the key exists and works; in ghost.sh he says "he needs you to open it" (S:977) while the script itself says "no key material requested" (S:853).
-3. "you have 8 minutes" (S:1458), later "two minutes. no extensions." (S:1599); `hint` can cut the time further.
+3. "you have 8 minutes" (S:1458), later "five minutes. no extensions." (was "two minutes" until phase 4b.0b); `hint` can cut the time further.
 4. `abort` is described differently in three places: "close the session before it logs you" (watcher), "closes the guest shell and hands control to the remote operator" (L:153-154, C:54), and `verify relay` says it "maps to pts/0" (L:253).
 5. The watcher's `retry attempt detected` and "he will find a way back" set up a sequel that does not exist.
 6. Not in code: who "they" are, any year other than 2015, a PID for `ghost.sh` (phase 3's fake `ps aux` plans one: `ghost.sh` PID 1337), whose name Elliot is beyond the easter egg.
 7. Developer route `ending` skips the trust choice, so it always uses the unknown route; `DEVELOPER SHUTDOWN TEST` records no case outcome.
 
-8. **Planned (phase 4b, owner decision 2026-10-15):** a **third voice**, a complete mystery, appears right after the inbox message and explains the case file. It has no name or backstory by design: do not add one without an owner decision. It is expected to return in a later level or chapter (owner, 2026-10-15), so leave room for it and do not close its mystery in Level 01. The trace window after the trust choice is planned to grow from 2 to 5 minutes (300 s); this file still describes 120 s until phase 4b.0b is merged.
+8. **Planned (phase 4b, owner decision 2026-10-15):** a **third voice**, a complete mystery, appears right after the inbox message and explains the case file. It has no name or backstory by design: do not add one without an owner decision. It is expected to return in a later level or chapter (owner, 2026-10-15), so leave room for it and do not close its mystery in Level 01. The trace window after the trust choice grew from 2 to 5 minutes (300 s) in phase 4b.0b (owner decision 2026-10-15); the `hint` cost stays 30 s.
 
 ## 7. Rules for changing the story
 
