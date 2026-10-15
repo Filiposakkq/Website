@@ -13,7 +13,7 @@ Read [`README.md`](README.md) first. Added 2026-10-15 at the owner's request (no
 2. **Command line:** inside the board there is a small command line that runs **board commands only** (a limited set; the shell keeps the puzzle). It does not replace the shell.
 3. **Explanation:** **a character explains the board** in dialogue (story-driven), not an overlay tutorial. The speaker is a **third character who stays a complete mystery** (neither `unknown` nor `watcher`): no name, no backstory, no explanation of who it is or why it helps. This is deliberate and is recorded in `docs/story/story-bible.md` as an intended open end, not a loose end to fix. The wording still needs the owner's approval.
 4. **Board commands are new evidence commands** (not the shell's), and where one depends on the trace the rules in 4b.3 apply.
-5. **The trace starts at 5 minutes** (300 s) instead of 8 (480 s): task 4b.0b.
+5. **The window after the trust choice becomes 5 minutes** (300 s) instead of 2 (120 s): task 4b.0b. The start of the trace (480 s before the trust choice) is **not** changed.
 
 ## Goal
 
@@ -53,7 +53,7 @@ The evidence board stops being something the player stumbles on. A character int
 
 ## Tasks (checklist)
 
-- [ ] 4b.0b **Trace starts at 300 s (5 minutes)** (owner decision): change `TRACE.start` in `story-data/constants.js` from 480 to 300; change the spoken line "you have 8 minutes" in the story data to 5 minutes; update `docs/story/story-bible.md` (scene 10, the timers list, loose end 3), `docs/state/story.md`, the `trace-tick` default and the sample/lint values that use 480 in `js/audio/patches.js` (`secondsLeft: 480`; check the reactive thresholds still make sense with 300), the smoke tests and `validate-story` if they assume 480, and `owner-test-checklist.md`. Check the intro: the trace counts down while the intro, the cut-off and the watcher takeover play (rate x2 and x3); with 300 s the 10 s TRACE PENDING floor may now be reached before the player has chosen. Measure it with the smoke test or a scripted run and, if so, tune `TRACE.start` or the rates so the floor is **not** reached before the trust choice screen is up in a normal run (unverified now). The 120 s windows after the trust choice and the unlock are unchanged; phase 4's board tuning is built for the 120 s window, so nothing there changes.
+- [ ] 4b.0b **The trace window after the trust choice is 300 s (5 minutes)** (owner decision; was 120 s): change `TRACE.afterTrust` in `story-data/constants.js` to 300. `TRACE.start` (480), `TRACE.afterUnlock` (120, the ghost.sh window) and `TRACE.takeover` stay. Everything that says "two minutes" or `02:00` follows: the spoken line `two minutes. no extensions.` in `story-data/routes.js` (rewrite to five minutes, keep the voice), `ETA RESET: 02:00` is generated from the constant, the `trace-warn` description ("two minutes") in `js/audio/patches.js`, `docs/story/story-bible.md` (scene 14, the timers list, loose end 3), `docs/state/story.md`, `owner-test-checklist.md`, the smoke tests and `validate-story` if any assume 120. **Re-tune what was built for the 120 s window (phase 4):** `CASE.traceWindow` follows `afterTrust` (the map and its hop timing then spread over 300 s, so check it still feels like pressure), but the loss thresholds `CASE.compromiseAt` (45, 35, 90 s left) are absolute: with 300 s they trigger after 210, 265 and 255 s, i.e. almost never, so records would no longer be at risk. Move them to be relative (a share of the window) or re-tune them, and re-check the phase 4 tuning table ("the whole board costs less than one hint"). The sound thresholds in `trace-sound.js` (warning at 120 s, critical at 60 s and 10 s) must be checked against 300 s: the warning at 120 s now arrives after 60 % of the window. Check `hint` (30 s) against the longer window, the `trace-expiry` smoke scenarios (a real 300 s wait would be far too slow: they must use the fast path, check `dev-routes.js`/`lethalTrace`), and the TRACE PENDING floor is no longer an issue because `TRACE.start` is unchanged. More time makes the puzzle easier: the owner confirms that is wanted.
 - [ ] 4b.0 Re-verify the "current state" of `casefile.js`, `board-ui.js`, `hacking-commands.js` against the code; start the checkpoint log and the Resume point.
 - [ ] 4b.1 Availability (`makeAvailable`, story node, fallback, dev routes) + smoke scenario: the trigger is hidden before the mention and visible after it, on both routes.
 - [ ] 4b.2 Explanation lines in the story data + validator checks (no key text, no real names, lowercase style rules are manual).
@@ -83,7 +83,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | Step | Status | Commit | Notes |
 |---|---|---|---|
 | 4b.0 Re-verify + start log | todo | | |
-| 4b.0b Trace start 300 s | todo | | check the TRACE PENDING floor in the intro |
+| 4b.0b Trace window after trust = 300 s | todo | | re-tune `compromiseAt`, sound thresholds, `trace-warn`, smoke speed |
 | 4b.1 Availability at the first mention | todo | | |
 | 4b.2 Explanation by a character | todo | | needs the owner's answers above |
 | 4b.3 Board command pane | todo | | |

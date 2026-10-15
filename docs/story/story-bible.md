@@ -73,7 +73,7 @@ These are **open**: do not "fix" one silently, ask the owner (they may be delibe
 6. Not in code: who "they" are, any year other than 2015, a PID for `ghost.sh` (phase 3's fake `ps aux` plans one: `ghost.sh` PID 1337), whose name Elliot is beyond the easter egg.
 7. Developer route `ending` skips the trust choice, so it always uses the unknown route; `DEVELOPER SHUTDOWN TEST` records no case outcome.
 
-8. **Planned (phase 4b, owner decision 2026-10-15):** a **third voice**, a complete mystery, appears right after the inbox message and explains the case file. It has no name or backstory by design: do not add one without an owner decision. The trace is planned to start at 5 minutes (300 s) instead of 8; this file still describes 480 s until phase 4b.0b is merged.
+8. **Planned (phase 4b, owner decision 2026-10-15):** a **third voice**, a complete mystery, appears right after the inbox message and explains the case file. It has no name or backstory by design: do not add one without an owner decision. The trace window after the trust choice is planned to grow from 2 to 5 minutes (300 s); this file still describes 120 s until phase 4b.0b is merged.
 
 ## 7. Rules for changing the story
 
