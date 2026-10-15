@@ -1,6 +1,6 @@
 # Audio
 
-Valid after: phase 2 (PR #7), `main` `2a9abad`, verified 2026-10-14. Cue list with callers: [`../overhaul/audio-cues.md`](../overhaul/audio-cues.md).
+Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15. Cue list with callers: [`../overhaul/audio-cues.md`](../overhaul/audio-cues.md).
 
 - `js/audio.js` is a thin controller; the sounds are **data** in `js/audio/patches.js` (cues and 4 ambient beds) and the Web Audio code is in `js/audio/render.js`.
 - API: `play(name, params?)`, `setScene`, `unlock`, `list()`, `duration()`, `stopAll({ beds })`, `dispose()`, `pendingNodes()`, `prepare()`.

@@ -1,6 +1,6 @@
 # Story, level and evidence code
 
-Valid after: phase 3.10 (handoff) (branch `overhaul/phase-3-story`; the rest of this file is as of phase 2, `main` `2a9abad`), verified 2026-10-14. The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
+Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15. The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
 
 | File | Role |
 |---|---|
@@ -18,7 +18,7 @@ Valid after: phase 3.10 (handoff) (branch `overhaul/phase-3-story`; the rest of 
 
 Trace facts: the times are named constants in `story-data/constants.js` (`TRACE`: start 480 s, 120 s after the trust choice, 120 s after the unlock, 60 s at 8x on the watcher takeover, `hint` costs 30 s). Policy: `running` from the start until the trust choice (floors at 10 s, TRACE PENDING), `lethal` from the choice on, `close()` at the ghost script's first step (TRACE CLOSED).
 
-## Narrative engine (`js/engine.js`, phase 3; drives the boot, the intro, the trust choice, the routes and the ghost route; the Level 01 shell and the rest of the ending still run as legacy `run` nodes until 3.7 and 3.8)
+## Narrative engine (`js/engine.js`; drives the boot, the intro, the trust choice, the routes, the ghost route, the reveal and the endings; the Level 01 shell is the registry-based `level01.js`)
 
 A story is `{ initialState, routes?, segments: [{ id, skippable, announce, nodes }] }`. The engine compiles the segments into one flat program (a `branch` becomes jumps), walks it with a pointer, and asks a **host** (built by `story.js`) to do everything visible. It never touches the DOM, so `node tools/validate-story.mjs` can validate and dry-run a story.
 

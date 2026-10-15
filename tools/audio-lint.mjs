@@ -349,7 +349,8 @@ async function lintInPage({ only: filter }) {
       if (mode.left() !== held) problems.push('a frozen trace kept counting');
       mode.setMode('lethal');
       mode.set(2);
-      await new Promise((resolve) => setTimeout(resolve, 2300));
+      // Two 1 s ticks are needed; poll with a generous limit instead of a fixed sleep (a loaded machine made 2.3 s flaky).
+      for (let waited = 0; !ended && waited < 8000; waited += 100) await new Promise((resolve) => setTimeout(resolve, 100));
       if (!ended) problems.push('a lethal trace did not expire');
       mode.halt(true); // removes its HUD, so the next label() reads the closing trace
       const closing = startTrace(30, { session, mode: 'lethal' });
