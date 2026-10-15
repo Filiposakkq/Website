@@ -78,7 +78,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 | 7 | Developer panel | todo | 1; best after 2–6 | `overhaul/phase-7-devpanel` | | |
 | 8 | Main site | todo | — (independent) | `overhaul/phase-8-main-site` | | |
 | 9 | Extras & polish | todo | all others | `overhaul/phase-9-polish` | | |
-| 4b | Case file from the first story mention, explained by a character, with a board command line (owner request 2026-10-15) | in progress | 1, 3, 4 | `overhaul/phase-4b-case-file` | | not part of the original plan; open questions in the phase file |
+| 4b | Case file from the first story mention, explained by a character, with a board command line (owner request 2026-10-15) | in review | 1, 3, 4 | `overhaul/phase-4b-case-file` | PR (see the pull request list; not merged) | not part of the original plan; open questions in the phase file |
 
 ### Dependency graph and what can run in parallel
 
@@ -370,6 +370,7 @@ None of these is a regression and none blocks the game; each has a home phase.
 | The DEV `boot` route calls `runStory()` directly, so the ambient-interval cleanup in `startStory`'s `finally` does not run when it ends normally (localhost only) | Phase 7 |
 | Skip control (lower right) still covers text on small phones and its idle look is a compromise: rework it (HOLD TO SKIP label, circular hold progress, placed above the prompt, 3 s hold kept, smoke test keeps using a real mouse press). The hold state is per session since phase 3.2 (`js/skip-control.js`) | Phase 5 (visuals) |
 | Trace times (480 / 300 / 120 / 60, `hint` 30 s; the window after the trust choice grew from 120 to 300 s in phase 4b.0b) are untuned: named constants in `story-data/constants.js`, to be tuned after the owner's phone tests. (The per-scene policy is done in phase 3.5: `running` floors at TRACE PENDING, `lethal` after the trust choice, `close` at the ghost script; HUD look is phase 5.4) | Owner tuning; phase 5 (HUD look, 5.4) |
+| The board command line (phase 4b.3) is unverified with a real on-screen keyboard and with a screen reader; the trace sound thresholds (120 s / 60 s) are absolute and now come late in the 300 s window; `hint` (30 s) is a smaller share of it | Owner test, then tune (`owner-test-checklist.md`, phase 4b section) |
 | Trace HUD overlaps the ghost panel label on phones (docks to the top right) | Phase 5 |
 | More ways to be traced (noisy commands, honeypot file, unverified `ghost.sh`, watcher lockout) | Idea only: "Phase 10", see `docs/story/README.md`; needs owner canon decisions |
 | Real-device checks not done: screen reader, audible output (phase 2 sounds have never been heard by anyone), 60 fps of the rain on weak phones | Owner, on the preview of each phase |
@@ -399,3 +400,4 @@ None of these is a regression and none blocks the game; each has a home phase.
 | 2026-10-13 | Phase 2 branch is `overhaul/phase-02-audio` (owner's instruction), not `overhaul/phase-2-audio` as the docs said | Decided by owner |
 | 2026-10-15 | Phase 4 decisions (evidence as data, `decrypt` blocks the shell, loss thresholds, sealed stubs, board optional for the win, no timer in the case file): see "Decisions made in phase 4" in `phase-04-evidence-board.md` | Default; owner to confirm in review |
 | 2026-10-15 | Phase 4b.0b decisions (defaults, owner to confirm): the evidence loss thresholds become shares of the window (3/8, 7/24, 3/4, i.e. 113 / 88 / 225 s left at 300 s) so the pressure keeps its shape; the trace sound thresholds stay absolute (warning at 120 s left, critical at 60 s and 10 s: the first three minutes are calm); `hint` stays 30 s; tests run with a 120 s window served through a route and one scenario checks the shipped 300 s | Default; owner to confirm by playing |
+| 2026-10-15 | Phase 4b.3 decisions (defaults, owner to confirm): `dump` needs a link like the other evidence commands; a board command keeps running when the dialog closes (its output waits in the board log) and the input is read-only meanwhile; `pending` means the trace is `running` or `frozen`, and only `lethal` loses evidence or charges a wrong `connect`; `board`/`evidence` typed in the board answer "use the shell for that"; one job slot (`caseFile.claim`) is shared by the shell and the board. |

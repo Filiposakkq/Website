@@ -86,15 +86,15 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | 4b.0b Trace window after trust = 300 s | done | `25bfc45` | window 300 s, loss thresholds as shares (113 / 88 / 225 s left), spoken line, docs, smoke serves a 120 s test window + one scenario for the shipped value. **last green commit: `25bfc45`**: full smoke 25/28 in the parallel run; the 3 failures (`reduced: typing ticks ...` and two real-time desktop scenarios that timed out in `reachTrustChoice` while other tools ran) all pass alone on the same snapshot; `validate-story`, `audio-lint` (0 problems) and `check-fonts` pass |
 | 4b.1 Availability at the first mention | done | `05a7fa9` | `makeAvailable()`, the story node (`caseBriefing`), developer routes, validator and 4 smoke scenarios; each passes alone on the snapshot; full smoke run again after 4b.2 (see its row) |
 | 4b.2 Explanation by a character | done | `5c43666` | third voice `<???>` (blue, `key-tick-mystery`), 5 draft lines, validator + 1 smoke scenario (passes alone), docs; wording and sound **unverified** (owner checklist); **last green commit: `5c43666`**: full smoke 33 of 33 (`--jobs=8`, snapshot) |
-| 4b.3 Board command pane | in progress | | registry group `board`, `board-commands.js`, shared `hacking-commands.js` (one job slot, `needs: link`), pane in `board-ui.js`, lethal-only loss and charge, honest TRACE pane; validator block + 5 smoke scenarios pass alone; full smoke still to run; phone keyboard, screen reader and feel **unverified** |
-| 4b.4 Tests | todo | | |
-| 4b.5 Docs | todo | | |
+| 4b.3 Board command pane | done | `bb599e7` | registry group `board`, `board-commands.js`, shared `hacking-commands.js` (one job slot, `needs: link`), pane in `board-ui.js`, lethal-only loss and charge, honest TRACE pane. **last green commit: `bb599e7`**: full smoke 38 of 38 (`--jobs=8`, snapshot), `validate-story`, `audio-lint` (0 problems), `check-fonts` pass; phone keyboard, screen reader and feel **unverified** |
+| 4b.4 Tests | done | `bb599e7` | tests were written with the code: a `validate-story` block (registry, words, rules a to e, shared state, job slot, trace end, abort, reset, mutation-checked) and 5 smoke scenarios (pending trace, no trace, phone, keyboard only, reboot during a decrypt); see the handoff report |
+| 4b.5 Docs | done | see PR | state docs (`story`, `ui-and-css`, `tools`, `audio`), story bible, `audio-cues.md`, owner checklist, CHANGELOG, tracker, known issues, decisions log, this report |
 
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next step.)_
 
-### Resume point (session 1, 2026-10-15, written at the start)
+### Resume point (session 1, 2026-10-15, written at the start) (historical)
 
 - Branch `overhaul/phase-4b-case-file`, created from `main` `bad4a0b` and pushed. Nothing is half edited.
 - `last green commit`: `bad4a0b` (baseline `main`, no 4b code yet): `node tools/smoke.mjs` 26 of 27 in the parallel run; the failing one (`reduced: typing ticks are rate limited ...`) passes alone (known load flake, see `tools/README.md`).
@@ -111,3 +111,45 @@ _(Keep a **Resume point** block first. It is advisory and goes stale, so write i
 - `hacking-commands.js` prints through the shell's `line`, hides the shell prompt with `ctx.terminal.close`, reads `env.play.over` and sets time through `env.trace.set`. It has **no guard against two jobs at once**: with a second entry point (the board) a shell `scan` and a board `scan` could overlap, so the shared implementation gets one busy guard.
 - The shell command `board` opens the dialog and returns at once; the story and the prompt keep running behind the modal dialog. With the trigger visible from the inbox on, the player can also open the board during the intro.
 - The tests: `loseByTraceExpiry` and the "lost evidence" scenario assume a 120 s window (two hints, a 90 s threshold); with 300 s they would need minutes of real time. Plan (4b.0b): the smoke runner serves `constants.js` with a shorter `afterTrust` for the timing scenarios (Playwright route, no test hook in the shipped code) and one scenario checks the shipped value.
+
+### Resume point (session 1, final)
+
+- Branch `overhaul/phase-4b-case-file`, all sub-steps done and pushed; the PR to `main` is open and is **not merged** (the owner merges).
+- `last green commit`: `bb599e7` (full smoke 38 of 38). Later commits change only documents.
+- Nothing is half-edited. If a review finds something, fix it on this branch, run `node tools/validate-story.mjs` and the affected `--only=` scenarios, then the full smoke.
+
+## Handoff report (phase 4b)
+
+**What was built** (the sub-steps, in order)
+
+- 4b.0b: the window after the trust choice is `TRACE.afterTrust = 300` s; the loss thresholds are shares of it (`CASE.compromiseShare`: 113 / 88 / 225 s left); the spoken line says five minutes. The smoke runner serves a 120 s test window (a Playwright route that rewrites `constants.js`, no hook in shipped code) and one scenario checks the shipped value.
+- 4b.1: `caseFile.makeAvailable()` and a story node right after the inbox message reveal the CASE FILE button; developer routes call it; the first record that leaves `hidden` is still a fallback.
+- 4b.2: the third voice `<???>` (blue `#4da6ff`, 8.21:1; own cue `key-tick-mystery`) says five lines (`caseBriefing` in `story-data/intro.js`), validated for order, tone and forbidden words.
+- 4b.3: the board command line.
+  - `board-commands.js` has its own registry (group `board`): `help list open scan intercept dump decrypt connect close`. `scan intercept dump decrypt connect` are the shell's definitions (`registerHackingCommands(registry, deps, io)` is called by both).
+  - One job slot: `caseFile.claim()`; a second timed command answers `another job is running.`
+  - Trace rules (`caseFile.linkState()` and `getTraceMode`): (a) no trace: `no active link yet.`; (b) pending: commands work and take their time, nothing is charged; (c) lethal: as phase 4; (d) `compromiseCheck` returns nothing unless the trace is lethal; (e) the board's TRACE pane reads NO TRACE YET / TRACE PENDING and the path says `trace: not counting yet`, with no `atRisk` flags.
+  - The pane in `board-ui.js` (wide: a strip under the four panes; phone: the COMMANDS tab), `.case-cmd-*` CSS region. The log lives in `board-commands.js`, so a decrypt keeps its output when the dialog is closed.
+  - `BOARD_SHELL_WORDS` (in `story-data/hacking.js`) answers `use the shell for that`; `validate-story` checks it against the real shell registrations.
+- 4b.4 tests: see the checkpoint rows.
+
+**Verified** (by me, headless): `node tools/validate-story.mjs` (with mutation checks that removing the lethal gate on loss or on the charge fails), `node tools/audio-lint.mjs` (0 problems, 112 rows), `bash tools/check-fonts.sh`, and the full `node tools/smoke.mjs --jobs=8` on a snapshot: 38 of 38.
+
+**Unverified** (needs the owner or a real device)
+
+- How the 5-minute window feels (easier than before, as intended).
+- The sound of `key-tick-mystery`, and the wording and typing speed of the `<???>` lines (a draft).
+- The command pane with an on-screen keyboard on a real phone (checked only at 390 x 844 in a headless browser) and with a screen reader (log region, silent progress line).
+- No separate review-only pass by a different Claude was done.
+
+**Decisions made without the owner** (also in the decisions log)
+
+- The board's `dump` needs a link like the other evidence commands (rule a lists only help, list, open and close as read-only).
+- A command from the board keeps running when the dialog is closed (its output waits in the log); the input is read-only while it runs.
+- `board` and `evidence` typed in the pane answer `use the shell for that`.
+- `frozen` and `running` both count as "pending" for the rules (no cost, no loss).
+
+**Known follow-ups**
+
+- The trace sound thresholds (warning at 120 s, critical at 60 s) are unchanged and absolute; with 300 s the warning now comes after 60 % of the window. Listen and tune.
+- `hint` still costs 30 s, which is now a smaller share of the window.
