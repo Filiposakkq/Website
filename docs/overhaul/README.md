@@ -78,7 +78,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 | 7 | Developer panel | todo | 1; best after 2–6 | `overhaul/phase-7-devpanel` | | |
 | 8 | Main site | todo | — (independent) | `overhaul/phase-8-main-site` | | |
 | 9 | Extras & polish | todo | all others | `overhaul/phase-9-polish` | | |
-| 4b | Case file from the first story mention, explained by a character, with a board command line (owner request 2026-10-15) | in review | 1, 3, 4 | `overhaul/phase-4b-case-file` | PR #14 (open, not merged) | not part of the original plan; open questions in the phase file |
+| 4b | Case file from the first story mention, explained by a character, with a board command line (owner request 2026-10-15) | merged | 1, 3, 4 | `overhaul/phase-4b-case-file` | PR #14, squash commit `4f6d0de` | owner tested the preview 2026-10-16 (findings not recorded here); not part of the original plan; open questions in the phase file |
 
 ### Dependency graph and what can run in parallel
 
