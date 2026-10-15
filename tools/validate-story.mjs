@@ -280,7 +280,7 @@ if (story) {
 
   const lines = flat.map((node, index) => ({ node, index })).filter(({ node }) => node.type === 'say' && node.who === 'mystery');
   const spoken = lines.map(({ node }) => node.text);
-  expect(lines.length >= 2 && lines.length <= 5, `the third voice has 2 to 5 lines (${lines.length})`);
+  expect(lines.length >= 2 && lines.length <= 12, `the third voice has 2 to 12 lines (${lines.length})`);
   expect(spoken.every((text) => typeof text === 'string'), 'its lines are plain text');
   const text = spoken.filter((entry) => typeof entry === 'string');
   expect(text.every((entry) => entry === entry.toLowerCase() && !entry.includes('!')), 'its lines are lowercase and have no exclamation marks');

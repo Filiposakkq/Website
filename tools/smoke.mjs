@@ -413,8 +413,14 @@ scenarios.push({
     const lines = [
       '<???> the case file is in the corner.',
       '<???> open it. record what you find.',
+      '<???> every record is a piece. none of them is the whole.',
+      '<???> two pieces that belong together will say so. connect them.',
       '<???> evidence is not identity.',
-      '<???> scan and decrypt cost time. the trace does not wait.',
+      '<???> a name on a screen is only a name.',
+      '<???> scan finds what is hidden. decrypt opens what is sealed.',
+      '<???> both cost time. the trace does not wait.',
+      '<???> what you do not hold, the trace will take.',
+      '<???> the board has a line of its own. type help.',
       '<???> it is optional. use it.',
     ];
     const order = [at('cat ~/inbox/001.msg'), at('*** new connection: ??? ***'), ...lines.map((text) => at(text)), at('*** ??? disconnected ***'), at('=== LEVEL 01 :: THE KEY ===')];
