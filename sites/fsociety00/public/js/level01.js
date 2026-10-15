@@ -3,6 +3,7 @@ import { formatClock } from './util.js';
 import { isAbortError } from './session.js';
 import { createRegistry } from './commands.js';
 import { registerSystemCommands } from './system-commands.js';
+import { registerHackingCommands } from './hacking-commands.js';
 import { TRACE } from './story-data/constants.js';
 import { SYSTEM_FILES } from './story-data/system.js';
 import {
@@ -224,6 +225,9 @@ export function createLevel01(ctx) {
       line('read each with: cat page/<file>', 'dim');
     },
   });
+
+  // scan, intercept, dump, decrypt, connect: the evidence mechanics (hacking-commands.js). All optional.
+  registerHackingCommands(registry, ctx);
 
   // The two routes each get their own command; the other route sees them as unknown or as a usage line.
   registry.register({

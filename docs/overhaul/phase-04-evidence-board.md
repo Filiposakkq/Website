@@ -135,8 +135,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | Step | Status | Commit | Notes |
 |---|---|---|---|
 | 4.1 EVIDENCE schema migration + validator | done | `864dd72` | records in `story-data/evidence.js` (19: original 9, 5 network, 5 INTEL), `CASE` constants, evidence validator with 17 mutations; smoke 21/21 on a snapshot (**last green commit: `864dd72`**) |
-| 4.2 State machine + casefile methods | done | (next push) | hidden/locked/unlocked/decrypted/compromised, `scan intercept dump find startDecrypt finishDecrypt connect compromiseCheck tick`; 45 Node checks in `validate-story`; `trace.onTick` feeds the loss rule; board still the legacy view until 4.5 |
-| 4.3 Commands scan / intercept / dump / decrypt / connect | todo | | |
+| 4.2 State machine + casefile methods | done | `6e3e8fc` | hidden/locked/unlocked/decrypted/compromised, `scan intercept dump find startDecrypt finishDecrypt connect compromiseCheck tick`; 45 Node checks in `validate-story`; `trace.onTick` feeds the loss rule; board still the legacy view until 4.5; smoke 21/21 on a snapshot (**last green commit: `6e3e8fc`**) |
+| 4.3 Commands scan / intercept / dump / decrypt / connect | done | (hash in the 4.4 commit) | `hacking-commands.js` + `story-data/hacking.js`; 31 Node checks with a fake clock (incl. trace ending mid-decrypt, record overwritten mid-decrypt, no key text, documentation IPs); 2 new smoke scenarios; smoke 23/23 on a snapshot (**last green commit: this 4.3 commit**); browser look of the commands on a phone width: unverified |
 | 4.4 Topology module (extra 8) + trace --status | todo | | |
 | 4.5 Board layout + native dialog + mobile + a11y + fonts | todo | | |
 | 4.6 Ghost trail + COMPROMISED handling | todo | | |

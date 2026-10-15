@@ -579,5 +579,149 @@ if (story) {
   }
 }
 
+// ---- the hacking commands (phase 4.3), driven with a fake clock and the real registry and case file
+{
+  console.log('\nhacking commands');
+  const { registerHackingCommands } = await import(js('hacking-commands.js'));
+  const { createCaseFile } = await import(js('casefile.js'));
+  const { createRegistry } = await import(js('commands.js'));
+  const hackingData = await import(js('story-data/hacking.js'));
+  const { CASE: TUNING } = await import(js('story-data/constants.js'));
+
+  let clock = 1000; // ms; casefile.js and hacking-commands.js read performance.now()
+  const realNow = performance.now.bind(performance);
+  performance.now = () => clock;
+  try {
+    const rows = [];
+    const played = [];
+    const line = (text = '', cls = '') => { const row = { textContent: text, cls }; rows.push(row); return row; };
+    const output = () => rows.map((row) => row.textContent).join('\n');
+    let secs = 120;
+    let onSleep = () => {};
+    const trigger = {
+      hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
+    };
+    const setup = (route) => {
+      secs = 120;
+      clock = 1000;
+      rows.length = 0;
+      played.length = 0;
+      onSleep = () => {};
+      const caseFile = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => played.push(cue) } });
+      caseFile.start(route);
+      caseFile.chooseTrust(route);
+      const session = {
+        async sleep(ms) { clock += ms; secs -= ms / 1000; caseFile.tick(secs); onSleep(); },
+      };
+      const registry = createRegistry();
+      registerHackingCommands(registry, {
+        line, audio: { play: (cue) => played.push(cue) }, session, caseFile, motionReduced: () => false, terminal: { close() {} },
+      });
+      const env = { trusted: route, trace: { left: () => secs, set: (n) => { secs = n; } }, play: { over: null } };
+      const run = (command) => { rows.length = 0; return registry.dispatch(command, env, line); };
+      return { caseFile, registry, env, run, startedAt: clock };
+    };
+
+    {
+      const { caseFile, registry, env, run } = setup('unknown');
+      const help = registry.helpLines(env).map(([text]) => text).join('\n');
+      expect(['scan', 'intercept', 'dump <file>', 'decrypt <id>', 'connect <a> <b>'].every((usage) => help.includes(usage)), 'help lists scan, intercept, dump, decrypt and connect');
+
+      const before = clock;
+      await run('scan');
+      expect(output().includes('scan: 10.0.2.0/24') && output().includes('new nodes: 2') && /e12 {2}relay\/handshake\.log/.test(output()) && /e13 {2}relay\/ledger\.enc {2}\[enc\]/.test(output()), `scan 1 lists the two relay files (${rows.length} lines)`);
+      expect(clock - before >= TUNING.scanSeconds[0] * 1000 && caseFile.snapshot().scans === 1, `scan 1 takes ${TUNING.scanSeconds[0]} s of real time and counts`);
+      expect(played.includes('decrypt-progress') && played.includes('cmd-run'), 'scan plays cmd-run and the decrypt-progress ticks');
+      await run('scan');
+      expect(output().includes('deep scan') && output().includes('trace-agent page') && output().includes('new nodes: 1'), 'scan 2 is the deep scan and finds the volatile page');
+      await run('scan');
+      expect(output().includes('nothing new') && caseFile.snapshot().scans === 2, 'scan 3 is instant and changes nothing');
+
+      played.length = 0;
+      await run('intercept');
+      expect(output().includes('capture: eth0') && output().includes('captured: e10') && played.filter((cue) => cue === 'packet-intercept').length === 3, 'intercept 1 trickles three packets and captures the beacon');
+      await run('intercept');
+      expect(/captured: e11 {2}Relay handshake frame {2}\[enc\]/.test(output()) && output().includes('read with: decrypt <id>'), 'intercept 2 captures the encrypted frame');
+      await run('intercept');
+      expect(output().includes('nothing of interest'), 'intercept 3 finds nothing');
+
+      await run('dump');
+      expect(output().includes('relay/handshake.log  e12') && output().includes('relay/ledger.enc  e13 [enc]'), 'dump without an argument lists the files a scan found');
+      await run('dump relay/handshake.log');
+      expect(output().includes('03:14:08 REGISTER guest=4097') && output().includes('[evidence] e12'), 'dump prints the file and the evidence line');
+      await run('dump ./relay/ledger.enc');
+      expect(output().includes('encrypted. use decrypt e13'), 'dump points an encrypted file at decrypt');
+      await run('dump nothing.txt');
+      expect(output().includes('no such file'), 'dump says "no such file" for an unknown path');
+
+      await run('decrypt');
+      expect(output().includes('e13') && !output().includes('e10'), 'decrypt without an argument lists the locked encrypted nodes');
+      await run('decrypt e10');
+      expect(output().includes('e10 is not encrypted'), 'decrypt refuses a node that is not encrypted');
+      await run('decrypt zz9');
+      expect(output().includes('zz9: no such node'), 'decrypt says "no such node" for an unknown name');
+      const t0 = clock;
+      await run('decrypt e11');
+      expect(output().includes('[ok] decrypted: Relay handshake frame') && output().includes('relay 4') && clock - t0 >= TUNING.decryptSeconds.relayChain * 1000, `decrypt prints the frame after ${TUNING.decryptSeconds.relayChain} s of real time`);
+      expect(caseFile.snapshot().evidence['net-relay-chain'] === 'decrypted' && caseFile.snapshot().job === null && played.includes('evidence-decrypt'), 'decrypt leaves the record decrypted and no job behind');
+      await run('decrypt e11');
+      expect(output().includes('already decrypted'), 'decrypting twice is refused');
+
+      await run('connect');
+      expect(output().includes('usage: connect <id> <id>') && output().includes('readable: e10 e11 e12'), 'connect without arguments lists what can be connected');
+      await run('connect e10 e11');
+      expect(output().includes('intel: One exit') && output().includes('[evidence] e16') && played.includes('relay-connect'), 'connect reveals the INTEL record');
+      secs = 100;
+      await run('connect e10 e12');
+      expect(output().includes('no relation between e10 and e12') && secs === 100 - TUNING.connectMissCost, `a connect with no relation costs ${TUNING.connectMissCost} trace seconds`);
+      await run('connect e13 e12');
+      expect(output().includes('e13 is not readable yet'), 'connect refuses a locked node');
+      await run('connect e10 e10');
+      expect(output().includes('pick two different nodes'), 'connect refuses one node twice');
+    }
+
+    {
+      // The trace ends in the middle of a decrypt: the job stops, nothing is left behind.
+      const { caseFile, env, run } = setup('unknown');
+      await run('scan');
+      let sleeps = 0;
+      onSleep = () => { if (++sleeps === 3) env.play.over = 'TRACE COMPLETE'; };
+      await run('decrypt e13');
+      expect(output().includes('decrypt: interrupted') && caseFile.snapshot().job === null && caseFile.snapshot().evidence['srv-ledger'] === 'locked', 'a decrypt stops when the trace ends and leaves the record locked');
+    }
+
+    {
+      // The record is overwritten by the trace while it is being decrypted.
+      const { caseFile, run } = setup('unknown');
+      await run('scan');
+      secs = TUNING.compromiseAt.ledger + 3;
+      await run('decrypt e13');
+      expect(output().includes('overwritten by the trace') && caseFile.snapshot().evidence['srv-ledger'] === 'compromised' && caseFile.snapshot().job === null, 'a decrypt of a record the trace overwrites meanwhile fails');
+    }
+
+    {
+      // A record decrypted too late is lost before the player can start; the shell says so.
+      const { run } = setup('watcher');
+      await run('scan');
+      secs = TUNING.compromiseAt.ledger - 1;
+      await run('decrypt e13');
+      expect(output().includes('data corrupted, cannot recover'), 'decrypt refuses a record that is already lost');
+    }
+
+    // The words: documentation addresses only, no key, every message used exists.
+    const text = JSON.stringify(hackingData);
+    const addresses = text.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g) ?? [];
+    const documentation = (address) => /^(192\.0\.2|198\.51\.100|203\.0\.113|10\.0\.2|127\.0\.0)/.test(address);
+    expect(addresses.every(documentation), `only documentation-range addresses appear in the command text (${addresses.filter((a) => !documentation(a)).join(', ') || 'none outside'})`);
+    expect(!/sdb9-part|--sdb9|ghost[-\s]+shell|shell[-\s]+1337/i.test(text), 'no command text prints a key layer');
+    const source = await readFile(js('hacking-commands.js'), 'utf8');
+    const used = [...source.matchAll(/msg\('(\w+)'/g)].map((match) => match[1]);
+    expect(used.every((key) => key in hackingData.MESSAGES), `every message the commands use exists (${used.filter((key) => !(key in hackingData.MESSAGES)).join(', ') || 'all'})`);
+    expect(Object.keys(hackingData.DUMP_FILES).every((file) => hackingData.DUMP_FILES[file].length) && Object.keys(hackingData.DECRYPTED).length === 2, 'every dumped file and decrypted record has text');
+  } finally {
+    performance.now = realNow;
+  }
+}
+
 console.log(failures ? `\n${failures} problem(s)` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

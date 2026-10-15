@@ -90,7 +90,7 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `boot-memtest` | boot | **phase 3.3, wired**: `story-data/boot.js` while the memory counts up |
 | `boot-fail` | boot | **phase 3.3, wired**: `output.js` `svc` when a service line is `FAILED` (the firewall) |
 | `key-tick` | terminal | **phase 2, wired**: real keystrokes (`story.js` `onKeyPress`) and auto-typing in `type`, `cmd`, `say` (every 3rd character, `{ gain: 0.6 }`) |
-| `cmd-run`, `cmd-fail` | terminal | phase 3 (Linux commands) |
+| `cmd-run`, `cmd-fail` | terminal | wired in phase 4.3 by `hacking-commands.js` (`cmd-run` when `scan`/`intercept`/`decrypt` start, `cmd-fail` on a refusal or a miss); the phase 3 Linux commands still do not play them |
 | `ghost-appear` | story | **phase 3.6, wired**: `story-data/ghost.js` when the ghost panel opens |
 | `trust-choice` | story | **phase 3.5, wired**: `story-data/routes.js`, right after the player picks |
 | `trace-start` | trace | **phase 3.5, wired**: `story.js` engine host, when the trace turns `lethal` (after the trust choice) |
@@ -100,7 +100,7 @@ All are in `js/audio/patches.js` and appear in `audio.list()`. "Wired by" says w
 | `board-open`, `node-select` | evidence | phase 4.5 |
 | `relay-connect` | hacking | **phase 4.2, wired**: `casefile.js` `connect` (a pair revealed INTEL) |
 | `breach-alert` | hacking | **phase 4.2, wired**: `casefile.js` `compromiseCheck` (evidence lost to the trace) |
-| `decrypt-progress` (12 per second max), `packet-intercept` | hacking | phase 4.3 (the `decrypt`, `scan` and `intercept` commands) |
+| `decrypt-progress` (12 per second max), `packet-intercept` | hacking | wired in phase 4.3: `decrypt-progress` ticks with every redraw of the progress line of `scan` and `decrypt`; `packet-intercept` plays once per packet row of `intercept` |
 | `traced-alert`, `system-takeover`, `session-kill` | game over | phase 6 |
 
 Aliases (different name, same sound; `audio.list()` marks them `kind: 'alias'`): `trace-expire` is `trace-expired`, `identity-reveal` is `identity`.

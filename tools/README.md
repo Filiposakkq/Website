@@ -35,6 +35,8 @@ Notes:
 
 ## `validate-story.mjs` — story data and engine check (phase 3)
 
+Since phase 4.3 it also drives the real `hacking-commands.js` with a fake clock (scan, intercept, dump, decrypt, connect, trace ending during a decrypt) and checks that the command text uses only documentation-range addresses and never prints a key layer.
+
 ```sh
 node tools/validate-story.mjs            # self-test, then validate and dry-run the story data
 node tools/validate-story.mjs --verbose  # also list the cues and labels the story uses

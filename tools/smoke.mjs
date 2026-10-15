@@ -320,6 +320,51 @@ scenarios.push({
   },
 });
 
+// Phase 4.3: the hacking commands build the case file in real time and the key is still solved afterwards.
+scenarios.push({
+  name: 'desktop: scan, intercept, dump, decrypt, connect -> victory',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'type', reduced: false });
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'new nodes: 2', 30000);
+    await sleep(500);
+    await sendCommand(page, 'intercept');
+    await waitOutput(page, 'captured: e10', 30000);
+    await sleep(500);
+    await sendCommand(page, 'dump relay/handshake.log');
+    await waitOutput(page, '[evidence] e12');
+    await sendCommand(page, 'connect e10 e12');
+    await waitOutput(page, 'no relation between e10 and e12');
+    await sendCommand(page, 'trace');
+    const leaked = await page.evaluate(() => /sdb9-part|ghost[-\s]shell|shell[-\s]1337/i.test(document.getElementById('output').textContent.replace(/unlock ghost shell 1337/g, '')));
+    if (leaked) throw new Error('a hacking command printed a key layer');
+    await winGame(page);
+  },
+});
+
+// Phase 4.3: a decrypt runs to the end, then the trace ends -> clean game over; reboot leaves no job or timer behind.
+// (The trace ending in the middle of a decrypt is covered in tools/validate-story.mjs: a record cannot be decrypted
+// late enough in the UI because the volatile records are overwritten before the last seconds.)
+scenarios.push({
+  name: 'desktop: decrypt, then trace expiry -> game over -> reboot',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'type', reduced: false });
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'new nodes: 2', 30000);
+    await sleep(500);
+    await sendCommand(page, 'decrypt e13');
+    await waitOutput(page, '[ok] decrypted: ', 30000);
+    await sleep(500);
+    await loseByTraceExpiry(page);
+    await rebootAndVerify(page, { reduced: false });
+    await sleep(500);
+    const pending = await page.evaluate(async () => (await import('/js/session.js')).currentSession().pending());
+    if (pending > 6) throw new Error(`${pending} timer handle(s) look too many after the reboot`);
+  },
+});
+
 // The third hint reveals the console part. It used to throw (revealSourcePart was never passed in).
 scenarios.push({
   name: 'reduced: third hint whispers the console part',
