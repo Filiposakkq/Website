@@ -283,11 +283,20 @@ if (story) {
   // Two appearances: the briefing (between the inbox message and the trace start) and one return when sdb9 opens.
   const unlockAt = at((node) => node.type === 'label' && node.name === 'unlock');
   const briefing = lines.filter(({ index }) => index < traceStart);
-  const returns = lines.filter(({ index }) => index > unlockAt && unlockAt >= 0);
-  expect(briefing.length + returns.length === lines.length, 'the third voice speaks only in the briefing and once when sdb9 opens');
+  const revealAt = at((node) => node.type === 'label' && node.name === 'reveal');
+  const returns = lines.filter(({ index }) => index > unlockAt && unlockAt >= 0 && index < revealAt);
+  const finale = lines.filter(({ index }) => index > revealAt && revealAt >= 0);
+  expect(briefing.length + returns.length + finale.length === lines.length, 'the third voice speaks in three places only: the briefing, when sdb9 opens and at the end of the level');
+  expect(finale.length >= 1 && finale.length <= 3, `the closing appearance has 1 to 3 lines (${finale.length})`);
+  const secure = flat.slice(revealAt);
+  const secureAt = secure.findIndex((node) => node.type === 'bar' && node.cls === 'voice-blue' && /secure line/i.test(node.label));
+  expect(secureAt >= 0 && secure.slice(0, secureAt).some((node) => node.type === 'say' && node.who === 'watcher'), 'at the end the watcher tries to reconnect, then a blue "establishing secure line" bar runs');
+  expect(secure.slice(secureAt).some((node) => node.type === 'line' && node.style === 'voice-blue' && /blocked/i.test(String(node.text))), 'the blue secure line blocks the watcher');
+  expect(secureAt >= 0 && secure.findIndex((node) => node.type === 'say' && node.who === 'mystery') > secureAt, 'the third voice speaks after the secure line is up');
+  expect(flat.at(-1)?.type === 'line' && /this is where the signal ends/.test(String(flat.at(-1).text)), 'the story still ends on "this is where the signal ends."');
   expect(briefing.length >= 2 && briefing.length <= 14, `the briefing has 2 to 14 lines (${briefing.length})`);
-  expect(returns.length >= 1 && returns.length <= 3, `the return has 1 to 3 lines (${returns.length})`);
-  expect(returns.every(({ index }) => flat.slice(Math.max(0, index - 3), index).some((node) => node.type === 'say' && node.who === 'watcher' || node.type === 'typing')),
+  expect(returns.length >= 1 && returns.length <= 3, `the return when sdb9 opens has 1 to 3 lines (${returns.length})`);
+  expect([...returns, ...finale].every(({ index }) => flat.slice(Math.max(0, index - 3), index).some((node) => node.type === 'say' && node.who === 'watcher' || node.type === 'typing')),
     'the return happens in a conversation: another voice is on the line');
   expect(spoken.every((text) => typeof text === 'string'), 'its lines are plain text');
   const text = spoken.filter((entry) => typeof entry === 'string');

@@ -186,6 +186,19 @@ async function winGame(page) {
     return [at('close it.'), at('<???> read it before you run it.'), at('this channel is not on my list.'), at('<???> it is not on any list.'), at('that was not me.'), at('this is where the signal ends.')];
   });
   if (back.some((index) => index < 0) || back.some((index, i) => i > 0 && index <= back[i - 1])) throw new Error(`the third voice should return in order when sdb9 opens: ${JSON.stringify(back)}`);
+  // The watcher's last retry is met by a blue secure line and the third voice (phase 4b).
+  const finale = await page.evaluate(() => {
+    const rows = [...document.getElementById('output').children];
+    const texts = rows.map((row) => row.textContent.trim());
+    const at = (needle) => texts.findIndex((text) => text.includes(needle));
+    const blue = (needle) => { const row = rows[at(needle)]; return row ? getComputedStyle(row).color : ''; };
+    return {
+      order: [at('=== LEVEL 01 COMPLETE ==='), at('retry attempt detected'), at('let me back in'), at('establishing secure line'), at('secure line established'), at('reconnect: BLOCKED'), at('i did not do that.'), at('<???> that door is closed.'), at('<???> sleep. we will call when it is time.'), at('this is where the signal ends.')],
+      colors: [blue('establishing secure line'), blue('secure line established'), blue('reconnect: BLOCKED')],
+    };
+  });
+  if (finale.order.some((index) => index < 0) || finale.order.some((index, i) => i > 0 && index <= finale.order[i - 1])) throw new Error(`the level should end with the watcher's retry, the secure line and <???>, in order: ${JSON.stringify(finale.order)}`);
+  if (finale.colors.some((color) => color !== 'rgb(77, 166, 255)')) throw new Error(`the secure line bar and its lines should be blue: ${JSON.stringify(finale.colors)}`);
   // The ghost script closed the trace request (phase 3.5): the HUD says so and the clock is stopped.
   const closed = await page.evaluate(() => document.querySelector('#hud .lbl')?.textContent);
   if (closed !== 'TRACE CLOSED') throw new Error(`after ghost.sh the HUD should read TRACE CLOSED, reads ${closed}`);
