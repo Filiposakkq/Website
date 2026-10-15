@@ -1,6 +1,6 @@
 # Story, level and evidence code
 
-Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15. The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
+Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15; the case file rows are being updated by phase 4 (branch `overhaul/phase-4-evidence`, 4.1 done). The plot itself is in [`../story/story-bible.md`](../story/story-bible.md).
 
 | File | Role |
 |---|---|
@@ -13,7 +13,8 @@ Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15. The plot i
 | `js/commands.js` | `createRegistry()`: `register({ name, aliases, group, usage, summary, available, listed, run })`, `dispatch(raw, env, line)`, `helpLines(env)`. `help` is generated from the registry (groups `commands:` and `system:`); a command with `available` false is plain "command not found" (the `abort` of the other route) |
 | `js/system-commands.js` | The flavor commands (group `system`): `whoami uname ps netstat ifconfig history pwd date echo clear cd`, plus restricted words (`sudo rm ssh ...` answer `bash: <cmd>: permission denied`). Output text and world facts are in `story-data/system.js`; `cat /var/log/auth.log` reads `SYSTEM_FILES`. No command prints the key (checked by `validate-story`). `ps aux` shows `ghost.sh` as PID 1337 but adds no case-file evidence (the evidence ids are fixed in `casefile.js`, phase 4). Tab completion: not done |
 | `js/trace.js` | `startTrace(secs, { session, mode, onSecond })` (session required): HUD and countdown. **Modes:** `running` counts down to a floor of 10 s and reads TRACE PENDING (cannot expire), `frozen` holds, `lethal` is the only mode that can expire (TRACE COMPLETE); `setMode()`, `close()` (TRACE CLOSED, ghost.sh), `set()` restarts an expired trace; `onSecond` is the permanent sound hook, `api.onTick`/`onEnd` stay free for level code |
-| `js/casefile.js` | Evidence board (API in the master README glossary); phase 4 reworks it |
+| `js/casefile.js` | Evidence board (API in the master README glossary). **Phase 4 in progress (4.1 done):** the records moved to `story-data/evidence.js`; until the new board (4.5) the board still renders only the original nine records (`ORIGINAL_IDS` filter in `casefile.js`) |
+| `js/story-data/evidence.js` | The evidence records as pure data (schema in the file header: `id`, short `code` like `e11`, `type` INTERCEPT / ARTIFACT / SIGNAL / INTEL / COMPROMISED, `found`, `tier`, `file`, `encrypted` + `decryptSeconds`, `requires`, `connects`, `compromiseAtTrace`) and the run-time states (hidden, locked, unlocked, decrypted, compromised). 19 records: the original nine, five new network records and five INTEL records. Checked by `validate-story`. All tuning numbers for the board and the hacking commands are `CASE` in `story-data/constants.js` |
 | `js/story-choices.js` | `chooseOption(ctx, options)`: tap or type one of the options of a `choice` node; resolves with the option id |
 
 Trace facts: the times are named constants in `story-data/constants.js` (`TRACE`: start 480 s, 120 s after the trust choice, 120 s after the unlock, 60 s at 8x on the watcher takeover, `hint` costs 30 s). Policy: `running` from the start until the trust choice (floors at 10 s, TRACE PENDING), `lethal` from the choice on, `close()` at the ghost script's first step (TRACE CLOSED).

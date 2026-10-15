@@ -47,6 +47,13 @@ against the real registries (`js/audio/patches.js` cues and scenes, the case fil
 names) and walks the story with a recording host once per combination of choices. `run` nodes (bespoke visual beats)
 are not called in a dry run, so it proves the node graph, not what the screen looks like. Exit code 1 on any problem.
 
+Phase 4 added an **evidence** section: it validates `js/story-data/evidence.js` (unique ids and short codes, types, `found`
+values, positions, `links`/`requires`/`connects` ids, no `requires` cycle, scan and intercept tiers without gaps, every
+record reachable on both trust routes, encrypted and fragile records only where the original puzzle path stays open, no
+text that prints a key layer), proves with 17 mutations of the real data that each kind of mistake is reported, and
+checks that every `discover('<id>')` call, every `caseFile('discover', '<id>')` story node and every id in
+`story-data/level01.js` names an existing record that a plain `discover` may reach.
+
 ## `transcript.mjs` — playthrough text recorder and differ (phase 3)
 
 ```sh
