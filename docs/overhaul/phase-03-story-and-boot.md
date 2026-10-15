@@ -198,17 +198,100 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 3.1 Engine + node types + tools/validate-story.mjs | todo | | |
-| 3.2 Skip logic as segment fast-forward | todo | | |
-| 3.3 Realistic boot data (incl. the sdb9 hook) | todo | | |
-| 3.4 Intro + transmission migrated | todo | | |
-| 3.5 Trust choice + branches migrated | todo | | |
-| 3.6 Ghost route migrated | todo | | |
-| 3.7 Identity reveal + endings migrated | todo | | |
-| 3.8 Command registry (migrate all existing commands) | todo | | |
-| 3.9 Realistic Linux commands | todo | | |
-| 3.10 story.js cleanup (< ~400 lines) + dialogue polish + audio-cues.md | todo | | |
+| 3.1 Engine + node types + tools/validate-story.mjs | done | 1650879 | `js/engine.js`, `js/pace.js`, `session.flush()`, `tools/validate-story.mjs` (self-test only; no story data yet). Engine is not driving the game before 3.3 |
+| 3.2 Skip logic as segment fast-forward | done | see 3.3 | Skip = `pace.setFast` + `session.flush()` per engine segment; `js/skip-control.js` holds the 3 s state per session; old `run.skip*` flags deleted. Smoke 20/20 |
+| 3.3 Realistic boot data (incl. the sdb9 hook) | done | 61b98cd | `story-data/boot.js` runs through the engine; `output.js` extracted; smoke 20/20 (updated the BIOS header string in `tools/smoke.mjs`); transcript diff vs baseline = boot text only |
+| 3.4 Intro + transmission migrated | done | ae37c3c | `story-data/intro.js`; transcript = baseline byte for byte (smoke 19/20 in one parallel run, the typing-ticks scenario is the known flaky one, passes alone) |
+| 3.5 Trust choice + branches migrated | done | ae37c3c | `story-data/routes.js`, generic `chooseOption`; trace policy (Design 3.5): `trace.js` modes + `close()`, `TRACE` constants, `trust-choice` and `trace-start` cues wired; smoke 20/20 incl. new TRACE CLOSED assertion; audio-lint 0 problems |
+| 3.6 Ghost route migrated | done | (this commit) | `story-data/ghost.js` (unlock to the end of the script) + `js/ghost.js` (prompt and panel); transcript = baseline; smoke 20/20 |
+| 3.7 Identity reveal + endings migrated | done | (this commit) | `story-data/ending.js` + `endings.js` (game over / takeover text), modules `fx-screen.js` `logo.js` `endings.js` `reveal.js`; story.js 1010 -> ~480 lines; transcript = 3.6 (0 differing lines); smoke 20/20; validate-story ok |
+| 3.8 Command registry (migrate all existing commands) | done | (this commit) | `commands.js` + `story-data/level01.js`; `level01.js` registers every command; `help` generated; new smoke scenario `registry commands, flavor commands and clear` |
+| 3.9 Realistic Linux commands | done | (this commit) | `system-commands.js` + `story-data/system.js`; validate-story checks (doc-range IPs only, ghost.sh PID 1337, eth0:1, :4444 redacted, no key text); transcript diff = help + new commands only; smoke 21/21 |
+| 3.10 story.js cleanup (< ~400 lines) + dialogue polish + audio-cues.md | done | (this commit) | story.js ~300 lines (`modals.js`, `power-ui.js`, `dev-routes.js`; `host.legacy` removed); one watcher line polished; audio-cues.md callers updated; CHANGELOG line; smoke 21/21 |
 
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
+
+### Resume point (2026-10-15, session 1, phase complete)
+
+- Branch `overhaul/phase-3-story`; all rows done; handoff report below. Remaining: the owner's review and merge (not done by Claude). If a review finds issues: fix on this branch, re-run `node tools/smoke.mjs`, `node tools/validate-story.mjs`, update the Checkpoint log.
+
+### Resume point (2026-10-15, session 1, after 3.9) (historical)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: the commit of rows 3.8/3.9 (full smoke 21/21 on a snapshot, `validate-story` passes, transcript diff vs 3.7 = help lines and the new commands only).
+- Next: 3.10 cleanup. `story.js` is ~480 lines (goal under ~400: candidates are `resetGame`, the developer routes, the launch sequence, `legacyLevel` / the `ghost()` and `level01()` shells), then remove `host.legacy` if possible, dialogue polish (typos, rhythm), audio-cues.md final pass, `CHANGELOG.md` line, handoff report, master README tracker row and Known issues, PR to main (do not merge).
+
+### Resume point (2026-10-14, session 1, after 3.7) (historical)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.7 (full smoke 20/20 on a snapshot, `validate-story` passes, transcript diff vs 3.6 = 0 lines; audio-lint `trace` row flaked once under load and passed alone).
+- Next: 3.8 command registry (`js/commands.js`, migrate every `level01.js` command; then `host.legacy.level` goes), 3.9 Linux commands, 3.10 cleanup (story.js under ~400 lines, currently ~480), dialogue polish, `CHANGELOG.md`, handoff report, PR.
+
+### Resume point (2026-10-14, session 1, after 3.6) (historical)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.6 (full smoke 20/20 on a snapshot, `node tools/validate-story.mjs` passes, transcript diff vs the baseline = boot text only).
+- Engine segments: `boot`, `intro`, `choice` (trust choice, routes, trace reset, then the Level 01 shell as a legacy `run` node that ends the run on game over), `ending` (unlock, watcher, ghost prompt and script as nodes, then `legacyEnding` in `story.js`).
+- Next: 3.7. `legacyEnding` (erased list, GHOSTED stamp, assessment, then `playIdentityReveal`) into `story-data/ending.js`; the bespoke beats (`renameEverywhere`, `moveHelloIntoChat`, the GHOSTED row swap) stay functions called by `run` nodes, ideally moved to a module (`js/fx-reveal.js`) so `story.js` shrinks. `gameOver` / `watcherTakeover` / endings text (`TRACE COMPLETE`, `LOCKED OUT`, `SESSION COMPROMISED`, `DEVELOPER SHUTDOWN TEST`) also move to data/module there. Then 3.8 command registry, 3.9 Linux commands, 3.10 cleanup (story.js under ~400 lines), dialogue polish, `CHANGELOG.md`, handoff report.
+- Nothing half edited. Baseline for transcript diffs: `main` 33c7b94.
+
+### Resume point (2026-10-14, session 1, after 3.5) (historical)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: `ae37c3c` (full `node tools/smoke.mjs` 20/20 on a snapshot of it, `node tools/audio-lint.mjs` 0 problems, `node tools/validate-story.mjs` passes, `node tools/transcript.mjs --diff` vs the baseline shows the boot text only).
+- Engine segments: `boot` (nodes), `intro` (nodes), `choice` (nodes: trust choice, both routes, trace reset, then one `run` node calling `legacyLevel` in `story.js`).
+- Next: 3.6 ghost route. `promptGhost` + `runGhost` + the ghost part of `revealName` into nodes (the ghost panel with its steps stays a bespoke `run` beat; the trace is already `close()`d there). Then 3.7 reveal + endings (`playIdentityReveal`, `renameEverywhere`, `moveHelloIntoChat`, `gameOver`, `watcherTakeover` stay functions called by `run` nodes), 3.8 command registry (`level01.js` switch), 3.9 Linux commands, 3.10 cleanup (story.js under ~400 lines) + dialogue polish.
+- Nothing half edited. Baseline for transcript diffs: `main` 33c7b94 (record into a scratch dir from a checkout; the session scratchpad copy is not committed).
+- Reminders: update docs in the same commit (audio-cues.md, docs/state/*, tools/README.md); a `CHANGELOG.md` line at the end; the handoff report at the end.
+
+### Resume point (2026-10-14, session 1, after 3.3) (historical)
+
+- Branch `overhaul/phase-3-story`. `last green commit`: the commit of row 3.3 (full `node tools/smoke.mjs` 20/20 on a snapshot of it; the commit before it, 1650879, was 17/20 in one parallel run and the 3 load failures passed alone).
+- Done: 3.1 engine, 3.2 skip, 3.3 boot data. The engine runs three segments: `boot` (nodes), `intro` and `choice` (each a single `run` node calling `legacyIntro` / `legacyRest` in `story.js`).
+- Next: 3.4. Turn `legacyIntro` (flash/blackout, INCOMING TRANSMISSION, hello, wipe, logo, inbox, LEVEL 01 brief, trace start, cut-off, watcher interruption, "who do you trust?") into nodes in `story-data/intro.js`. Bespoke beats stay `run` nodes. Check with `node tools/transcript.mjs --out=<dir>` then `--diff=` against the baseline (record the baseline from a checkout of `33c7b94`; the scratchpad copy is not committed).
+- Nothing half edited. Known harmless leftovers: `const story = []` in `legacyIntro` (dead, remove in 3.4).
+- Tools: `tools/validate-story.mjs`, `tools/transcript.mjs`, `tools/smoke.mjs`.
+
+### Resume point (2026-10-14, session 1 start) (historical)
+
+- Branch `overhaul/phase-3-story`, created from `main` `33c7b94`. Head commit: see `git log`.
+- `last green commit`: none yet (no smoke run on this branch).
+- Step in progress: none, only the tracker row was set to `in progress`.
+- Nothing broken, nothing half edited. No code has been changed yet.
+- Next: re-verify the "Current state" section of this file against the code, then start 3.1 (engine, node types, `tools/validate-story.mjs`).
+
+
+### 3.1 notes (2026-10-14)
+
+- **Baseline smoke on `main` 33c7b94 (before any change):** 18/20 in the parallel run; `reduced: typing ticks are rate limited...` (30 instant keystrokes started 14 click nodes) and `desktop: trust unknown -> victory` (90 s timeout waiting for the trust choice) failed under load and both passed when rerun alone (5 s and 158 s). This is the known flakiness in `tools/README.md`. Judge later runs against it: rerun failures alone before concluding anything.
+- **Engine design decisions.** Segments carry the skip policy (`skippable: 'boot' | 'intro'`, `announce`); a skip is `pace.setFast(true)` plus `session.flush()` (new, wakes every pending sleep without aborting), so a skip takes effect at once instead of after the current wait. `sfx`, `gfx`, `flash`, `static`, `corrupt` and `wait` nodes are dropped while skipping; text, `scene`, `trace`, `state`, `case` and `run` nodes still run. The next segment ends the fast-forward. Branches compile to jumps, so there is one flat program and a real pointer for `engine.getState()`.
+- **Validator.** `tools/validate-story.mjs` checks node fields strictly (a misspelled field is an error) and dry-runs every combination of choices with a recording host; `run` nodes are not called in a dry run.
+
+### 3.2 and 3.3 notes (2026-10-14)
+
+- **Stale engine events.** A developer jump aborts the old session, and the old engine's `finally` reports its end a moment later; it used to hide the shared skip button after the new run had shown it (found by the scenario `abort at BIOS...`). `skip-control.js` now ignores events once its own session has aborted. Anything that touches shared DOM from an engine event must do the same.
+- **Boot text changes (intentional, from the plan):** new BIOS/GRUB/kernel/service text; one failing service (`Firewall`); login lines type themselves with a masked password; three warnings after the partition scan. **Removed:** the Tor and relay-service lines, `fsck`, the network bring-up with five relay hops, cryptsetup/`/dev/sdb1`, the drive list `sda/sdb/sdc`. **Kept:** `scanning for partitions... found unlisted partition: /dev/sdb9 / contents: encrypted / owner: unknown` and the final `WARNING: unauthorized access detected / source: unknown / tracing connection... / trace request failed.` The later dialogue never mentions the removed lines (grep checked).
+- **Audio:** the boot now plays `boot-memtest`, `boot-checkpoint`, `drive-seek`, `boot-fail` (on the failed service, instead of `failure`) and `boot-complete`. `boot-memory`, `relay-hop`, `network-lock` and `disk-unseal` have no caller (kept). Listening is unverified (nobody has heard the new boot).
+- **Boot length** is unverified on a real clock: estimated about 38 s un-skipped (the BIOS part is about 14 s). Check on the preview; tune the waits in `story-data/boot.js`.
+- **`tools/transcript.mjs`** gained a `boot` scenario (captured inside the page, because the story wipes the screen) and normalizes the `eta:` line. Baseline for later diffs: record from a checkout of `33c7b94`.
+- `tools/smoke.mjs`: the only change is the BIOS header string (`FSOC-BIOS v3.1.4`).
+
+### 3.4 and 3.5 notes (2026-10-14)
+
+- **Skipping now drops sounds** in the skipped segment (`sfx` nodes and the sounds inside typing helpers): before, a skipped intro still played `transmission`, `mail-arrive` and so on. Intended (spec: sounds are dropped).
+- **Trace policy.** `running` (until the trust choice) counts down to 10 s and holds there reading TRACE PENDING, so it can never end the game before the player has chosen; the trust route turns it `lethal` (`trace-start` cue) and resets it to 120 s; `ghost.sh`'s "close_trace" now calls `trace.close()` (HUD reads TRACE CLOSED, clock stopped for good; before it was `kill()` / TRACE KILLED, same effect). Between the start of the ghost script and that step (about 5 s) the trace is still lethal, as before. `startTrace` requires the session now (the raw `setInterval` fallback is deleted). The times are named constants (`story-data/constants.js` `TRACE`); tuning is for after the owner's phone test.
+- **Generic choice.** `story-choices.js` exports `chooseOption(ctx, options)`; `chooseTrust` is gone. The accepted answers (`1`, `unknown`, `trust <unknown>` ...) are the options' `match` lists in `story-data/routes.js`; the optional leading `trust ` verb is still stripped inside `chooseOption` (a small trust-specific leftover, noted for 3.10).
+- **Tool fix.** `tools/transcript.mjs` shared one variable between its two capture scenarios (a race when run in parallel); each scenario returns its own rows now and the baseline was re-recorded. `tools/audio-lint.mjs` passes a session and `mode: 'lethal'` to `startTrace` and checks the new modes.
+- **Smoke note.** The scenario `reduced: typing ticks are rate limited...` failed once in a loaded parallel run again (unrelated to this phase; passes alone).
+
+## Handoff report (2026-10-15)
+
+**Done:** rows 3.1 to 3.10. The story is data (`js/story-data/`: boot, intro, routes, ghost, ending, endings, level01, system) run by `js/engine.js`; the screen effects, logo, endings, reveal, power sequences and developer routes are modules (`fx-screen.js`, `logo.js`, `endings.js`, `reveal.js`, `power-ui.js`, `dev-routes.js`, `modals.js`); `commands.js` is the command registry and `help` is generated from it; `system-commands.js` adds the realistic Linux commands. `story.js` is about 300 lines (was 1658).
+
+**Verified (last green commit = the head of this branch before the PR):** full `node tools/smoke.mjs` 21/21 on a snapshot; `node tools/validate-story.mjs` passes (engine self-test, story validation, dry run of every choice combination, registry and flavor-text checks); `tools/check-fonts.sh` OK; `tools/audio-lint.mjs` 0 problems when the `trace` rows are run alone; `tools/transcript.mjs` diffs: the intro, both routes, the ghost route and the ending are identical to `main`; the boot differs on purpose; the help text and the new commands differ on purpose; the three layers of the Level 01 key (`index.html`, `styles.css`, `js/source.js`) are untouched (`git diff main` is empty for them) and the smoke test wins through them.
+
+**Intentional behavior changes:** the new boot (the old Tor/relay-hop/fsck/cryptsetup lines and the sda/sdb/sdc listing are gone; the `sdb9` hook, a failed Firewall service and a masked login are in); the trace cannot expire before the trust choice; TRACE PENDING and TRACE CLOSED HUD states; skipping drops sounds; `help` is grouped into `commands:` and `system:` and its columns are wider; the watcher line "he cannot say it. he does not trust you." (was "he can't say it because he does not trust you."); `abort` and `isolate` swapped places in the watcher's help list.
+
+**Unverified:** every new sound (nothing was heard: `boot-memtest`, `boot-fail`, `boot-complete`, `trust-choice`, `trace-start`, `ghost-appear`); the boot length on a real clock (about 38 s estimated); the layout of the new boot and the `clear` command on a real phone; Firefox and Safari behavior of the new modules (headless Chromium only); the `audio-lint` `trace` row fails now and then under heavy parallel load (timing of a 2 s expiry) and passes alone; `smoke.mjs` has the known parallel flakiness (typing ticks, victory/expiry scenarios), rerun failures alone.
+
+**Not done / carried over:** tab completion for commands (optional in the spec); `ps aux` and the other flavor commands add no case-file evidence (evidence ids are fixed in `casefile.js`; phase 4); `scan`, `intercept`, `dump`, `decrypt`, `trace --status` are phase 4 and have no stub (help stays consistent without them).
+
+**Notes for the next phases:** add a command with `registry.register({...})` in `level01.js` or `system-commands.js` (text in `story-data/`); add a story beat as nodes in `story-data/*.js` and run `node tools/validate-story.mjs`; `host.runLevel` is the only bridge to the puzzle shell.

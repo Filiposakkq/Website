@@ -57,7 +57,7 @@ export function createSession() {
     sleep(ms) {
       if (signal.aborted) return Promise.reject(new AbortError(signal.reason?.message ?? signal.reason));
       return new Promise((resolve, reject) => {
-        const entry = { timer: 0, reject };
+        const entry = { timer: 0, resolve, reject };
         entry.timer = setTimeout(() => {
           sleepers.delete(entry);
           resolve();
@@ -70,6 +70,20 @@ export function createSession() {
     wait(ms) {
       if (signal.aborted) return Promise.reject(new AbortError(signal.reason?.message ?? signal.reason));
       return ms > 0 ? session.sleep(ms) : Promise.resolve();
+    },
+
+    /**
+     * Resolves every pending sleep() right now, without aborting. Used when the player skips: the
+     * waits that are already running end at once, and later waits are the caller's business.
+     */
+    flush() {
+      if (signal.aborted) return;
+      const waking = [...sleepers];
+      sleepers.clear();
+      waking.forEach((entry) => {
+        clearTimeout(entry.timer);
+        entry.resolve();
+      });
     },
 
     setTimeout(fn, ms, ...rest) {

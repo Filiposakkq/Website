@@ -70,7 +70,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 |---|---|---|---|---|---|---|
 | 1 | Foundation & bug fixes | merged | — | `overhaul/phase-1-foundation` | PR #4, squash commit `841cad0` | all rows done, smoke 16/16, owner tested the preview on phone and PC; review findings carried over, see "Known issues carried over" |
 | 2 | Audio | merged | 1 | `overhaul/phase-02-audio` | PR #7, squash commit `b0ea8ee` | all rows done, smoke 20/20, audio-lint 0 problems; **not yet listened to**: owner checklist "Phase 2 only" |
-| 3 | Story & boot | todo | 1 | `overhaul/phase-3-story` | | |
+| 3 | Story & boot | in review | 1 | `overhaul/phase-3-story` | PR #10 (not merged) | all rows 3.1–3.10 done, smoke 21/21, validate-story ok; **not heard/seen**: new boot sounds and length (~38 s est.), phone layout of the new boot; see the handoff report |
 | 4 | Evidence board | todo | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | | |
 | 5 | Animations | todo | 1 (3 recommended) | `overhaul/phase-5-animations` | | |
 | 6 | TRACED game over | todo | 1, 2, 3, 5 | `overhaul/phase-6-traced` | | |
@@ -195,7 +195,7 @@ Numbering follows `source/code-review.md`. "Verified" notes record what was foun
 | 2 | Trace timer never stops | 1 | **Confirmed.** `trace.js` never clears the interval when `secs` hits 0 (see Phase 1 for the `set()` re-arm subtlety) |
 | 3 | Web Audio envelope scheduling | 1 (minimal), 2 (replaced) | **Confirmed.** `envelope()` in `audio.js` still ramps to `start + 0.035` regardless of `duration` |
 | 4 | Async reentrancy / no cancellation | 1 | **Confirmed.** `resetGame()` and `runDeveloperRoute()` both call `void boot()` without cancelling the previous run |
-| 5 | `story.js` is a 1.6k-line monolith | 3 | **Confirmed** (1658 lines) |
+| 5 | `story.js` is a 1.6k-line monolith | 3 | **Fixed in phase 3** (about 300 lines); remove this row when the PR is merged |
 | 6 | `createLevel01` takes 13 loose parameters | 1 (introduce context), 3 (use it) | **Confirmed** (13 destructured params) |
 | 7 | Narrative logic in `tty.js` (`chooseTrust`) | 1 | **Confirmed** |
 | 8 | `window.setRain` / `syncRainMotion` globals | 1 | **Confirmed.** 12 lines in `story.js` reference `setRain` |
@@ -367,13 +367,11 @@ None of these is a regression and none blocks the game; each has a home phase.
 | 41 of 73 `@keyframes` animate `filter`, `box-shadow`, `text-shadow`, `clip-path`, `letter-spacing`, colors, `background-position`, `top`; one transition animates `top`, `left`, `font-size` (rule: only `transform`/`opacity`) | Phase 5 |
 | 26 font-size declarations below 11px in `.case-*` (player-facing on phones) and `.developer-*` (`tools/check-fonts.sh --all` lists them) | Phase 4 (`.case-*`), phase 7 (`.developer-*`) |
 | The DEV `boot` route calls `runStory()` directly, so the ambient-interval cleanup in `startStory`'s `finally` does not run when it ends normally (localhost only) | Phase 7 |
-| `trace.js` falls back to a raw `setInterval` when no session is passed (currently unreachable) | Phase 3 |
-| Skip control (lower right) still covers text on small phones and its idle look is a compromise: rework it (HOLD TO SKIP label, circular hold progress, placed above the prompt, 3 s hold kept, smoke test keeps using a real mouse press) | Phase 3 (skip-hold state is per session) and phase 5 (visuals) |
-| Trace timer: no per-scene policy. The HUD can hit 00:00 before the trust choice with nothing happening, it keeps running during the ghost sequence, and the times (480/120/120/60) are untuned | Phase 3 (`trace` policy in story data, task 3.5) and phase 5 (HUD look, 5.4) |
+| Skip control (lower right) still covers text on small phones and its idle look is a compromise: rework it (HOLD TO SKIP label, circular hold progress, placed above the prompt, 3 s hold kept, smoke test keeps using a real mouse press). The hold state is per session since phase 3.2 (`js/skip-control.js`) | Phase 5 (visuals) |
+| Trace times (480 / 120 / 120 / 60, `hint` 30 s) are untuned: named constants in `story-data/constants.js`, to be tuned after the owner's phone tests. (The per-scene policy is done in phase 3.5: `running` floors at TRACE PENDING, `lethal` after the trust choice, `close` at the ghost script; HUD look is phase 5.4) | Owner tuning; phase 5 (HUD look, 5.4) |
 | Trace HUD overlaps the ghost panel label on phones (docks to the top right) | Phase 5 |
 | More ways to be traced (noisy commands, honeypot file, unverified `ghost.sh`, watcher lockout) | Idea only: "Phase 10", see `docs/story/README.md`; needs owner canon decisions |
 | Real-device checks not done: screen reader, audible output (phase 2 sounds have never been heard by anyone), 60 fps of the rain on weak phones | Owner, on the preview of each phase |
-| The trace tick (phase 2) runs for the whole trace, also during the ghost sequence; no per-scene sound policy | Phase 3 (trace policy, task 3.5) |
 | Firefox/Safari fallback for `cancelAndHoldAtTime` in `audio/render.js` has never been executed | Owner or phase 9 QA |
 
 ## Decisions and open questions log

@@ -33,6 +33,35 @@ Notes:
 - Audio cannot be heard in headless runs. The smoke only checks that nothing throws, that no `AudioContext` exists before the launch click, and that a reboot leaves no source node running (a test-only probe installed with `addInitScript`; the game exposes no global). Levels and tails are in `audio-lint.mjs`.
 - A full run takes a few minutes because the story runs in real time (scenarios run in parallel).
 
+## `validate-story.mjs` — story data and engine check (phase 3)
+
+```sh
+node tools/validate-story.mjs            # self-test, then validate and dry-run the story data
+node tools/validate-story.mjs --verbose  # also list the cues and labels the story uses
+```
+
+Needs no browser and no server (about a second). Step 1 runs small fixture stories through the engine and checks
+that it reports every kind of mistake (unknown node type or field, missing label, bad cue, choice without a target ...)
+and that branches, choices, `end` and the skip rules behave. Step 2 loads `js/story-data/index.js`, validates it
+against the real registries (`js/audio/patches.js` cues and scenes, the case file API in `js/casefile.js`, the glitch
+names) and walks the story with a recording host once per combination of choices. `run` nodes (bespoke visual beats)
+are not called in a dry run, so it proves the node graph, not what the screen looks like. Exit code 1 on any problem.
+
+## `transcript.mjs` — playthrough text recorder and differ (phase 3)
+
+```sh
+node tools/transcript.mjs --out=/tmp/before                  # record 4 scripted playthroughs (reduced motion, ~1 min)
+node tools/transcript.mjs --site=<copy-of-public> --out=/tmp/after
+node tools/transcript.mjs --diff=/tmp/before,/tmp/after      # lines present in only one of the two recordings
+```
+
+Plays both trust routes to victory (every shell command, the ghost prompt), the `abort` ending and the lock-out in
+reduced motion and saves the terminal text, plus two captures taken the moment a marker line appears (`boot`, `transmission`: the story wipes those lines from the screen), with random parts normalized (relay IPs, latencies, redaction blocks,
+kernel timestamps, memory counter), so two recordings of the same build are identical. Used in phase 3 to check that
+every story line that was not changed on purpose is still there. `--diff` compares sets of lines, not their order,
+and exits 1 when anything differs. To record the baseline of an older commit, check it out into a scratch directory and
+pass its `sites/fsociety00/public` as `--site`. It judges text only, not looks or sound.
+
 ## `audio-lint.mjs` — audio engine lint (phase 2)
 
 ```sh
@@ -48,7 +77,7 @@ under full scale (the real loudness gate: nothing may rely on the output limiter
 `audio.duration()` declares. The master chain's soft clip tops out near -2.3 to -2.9 dBFS, so the "-1 dBFS" check cannot fail
 by itself; a separate row drives two cues at 200x gain to prove the limiter holds. For beds: audible while
 running, silent after `setScene('idle')` (nodes stopped on the audio clock), no click when crossfading
-through every scene. Also: rate-limited cues admit at most `rate` plays per second, and `stopAll()` leaves no
+through every scene. Also: rate-limited cues admit at most `rate` plays per second, `trace.js` modes (a running trace holds at 10 s and reads TRACE PENDING, frozen holds, lethal expires, `close()` reads TRACE CLOSED, a session is required), and `stopAll()` leaves no
 pending source node and no sound, `trace-sound.js` thresholds and `trace.js` `onSecond` (about 5 s of real time).
 Exit code 1 on any problem. The voice clip is a file and is skipped.
 It judges numbers, not taste: the owner still has to listen (listening checklist in the phase 2 PR).

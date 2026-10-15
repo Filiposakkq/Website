@@ -1,29 +1,26 @@
-// Story-level player choices. These used to live in tty.js, which made the generic terminal
-// know about the plot. tty.js now only handles input; the narrative decisions are here.
+// Story-level player choices. tty.js only handles input; the narrative decisions (what is offered, what each
+// option leads to) are story data (story-data/routes.js, `choice` nodes). This module is the generic UI for one
+// `choice` node: tappable buttons plus typing in the terminal.
 
 import { renderChoices } from './choices.js';
 
-const TRUST_OPTIONS = [
-  { id: 'unknown', key: '1', label: 'trust <unknown>', match: ['1', 'unknown'] },
-  { id: 'watcher', key: '2', label: 'trust <watcher>', match: ['2', 'watcher'] },
-];
-
-// Accepted answers: tap a button, `1`/`2`, `unknown`/`watcher`, and any of those after `trust `
-// with or without angle brackets (`trust <watcher>`), in any letter case.
+// Accepted answers: tap a button, an option's `match` words (such as `1` / `unknown`), and any of those after a
+// leading `trust ` with or without angle brackets (`trust <watcher>`), in any letter case.
 const normalize = (value) => value.trim().toLowerCase()
   .replace(/^trust\s+/, '').replace(/[<>]/g, '').trim();
 
 /**
- * Asks who the player trusts. Resolves with 'unknown' or 'watcher'.
+ * Offers `options` and resolves with the id of the one the player picks.
  *
  * @param {Pick<import('./context.js').GameContext, 'out' | 'line' | 'cmd' | 'terminal'>} ctx
- * @returns {Promise<'unknown' | 'watcher'>}
+ * @param {Array<{ id: string, key?: string, label: string, match: string[] }>} options
+ * @returns {Promise<string>}
  */
-export async function chooseTrust({ out, line, cmd, terminal }) {
+export async function chooseOption({ out, line, cmd, terminal }, options) {
   let tapped = null;
   const choices = renderChoices({
     container: out,
-    options: TRUST_OPTIONS,
+    options,
     onPick: (option) => {
       if (tapped) return;
       tapped = option;
@@ -43,14 +40,14 @@ export async function chooseTrust({ out, line, cmd, terminal }) {
     } else if (raw === null) {
       continue; // prompt was woken without a choice; ask again
     } else {
-      const hit = TRUST_OPTIONS.find((option) => option.match.includes(normalize(raw)));
+      const hit = options.find((option) => option.match.includes(normalize(raw)));
       if (hit) {
         choice = hit;
         terminal.close();
         choices.lock(choice.id);
       } else if (raw.trim()) {
         line(`command not found: ${raw.trim()}`, 'warn');
-        line(`try: ${TRUST_OPTIONS.map((option) => option.label).join('  |  ')}`, 'dim');
+        line(`try: ${options.map((option) => option.label).join('  |  ')}`, 'dim');
       }
     }
   }

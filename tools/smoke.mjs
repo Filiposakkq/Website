@@ -179,6 +179,9 @@ async function winGame(page) {
   await ghost.waitFor({ timeout: 90000 });
   await ghost.click();
   await waitOutput(page, 'this is where the signal ends.', 240000);
+  // The ghost script closed the trace request (phase 3.5): the HUD says so and the clock is stopped.
+  const closed = await page.evaluate(() => document.querySelector('#hud .lbl')?.textContent);
+  if (closed !== 'TRACE CLOSED') throw new Error(`after ghost.sh the HUD should read TRACE CLOSED, reads ${closed}`);
   // Victory is an exit path too: the logo's ambient jitter and every other timer must be gone.
   await sleep(500);
   const pending = await page.evaluate(async () => (await import('/js/session.js')).currentSession().pending());
@@ -218,7 +221,7 @@ async function snapshotRun(page) {
     const count = (needle) => text.split(needle).length - 1;
     const power = document.getElementById('powerPanel');
     return {
-      bios: count('FSOC-BIOS v0.0.1'),
+      bios: count('FSOC-BIOS v3.1.4'),
       restored: count('LOCAL CONSOLE RESTORED'),
       cpu: count('CPU: Intel(R)'),
       trustPrompts: count('who do you trust?'),
@@ -242,7 +245,7 @@ async function rebootAndVerify(page, { reduced }) {
   await waitGone(page, '#powerPanel', 60000);
   if (!reduced) {
     // Real-time run: the BIOS is still printing, so one stream means exactly one header.
-    await waitOutput(page, 'FSOC-BIOS v0.0.1');
+    await waitOutput(page, 'FSOC-BIOS v3.1.4');
     await sleep(6500);
     const early = await snapshotRun(page);
     expectClean(early, [
@@ -332,6 +335,32 @@ scenarios.push({
     }
     await sendCommand(page, 'help'); // the shell must still be alive
     await waitOutput(page, 'commands:');
+    await winGame(page);
+  },
+});
+
+// Phase 3.8 / 3.9: the command registry. The flavor commands answer in the story world and `clear` empties the terminal.
+scenarios.push({
+  name: 'reduced: registry commands, flavor commands and clear',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sendCommand(page, 'help');
+    await waitOutput(page, 'commands:');
+    // Phase 3.9: the registry's flavor commands answer in the story world, and `clear` empties the terminal.
+    await waitOutput(page, 'system:');
+    await sendCommand(page, 'ps aux');
+    await waitOutput(page, '/root/ghost.sh');
+    await sendCommand(page, 'cat /var/log/auth.log');
+    await waitOutput(page, 'session opened for user guest');
+    await sendCommand(page, 'sudo ls');
+    await waitOutput(page, 'bash: sudo: permission denied');
+    // `clear` removes its own echo, so sendCommand (which waits for the echo) cannot be used.
+    await page.locator('.tty-input').fill('clear');
+    await page.locator('.tty-input').press('Enter');
+    await page.waitForFunction(() => !document.getElementById('output').textContent.includes('ghost.sh --hold'));
+    await sendCommand(page, 'whoami'); // still alive after clear
+    await waitOutput(page, 'guest (uid=1000)');
     await winGame(page);
   },
 });

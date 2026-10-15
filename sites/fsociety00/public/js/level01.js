@@ -1,12 +1,16 @@
 import { sourcePartThree, whisperSourcePart } from './source.js';
 import { formatClock } from './util.js';
 import { isAbortError } from './session.js';
+import { createRegistry } from './commands.js';
+import { registerSystemCommands } from './system-commands.js';
+import { TRACE } from './story-data/constants.js';
+import { SYSTEM_FILES } from './story-data/system.js';
+import {
+  LEVEL01_HINTS, LEVEL01_FILES, LEVEL01_FILE_ROUTE, LEVEL01_FILE_EVIDENCE, LEVEL01_LS, LEVEL01_SOURCE_FILES,
+  LEVEL01_SOURCE_MAP,
+} from './story-data/level01.js';
 
-export const level01Hints = [
-  'three parts. inspect the page layers: markup, styles, and script.',
-  'on desktop try ctrl+u or dev tools. on mobile use `source map` here, then read each listed file.',
-  'the markup comment, a CSS custom property, and the JavaScript console each hold one part.',
-];
+export const level01Hints = LEVEL01_HINTS;
 
 export function getLevel01Key() {
   const markup = document.querySelector('meta[name="sdb9-part-one"]')?.content;
@@ -27,7 +31,8 @@ export function revealLevel01SourcePart() {
 }
 
 /**
- * Builds the Level 01 shell. Everything it needs comes from the GameContext.
+ * Builds the Level 01 shell. Everything it needs comes from the GameContext. The commands are registered in a
+ * registry (commands.js); this function only owns the key, the echo and the read-eval loop.
  *
  * @param {import('./context.js').GameContext} ctx
  */
@@ -48,20 +53,8 @@ export function createLevel01(ctx) {
     key = ['ghost', 'shell', sourcePartThree];
     integrityFailed = true;
   }
-  const sourceFiles = {
-    'page/index.html': {
-      url: new URL('../index.html', import.meta.url),
-      clue: /sdb9-part-one|sdb9 :: layer 1\/3/,
-    },
-    'page/styles.css': {
-      url: new URL('../styles.css', import.meta.url),
-      clue: /--sdb9-part-two/,
-    },
-    'page/js/source.js': {
-      url: new URL('./source.js', import.meta.url),
-      clue: /sourcePartThree/,
-    },
-  };
+  const sourceFiles = Object.fromEntries(Object.entries(LEVEL01_SOURCE_FILES)
+    .map(([name, file]) => [name, { ...file, url: new URL(file.path, import.meta.url) }]));
   let echoElement = null;
   let echoFadeTimer = 0;
   let echoRemoveTimer = 0;
@@ -103,243 +96,200 @@ export function createLevel01(ctx) {
     }, 5200);
   }
 
+  const registry = createRegistry();
+  const discovered = (id) => caseFile.snapshot().discoveries.includes(id);
+
+  registry.register({
+    name: 'help', usage: 'help', summary: 'this list',
+    run(_args, env) {
+      audio.play('list-hit');
+      registry.helpLines(env).forEach(([text, cls]) => line(text, cls));
+    },
+  });
+
+  registry.register({
+    name: 'ls', usage: 'ls', summary: 'list files',
+    run(_args, env) {
+      audio.play('list-hit');
+      line(LEVEL01_LS[env.trusted]);
+    },
+  });
+
+  registry.register({
+    name: 'cat', usage: 'cat <file>', summary: 'read a file',
+    async run(args, env) {
+      audio.play('file-read');
+      const file = (args[0] || '').replace(/^\.?\/?(~\/)?/, '');
+      if (!args[0]) { line('usage: cat <file>', 'dim'); return; }
+      const requiredRoute = LEVEL01_FILE_ROUTE[file];
+      if (requiredRoute && requiredRoute !== env.trusted) {
+        line(`cat: ${args[0]}: No such file or directory`, 'warn');
+      } else if (LEVEL01_FILES[file] || SYSTEM_FILES[file]) {
+        (LEVEL01_FILES[file] ?? SYSTEM_FILES[file])({ attempts: env.play.attempts }).forEach((entry) => line(entry || ' '));
+        if (LEVEL01_FILE_EVIDENCE[file]) caseFile.discover(LEVEL01_FILE_EVIDENCE[file]);
+      } else if (sourceFiles[file]) {
+        try {
+          const response = await fetch(sourceFiles[file].url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const source = await response.text();
+          session.throwIfAborted();
+          const clues = source.split(/\r?\n/).filter((entry) => sourceFiles[file].clue.test(entry));
+          if (clues.length) {
+            clues.forEach((entry) => line(entry, 'dim'));
+            caseFile.discover(sourceFiles[file].evidence);
+          } else line('source clue not found in this file.', 'warn');
+        } catch (error) {
+          if (isAbortError(error)) throw error;
+          line(`source: could not read ${file}: ${error.message}`, 'warn');
+        }
+      } else line(`cat: ${args[0]}: No such file or directory`, 'warn');
+    },
+  });
+
+  registry.register({
+    name: 'unlock', usage: 'unlock <key>', summary: 'try a key on sdb9',
+    async run(args, env) {
+      const guess = args.join(' ').toLowerCase().replace(/[\s_]+/g, '-');
+      if (!guess) { line('usage: unlock <key>', 'dim'); return; }
+      if (guess === 'elliot') {
+        audio.play('elliot-echo');
+        showElliotEcho();
+        caseFile.discover('elliot-echo');
+        return;
+      }
+      if (guess === key.join('-')) {
+        audio.play('success');
+        env.play.solved = true;
+        return;
+      }
+      env.play.attempts--;
+      caseFile.markFailedUnlock();
+      audio.play('failure');
+      const parts = guess.split('-');
+      if (parts.length === key.length) {
+        line(`  [${key.map((part, index) => (parts[index] === part ? 'ok' : '--')).join('] [')}]`, 'dim');
+      }
+      line(`unlock: invalid key. attempts left: ${env.play.attempts}`, 'warn');
+      await gfx('rgb');
+      if (env.play.attempts <= 0) env.play.over = 'LOCKED OUT';
+    },
+  });
+
+  registry.register({
+    name: 'hint', usage: 'hint', summary: `ask for help (-${TRACE.hintCost}s)`,
+    async run(_args, env) {
+      audio.play('hint');
+      caseFile.markHint();
+      if (env.play.hints >= LEVEL01_HINTS.length) { line('no more hints.', 'dim'); return; }
+      env.trace.set(Math.max(5, env.trace.left() - TRACE.hintCost));
+      line(`[trace -${TRACE.hintCost}s]`, 'warn');
+      await say(LEVEL01_HINTS[env.play.hints++], { speed: 35 });
+      if (env.play.hints === LEVEL01_HINTS.length) {
+        revealSourcePart();
+        caseFile.discover('page-script', 'The final fragment was revealed by the hint sequence.');
+      }
+    },
+  });
+
+  registry.register({
+    name: 'trace', usage: 'trace', summary: 'show monitoring status',
+    run(_args, env) {
+      audio.play('trace-status');
+      const closing = env.trace.left() < 120;
+      line(`trace:  ${closing ? 'CLOSING' : 'ACTIVE'}`, closing ? 'warn' : '');
+      line(`eta:    ${formatClock(env.trace.left())}`, 'dim');
+      line('relays: 7 / 9', 'dim');
+    },
+  });
+
+  registry.register({
+    name: 'board', aliases: ['evidence'], usage: 'board', summary: 'review the evidence and decision log',
+    run() {
+      audio.play('file-read');
+      caseFile.open();
+    },
+  });
+
+  registry.register({
+    name: 'source', aliases: ['view-source'], usage: 'source map', summary: 'inspect source clues (mobile-friendly)',
+    run(args) {
+      audio.play('file-read');
+      if (args[0] !== 'map') {
+        line('browser source view is not available in every mobile browser.', 'dim');
+        line('use `source map`, then `cat page/index.html`, `cat page/styles.css`,', 'dim');
+        line('and `cat page/js/source.js` to inspect the three page layers.', 'dim');
+        return;
+      }
+      LEVEL01_SOURCE_MAP.forEach((text) => line(text, 'dim'));
+      line('read each with: cat page/<file>', 'dim');
+    },
+  });
+
+  // The two routes each get their own command; the other route sees them as unknown or as a usage line.
+  registry.register({
+    name: 'verify', usage: 'verify relay', summary: 'validate the backchannel (read its note first)',
+    listed: (env) => env.trusted === 'unknown',
+    run(args, env) {
+      if (args[0]?.toLowerCase() !== 'relay' || env.trusted !== 'unknown') line('usage: verify relay', 'dim');
+      else if (!discovered('route-note')) line('relay: read inbox/001.msg before you validate its claim.', 'warn');
+      else {
+        caseFile.verifyRelay();
+        line('[route] abort maps to pts/0; the backchannel recommends inspected cleanup.', 'ok');
+        line('[branch] `cat ghost.sh` is still the only way to inspect the payload.', 'dim');
+      }
+    },
+  });
+
+  registry.register({
+    name: 'isolate', usage: 'isolate watcher', summary: 'quarantine pts/1 (read its log first)',
+    listed: (env) => env.trusted === 'watcher',
+    run(args, env) {
+      if (args[0]?.toLowerCase() !== 'watcher' || env.trusted !== 'watcher') line('usage: isolate watcher', 'dim');
+      else if (!discovered('watcher-log')) line('isolate: inspect watcher/session.log before changing the route.', 'warn');
+      else {
+        caseFile.isolateWatcher();
+        line('[route] pts/1 quarantined. guest shell remains under local control.', 'ok');
+        line('[branch] abort would still hand control to the remote operator.', 'dim');
+      }
+    },
+  });
+
+  registry.register({
+    name: 'abort', usage: 'abort', summary: 'close the guest session',
+    available: (env) => env.trusted === 'watcher',
+    async run(_args, env) {
+      await takeover(env.trace);
+      env.play.over = 'SESSION COMPROMISED';
+    },
+  });
+
+  registerSystemCommands(registry, { line, audio, out: ctx.out });
+
   return async function playLevel01(trace, trusted) {
-    const state = { over: null };
+    const play = { over: null, solved: false, attempts: 3, hints: 0 };
+    const env = { trusted, trace, play };
     if (integrityFailed) line('sdb9: integrity check failed, using sealed key', 'warn');
-    let attempts = 3;
-    let hints = 0;
-    let solved = false;
 
     trace.onEnd = () => {
-      state.over = 'TRACE COMPLETE';
+      play.over = 'TRACE COMPLETE';
       abortCommand();
     };
     // The trace sound (tick, warn, critical) is attached where the trace is created (story.js, trace-sound.js).
 
-    const files = {
-      'readme.txt': () => [
-        'sdb9 is sealed with a three-part key.',
-        'the key is not in this system.',
-        'it is in the page that shows you this system.',
-        '',
-        'part 1 :: the skeleton under the skin.',
-        'part 2 :: the skin itself.',
-        'part 3 :: what it whispers when no one is looking.',
-        '',
-        'join the parts with dashes. then unlock.',
-      ],
-      'notes.txt': () => [
-        'they never delete anything.',
-        'they overwrite. then they make sure',
-        'nobody remembers there was something to overwrite.',
-      ],
-      'sdb9.lock': () => [
-        'target:   /dev/sdb9',
-        'status:   LOCKED',
-        `attempts: ${attempts}`,
-        'key:      #####-#####-####   (3 parts)',
-      ],
-      'inbox/001.msg': () => [
-        'the partition is not empty.',
-        'it is locked.',
-        'pts/1 keeps telling you to type abort.',
-        'that closes the guest shell, not the remote operator.',
-        'read the cleanup script before you trust either channel.',
-      ],
-      'watcher/session.log': () => [
-        'operator: watcher // session: pts/1',
-        'attached: before guest login',
-        'request: abort guest session',
-        'note: abort returns control to the remote operator.',
-        'countermeasure: isolate pts/1 before cleanup.',
-      ],
-    };
-
-    while (!solved && !state.over) {
+    while (!play.solved && !play.over) {
       const raw = await readCommand();
       // Check expiry first: trace.onEnd wakes the prompt with null, and that must end in game over.
-      if (state.over) break;
+      if (play.over) break;
       if (raw === null) {
         trace.onEnd = null;
         return false;
       }
-      const [name, ...args] = raw.trim().split(/\s+/);
-      if (!name) continue;
-
-      switch (name.toLowerCase()) {
-        case 'help':
-          audio.play('list-hit');
-          line('commands:', 'dim');
-          line('  help           this list');
-          line('  ls             list files');
-          line('  cat <file>     read a file');
-          line('  unlock <key>   try a key on sdb9');
-          line('  hint           ask for help (-30s)');
-          line('  trace          show monitoring status');
-          line('  board          review the evidence and decision log');
-          line('  source map     inspect source clues (mobile-friendly)');
-          if (trusted === 'watcher') {
-            line('  abort          close the guest session');
-            line('  isolate watcher   quarantine pts/1 (read its log first)');
-          } else {
-            line('  verify relay   validate the backchannel (read its note first)');
-          }
-          break;
-
-        case 'ls':
-          audio.play('list-hit');
-          line(trusted === 'watcher'
-            ? 'inbox/   notes.txt   readme.txt   page/   sdb9.lock   watcher/'
-            : 'inbox/   notes.txt   readme.txt   page/   sdb9.lock');
-          break;
-
-        case 'cat': {
-          audio.play('file-read');
-          const file = (args[0] || '').replace(/^\.?\/?(~\/)?/, '');
-          if (!args[0]) line('usage: cat <file>', 'dim');
-          else if (file === 'watcher/session.log' && trusted !== 'watcher') {
-            line(`cat: ${args[0]}: No such file or directory`, 'warn');
-          } else if (file === 'inbox/001.msg' && trusted !== 'unknown') {
-            line(`cat: ${args[0]}: No such file or directory`, 'warn');
-          } else if (files[file]) {
-            files[file]().forEach((entry) => line(entry || ' '));
-            if (file === 'sdb9.lock') caseFile.discover('lock-header');
-            if (file === 'inbox/001.msg') caseFile.discover('route-note');
-            if (file === 'watcher/session.log') caseFile.discover('watcher-log');
-          }
-          else if (sourceFiles[file]) {
-            try {
-              const response = await fetch(sourceFiles[file].url);
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              const source = await response.text();
-              session.throwIfAborted();
-              const clues = source.split(/\r?\n/).filter((entry) => sourceFiles[file].clue.test(entry));
-              if (clues.length) {
-                clues.forEach((entry) => line(entry, 'dim'));
-                const evidenceId = file === 'page/index.html' ? 'page-markup'
-                  : file === 'page/styles.css' ? 'page-style' : 'page-script';
-                caseFile.discover(evidenceId);
-              }
-              else line('source clue not found in this file.', 'warn');
-            } catch (error) {
-              if (isAbortError(error)) throw error;
-              line(`source: could not read ${file}: ${error.message}`, 'warn');
-            }
-          } else line(`cat: ${args[0]}: No such file or directory`, 'warn');
-          break;
-        }
-
-        case 'board':
-        case 'evidence':
-          audio.play('file-read');
-          caseFile.open();
-          break;
-
-        case 'verify':
-          if (args[0]?.toLowerCase() !== 'relay' || trusted !== 'unknown') {
-            line('usage: verify relay', 'dim');
-          } else if (!caseFile.snapshot().discoveries.includes('route-note')) {
-            line('relay: read inbox/001.msg before you validate its claim.', 'warn');
-          } else {
-            caseFile.verifyRelay();
-            line('[route] abort maps to pts/0; the backchannel recommends inspected cleanup.', 'ok');
-            line('[branch] `cat ghost.sh` is still the only way to inspect the payload.', 'dim');
-          }
-          break;
-
-        case 'isolate':
-          if (args[0]?.toLowerCase() !== 'watcher' || trusted !== 'watcher') {
-            line('usage: isolate watcher', 'dim');
-          } else if (!caseFile.snapshot().discoveries.includes('watcher-log')) {
-            line('isolate: inspect watcher/session.log before changing the route.', 'warn');
-          } else {
-            caseFile.isolateWatcher();
-            line('[route] pts/1 quarantined. guest shell remains under local control.', 'ok');
-            line('[branch] abort would still hand control to the remote operator.', 'dim');
-          }
-          break;
-
-        case 'source':
-        case 'view-source':
-          audio.play('file-read');
-          if (args[0] !== 'map') {
-            line('browser source view is not available in every mobile browser.', 'dim');
-            line('use `source map`, then `cat page/index.html`, `cat page/styles.css`,', 'dim');
-            line('and `cat page/js/source.js` to inspect the three page layers.', 'dim');
-          } else {
-            line('SOURCE MAP :: /page', 'dim');
-            line('  index.html       markup comment');
-            line('  styles.css       root custom property');
-            line('  js/source.js     console whisper');
-            line('read each with: cat page/<file>', 'dim');
-          }
-          break;
-
-        case 'trace':
-          audio.play('trace-status');
-          line(`trace:  ${trace.left() < 120 ? 'CLOSING' : 'ACTIVE'}`, trace.left() < 120 ? 'warn' : '');
-          line(`eta:    ${formatClock(trace.left())}`, 'dim');
-          line('relays: 7 / 9', 'dim');
-          break;
-
-        case 'hint':
-          audio.play('hint');
-          caseFile.markHint();
-          if (hints >= level01Hints.length) {
-            line('no more hints.', 'dim');
-            break;
-          }
-          trace.set(Math.max(5, trace.left() - 30));
-          line('[trace -30s]', 'warn');
-          await say(level01Hints[hints++], { speed: 35 });
-          if (hints === level01Hints.length) {
-            revealSourcePart();
-            caseFile.discover('page-script', 'The final fragment was revealed by the hint sequence.');
-          }
-          break;
-
-        case 'unlock': {
-          const guess = args.join(' ').toLowerCase().replace(/[\s_]+/g, '-');
-          if (!guess) { line('usage: unlock <key>', 'dim'); break; }
-          if (guess === 'elliot') {
-            audio.play('elliot-echo');
-            showElliotEcho();
-            caseFile.discover('elliot-echo');
-            break;
-          }
-          if (guess === key.join('-')) {
-            audio.play('success');
-            solved = true;
-            break;
-          }
-          attempts--;
-          caseFile.markFailedUnlock();
-          audio.play('failure');
-          const parts = guess.split('-');
-          if (parts.length === key.length) {
-            line(`  [${key.map((part, index) => (parts[index] === part ? 'ok' : '--')).join('] [')}]`, 'dim');
-          }
-          line(`unlock: invalid key. attempts left: ${attempts}`, 'warn');
-          await gfx('rgb');
-          if (attempts <= 0) state.over = 'LOCKED OUT';
-          break;
-        }
-
-        case 'abort':
-          if (trusted !== 'watcher') { line(`command not found: ${name}`, 'warn'); break; }
-          await takeover(trace);
-          state.over = 'SESSION COMPROMISED';
-          break;
-
-        default:
-          line(`command not found: ${name}`, 'warn');
-          line('type help', 'dim');
-      }
+      await registry.dispatch(raw, env, line);
     }
 
     trace.onEnd = null;
-    if (state.over) {
-      await gameOver(trace, state.over);
+    if (play.over) {
+      await gameOver(trace, play.over);
       return false;
     }
     closePrompt();
