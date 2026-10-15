@@ -9,9 +9,11 @@ Read [`README.md`](README.md) first. Added 2026-10-15 at the owner's request (no
 
 ## Owner decisions (2026-10-15)
 
-1. **When:** the case file becomes available **at the first mention in the story** (a character brings it up in a dialogue), not at boot and not only on the first discovered record. Before that mention the trigger stays hidden.
+1. **When:** the case file becomes available **at the first mention in the story**, which is **right after the inbox message** (`cat ~/inbox/001.msg`, before the Level 01 intro), not at boot and not only on the first discovered record. Before that mention the trigger stays hidden.
 2. **Command line:** inside the board there is a small command line that runs **board commands only** (a limited set; the shell keeps the puzzle). It does not replace the shell.
-3. **Explanation:** **a character explains the board** in dialogue (story-driven), not an overlay tutorial. This changes the story, so the wording needs an owner canon decision (see "Open questions").
+3. **Explanation:** **a character explains the board** in dialogue (story-driven), not an overlay tutorial. The speaker is a **third character who stays a complete mystery** (neither `unknown` nor `watcher`): no name, no backstory, no explanation of who it is or why it helps. This is deliberate and is recorded in `docs/story/story-bible.md` as an intended open end, not a loose end to fix. The wording still needs the owner's approval.
+4. **Board commands are new evidence commands** (not the shell's), and where one depends on the trace the rules in 4b.3 apply.
+5. **The trace starts at 5 minutes** (300 s) instead of 8 (480 s): task 4b.0b.
 
 ## Goal
 
@@ -21,21 +23,22 @@ The evidence board stops being something the player stumbles on. A character int
 
 ### 4b.1 First mention and availability
 
-- [ ] Choose the story beat (proposal, **unverified, owner decides**): in the guest session intro, after `cat ~/inbox/001.msg` or at the start of the Level 01 intro, `unknown` says a line pointing at the case file (for example that it keeps a record of everything the guest finds). The beat is a node in the story data (`story-data/intro.js` or `level01.js`), not code.
+- [ ] The beat is **right after the inbox message** is read (decided). It is a node in the story data (`story-data/intro.js` or wherever the inbox scene lives), not code. The new voice appears for the first time here: a new voice label in `story-data/voices.js` (handle is an open question), styled so that it is clearly neither `unknown` nor `watcher`.
 - [ ] That node calls a small host action (for example `caseFile.makeAvailable()`), which reveals the trigger (the existing reveal animation) and sets `boardUnlocked`. Today `boardUnlocked` is set by the first discovered record (`setState` in `casefile.js`): keep that as a fallback so a developer jump into the puzzle still works.
 - [ ] The trigger is reachable by keyboard and touch from that moment; `board` in the shell opens it as before. A dev route that skips the intro must make the board available.
 - [ ] The Level 01 puzzle, the three-layer key and `unlock` are untouched. The board stays optional for the win.
 
 ### 4b.2 Explanation by a character
 
-- [ ] 2 to 5 short lines in the voice of the speaker (lowercase, calm, no exclamation marks; see `docs/story/story-bible.md` sections 2 and 5) that say: what the board is, that evidence is not identity, that `scan` and `decrypt` cost trace time, and that it is optional. Lines live in story data, validated by `tools/validate-story.mjs`.
+- [ ] 2 to 5 short lines in the voice of the third character (a flat, strange, unexplained voice; it never says who it is, why it knows, or what it wants; it must not give away the key or contradict `unknown` or `watcher`). Keep the story bible's style (lowercase, short lines, no exclamation marks). The lines (lowercase, calm, no exclamation marks; see `docs/story/story-bible.md` sections 2 and 5) that say: what the board is, that evidence is not identity, that `scan` and `decrypt` cost trace time, and that it is optional. Lines live in story data, validated by `tools/validate-story.mjs`.
 - [ ] The explanation is played once, in the story, right after the first mention. On the first time the board is opened, a one-line reminder in the board's log pane points at `help` (no overlay).
 - [ ] Skip (the hold control) and reduced motion work as for any other dialogue.
 
 ### 4b.3 Board command line
 
 - [ ] A command pane in the board dialog (`board-ui.js`): an input with a visible label, an output log inside the dialog, `Enter` to run, history with the up arrow, `Esc` closes the board as before. It must work with the on-screen keyboard (the input stays visible above it) and with a screen reader (its own live region, as the board already has).
-- [ ] Board commands only. Proposed set (owner can change): `help`, `list` (records with state), `open <id|code>` (select a record in the board), `scan`, `intercept`, `decrypt <id|code>`, `connect <a> <b>`, `trace` (same as `trace --status`), `close`. Names are data in a registry (reuse `commands.js` with a `scope: 'board'` group, so that `help` is generated and the validator checks it). Commands that cost time or trace behave **exactly** as in the shell: one implementation, two entry points (the shell and the board pane call the same functions in `hacking-commands.js`).
+- [ ] Board commands only: **new evidence commands**, not copies of the shell (decided). Proposed set (owner can change): `help`, `list` (records with state), `open <id|code>` (select a record in the board), `scan`, `intercept`, `decrypt <id|code>`, `connect <a> <b>`, `trace` (same as `trace --status`), `close`.
+- [ ] **Trace dependency (resolve before building).** The board is available from the inbox on, i.e. **before the trace exists** (it starts at the Level 01 intro) and later while it is `running` (cannot expire, floors at TRACE PENDING) and `lethal` (after the trust choice). Rules to implement, each as data in the command definitions (for example `needs: 'none' | 'trace'`), and to test: (a) before the trace has started, only the read-only commands (`help`, `list`, `open`, `close`) work; `scan`, `intercept`, `decrypt`, `connect` answer with one in-world line such as "no active link yet"; (b) while the trace is `running` before the trust choice they work and take their run time, but their trace cost (`connectMissCost`, `hintCost`-style costs) is **not charged** because the trace cannot be hurt yet; (c) after the trust choice (`lethal`) they behave exactly as phase 4 built them; (d) **verify in the code** how the evidence loss thresholds (`CASE.compromiseAt`, measured in trace seconds left) behave in `running` mode and before the trace exists: a record must never be lost while the trace is not lethal (unverified: the phase 4 notes do not say); (e) the board and `trace` command show `TRACE PENDING` / no trace honestly instead of a false countdown. Names are data in a registry (reuse `commands.js` with a `scope: 'board'` group, so that `help` is generated and the validator checks it). Commands that cost time or trace behave **exactly** as in the shell: one implementation, two entry points (the shell and the board pane call the same functions in `hacking-commands.js`).
 - [ ] A shell-only command typed in the board answers `use the shell for that` (no new behaviour, no shell access from the board).
 - [ ] `decrypt` still blocks input while it runs (phase 4 decision); the board pane shows the same progress line.
 - [ ] No second timer: everything uses the session (`session.sleep`, `trace.onTick`). The pane's listeners are removed when the dialog closes or the session aborts.
@@ -43,12 +46,14 @@ The evidence board stops being something the player stumbles on. A character int
 
 ## Open questions for the owner (answer before building 4b.2)
 
-- Which character speaks the explanation (`unknown`, or the watcher on the other route, or both)? The watcher route must not contradict the sealed-branch evidence.
-- Exact beat: right after the inbox message, or at the Level 01 intro? (The inbox message says the key is in the page; the case file mention should not give the key away.)
+- The third character: its handle or label in the terminal (for example `<???>`, a number, or a symbol), its typing style and colour, and whether it speaks only here or may return later. It stays unexplained either way.
+- On the watcher route the same voice must still make sense (the sealed-branch evidence is shown as `SEALED // OTHER BRANCH`).
 - Final command set for the board pane.
+- Answered: speaker is a third mystery character; beat is right after the inbox message; board commands are new evidence commands.
 
 ## Tasks (checklist)
 
+- [ ] 4b.0b **Trace starts at 300 s (5 minutes)** (owner decision): change `TRACE.start` in `story-data/constants.js` from 480 to 300; change the spoken line "you have 8 minutes" in the story data to 5 minutes; update `docs/story/story-bible.md` (scene 10, the timers list, loose end 3), `docs/state/story.md`, the `trace-tick` default and the sample/lint values that use 480 in `js/audio/patches.js` (`secondsLeft: 480`; check the reactive thresholds still make sense with 300), the smoke tests and `validate-story` if they assume 480, and `owner-test-checklist.md`. Check the intro: the trace counts down while the intro, the cut-off and the watcher takeover play (rate x2 and x3); with 300 s the 10 s TRACE PENDING floor may now be reached before the player has chosen. Measure it with the smoke test or a scripted run and, if so, tune `TRACE.start` or the rates so the floor is **not** reached before the trust choice screen is up in a normal run (unverified now). The 120 s windows after the trust choice and the unlock are unchanged; phase 4's board tuning is built for the 120 s window, so nothing there changes.
 - [ ] 4b.0 Re-verify the "current state" of `casefile.js`, `board-ui.js`, `hacking-commands.js` against the code; start the checkpoint log and the Resume point.
 - [ ] 4b.1 Availability (`makeAvailable`, story node, fallback, dev routes) + smoke scenario: the trigger is hidden before the mention and visible after it, on both routes.
 - [ ] 4b.2 Explanation lines in the story data + validator checks (no key text, no real names, lowercase style rules are manual).
@@ -78,6 +83,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | Step | Status | Commit | Notes |
 |---|---|---|---|
 | 4b.0 Re-verify + start log | todo | | |
+| 4b.0b Trace start 300 s | todo | | check the TRACE PENDING floor in the intro |
 | 4b.1 Availability at the first mention | todo | | |
 | 4b.2 Explanation by a character | todo | | needs the owner's answers above |
 | 4b.3 Board command pane | todo | | |
