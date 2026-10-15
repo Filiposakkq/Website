@@ -82,7 +82,7 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 4b.0 Re-verify + start log | todo | | |
+| 4b.0 Re-verify + start log | in progress | | branch pushed; findings in "Re-verification (4b.0)" below; baseline smoke on `main` `bad4a0b`: 26 of 27 in the parallel run, the 27th (`reduced: typing ticks ...`, a known load flake) passes alone |
 | 4b.0b Trace window after trust = 300 s | todo | | re-tune `compromiseAt`, sound thresholds, `trace-warn`, smoke speed |
 | 4b.1 Availability at the first mention | todo | | |
 | 4b.2 Explanation by a character | todo | | needs the owner's answers above |
@@ -93,3 +93,21 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next step.)_
+
+### Resume point (session 1, 2026-10-15, written at the start)
+
+- Branch `overhaul/phase-4b-case-file`, created from `main` `bad4a0b` and pushed. Nothing is half edited.
+- `last green commit`: `bad4a0b` (baseline `main`, no 4b code yet): `node tools/smoke.mjs` 26 of 27 in the parallel run; the failing one (`reduced: typing ticks are rate limited ...`) passes alone (known load flake, see `tools/README.md`).
+- Step in progress: 4b.0 (this log), then 4b.0b, 4b.1, 4b.2, 4b.3, 4b.4, 4b.5 in that order.
+- Next command: `node tools/validate-story.mjs` after each change; `node tools/smoke.mjs --only=<name>` while developing.
+
+### Re-verification (4b.0): the "current state" claims against the code (`main` `bad4a0b`)
+
+- **Phase 4 is on `main`** (squash `c976821`, PR #12; `board-ui.js`, `hacking-commands.js`, `topology.js`, `story-data/evidence.js`, `story-data/hacking.js` exist). The master README tracker still said "in review": corrected in the same commit. The dependency "phases 1, 3, 4 merged" holds.
+- `casefile.js`: `boardUnlocked` is set only by the first record that leaves `hidden` (`setState`); `start()` resets it and `updateTrigger()` hides `#caseTrigger` (also `hidden` in `index.html`). `getTraceLeft()` is `null` before the trace exists (`activeTrace?.left() ?? null` in `story.js`).
+- The trace is created by the story data at the LEVEL 01 brief (`trace('start')`, mode `running`), **after** the inbox message; `trace.onTick` (which feeds `caseFile.tick`) is only set by the Level 01 shell, i.e. after the trust choice.
+- **Rule (d), answered from the code:** `compromiseCheck` does not look at the trace mode. Today nothing can call it before the trace is `lethal` (it runs from `caseFile.tick` and from the evidence commands, and both exist only inside the Level 01 shell, which starts after `trace('mode', 'lethal')`). Once the board and its commands are reachable earlier this protection disappears, so 4b.3 gates the check explicitly on the mode (`lethal` only).
+- `topologyState()` clamps `1 - secsLeft / CASE.traceWindow`; in `running` mode the clock counts 480 s down to the 10 s floor, so a map fed with it would read about 97 % at TRACE PENDING (a false countdown, rule (e)). The board must not feed it unless the trace is lethal.
+- `hacking-commands.js` prints through the shell's `line`, hides the shell prompt with `ctx.terminal.close`, reads `env.play.over` and sets time through `env.trace.set`. It has **no guard against two jobs at once**: with a second entry point (the board) a shell `scan` and a board `scan` could overlap, so the shared implementation gets one busy guard.
+- The shell command `board` opens the dialog and returns at once; the story and the prompt keep running behind the modal dialog. With the trigger visible from the inbox on, the player can also open the board during the intro.
+- The tests: `loseByTraceExpiry` and the "lost evidence" scenario assume a 120 s window (two hints, a 90 s threshold); with 300 s they would need minutes of real time. Plan (4b.0b): the smoke runner serves `constants.js` with a shorter `afterTrust` for the timing scenarios (Playwright route, no test hook in the shipped code) and one scenario checks the shipped value.
