@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails when the fsociety00 stylesheet declares a font size that can render below 11px.
 #
-#   tools/check-fonts.sh            skip .case-* and .developer-* selectors (owned by phases 4 and 7)
+#   tools/check-fonts.sh            skip .developer-* selectors (owned by phase 7; .case-* is checked since phase 4.5)
 #   tools/check-fonts.sh --all      check the whole file (required from phase 7 on)
 #   tools/check-fonts.sh [--all] path/to/styles.css
 #
@@ -72,12 +72,12 @@ awk -v min="$MIN_PX" -v root="$ROOT_FLOOR_PX" -v all="$all" '
     px = (unit == "px") ? num + 0 : (num + 0) * root
     if (px >= min) return
     s = innermost()
-    if (!all && s ~ /\.(case|developer)-/) { skipped++; return }
+    if (!all && s ~ /\.developer-/) { skipped++; return }
     printf("styles.css:%d  %s  font-size: %s%s  (~%.1fpx, min %dpx)\n", lineno, s, num, unit, px, min)
     bad++
   }
   END {
-    if (skipped) printf("note: %d declaration(s) in .case-*/.developer-* skipped (use --all to include them)\n", skipped)
+    if (skipped) printf("note: %d declaration(s) in .developer-* skipped (use --all to include them)\n", skipped)
     if (bad) { printf("FAIL: %d font-size declaration(s) below %dpx\n", bad, min); exit 1 }
     print "OK: no font-size below " min "px"
   }

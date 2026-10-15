@@ -295,5 +295,491 @@ if (story) {
   expect(Object.values(level.LEVEL01_FILES).every((file) => file({ attempts: 3 }).every((row) => !/sdb9-part|--sdb9/.test(row))), 'no file text prints a key layer');
 }
 
+// ---- the evidence data of the case file (phase 4.1)
+{
+  console.log('\nevidence');
+  const { readdir } = await import('node:fs/promises');
+  const data = await import(js('story-data/evidence.js'));
+  const { CASE } = await import(js('story-data/constants.js'));
+  const level = await import(js('story-data/level01.js'));
+  const ROUTES = ['unknown', 'watcher'];
+  const KEY_LEAK = /sdb9-part|--sdb9|ghost[-\s]+shell|shell[-\s]+1337/i;
+
+  /** Problems in a list of evidence records (see the schema at the top of js/story-data/evidence.js). */
+  function validateEvidence(records, { types, found, traceWindow }) {
+    const problems = [];
+    const byId = new Map();
+    const codes = new Set();
+    const files = new Set();
+    for (const item of records) {
+      const name = `evidence "${item.id}"`;
+      if (!/^[a-z0-9-]+$/.test(item.id ?? '')) problems.push(`${name}: the id must be lower case letters, digits and dashes`);
+      if (byId.has(item.id)) problems.push(`${name}: duplicate id`);
+      byId.set(item.id, item);
+      if (!/^e\d+$/.test(item.code ?? '')) problems.push(`${name}: the code must look like e12`);
+      if (codes.has(item.code)) problems.push(`${name}: duplicate code "${item.code}"`);
+      codes.add(item.code);
+    }
+    const ids = new Set(byId.keys());
+    for (const item of records) {
+      const name = `evidence "${item.id}"`;
+      if (!types.includes(item.type)) problems.push(`${name}: unknown type "${item.type}"`);
+      if (!found.includes(item.found)) problems.push(`${name}: unknown "found" value "${item.found}"`);
+      if (item.route !== undefined && !ROUTES.includes(item.route)) problems.push(`${name}: unknown route "${item.route}"`);
+      for (const field of ['group', 'title', 'source', 'summary', 'detail']) {
+        if (typeof item[field] !== 'string' || !item[field].trim()) problems.push(`${name}: missing "${field}"`);
+      }
+      for (const field of ['title', 'source', 'summary', 'detail']) {
+        if (KEY_LEAK.test(item[field] ?? '')) problems.push(`${name}: "${field}" prints a key layer`);
+      }
+      const isIntel = item.type === 'INTEL';
+      const placed = Number.isFinite(item.x) && Number.isFinite(item.y);
+      if (isIntel && (item.x !== undefined || item.y !== undefined)) problems.push(`${name}: an INTEL record has no position (it sits between the pair that unlocks it)`);
+      if (!isIntel && (!placed || item.x < 0 || item.x > 100 || item.y < 0 || item.y > 100)) problems.push(`${name}: x and y must be numbers from 0 to 100`);
+      for (const field of ['links', 'requires']) {
+        for (const target of item[field] ?? []) {
+          if (!ids.has(target)) problems.push(`${name}: ${field} refers to unknown id "${target}"`);
+          if (target === item.id) problems.push(`${name}: ${field} refers to itself`);
+        }
+      }
+      if (!Array.isArray(item.links)) problems.push(`${name}: "links" must be an array (it may be empty)`);
+      if (isIntel !== (item.found === 'connect')) problems.push(`${name}: an INTEL record is found by "connect" and nothing else is`);
+      if (item.found === 'connect' || item.connects) {
+        if (!Array.isArray(item.connects) || !item.connects.length) problems.push(`${name}: an INTEL record needs at least one pair in "connects"`);
+        for (const pair of item.connects ?? []) {
+          if (!Array.isArray(pair) || pair.length !== 2 || pair[0] === pair[1]) { problems.push(`${name}: a connects entry must be two different ids`); continue; }
+          for (const target of pair) {
+            if (!ids.has(target)) problems.push(`${name}: connects refers to unknown id "${target}"`);
+            else if (byId.get(target).type === 'INTEL') problems.push(`${name}: connects "${target}", an INTEL record (connect chains are not supported)`);
+            else if (item.route && byId.get(target).route && byId.get(target).route !== item.route) problems.push(`${name}: connects "${target}", which belongs to the other route`);
+          }
+        }
+      }
+      if (item.found === 'scan' || item.found === 'intercept') {
+        if (!Number.isInteger(item.tier) || item.tier < 1) problems.push(`${name}: a ${item.found} record needs a "tier" of 1 or more`);
+      } else if (item.tier !== undefined) problems.push(`${name}: "tier" only belongs to scan and intercept records`);
+      if (item.found === 'scan') {
+        if (typeof item.file !== 'string' || !/^[a-z0-9._/-]+$/.test(item.file)) problems.push(`${name}: a scan record needs a "file" path for dump`);
+        else if (files.has(item.file)) problems.push(`${name}: duplicate file "${item.file}"`);
+        files.add(item.file);
+      } else if (item.file !== undefined) problems.push(`${name}: "file" only belongs to scan records`);
+      if (item.encrypted) {
+        if (!(item.decryptSeconds > 0)) problems.push(`${name}: an encrypted record needs a positive "decryptSeconds"`);
+        if (item.found === 'cat' || item.found === 'story' || item.found === 'echo' || item.found === 'connect') problems.push(`${name}: only scan and intercept records can be encrypted (the original puzzle path must stay open)`);
+      } else if (item.decryptSeconds !== undefined) problems.push(`${name}: "decryptSeconds" without "encrypted"`);
+      if (item.compromiseAtTrace !== undefined) {
+        if (!(item.compromiseAtTrace > 0 && item.compromiseAtTrace <= traceWindow)) problems.push(`${name}: compromiseAtTrace must be above 0 and at most the trace window (${traceWindow})`);
+        if (item.found === 'cat' || item.found === 'story' || item.found === 'echo') problems.push(`${name}: the original puzzle records are never lost`);
+      } else if (item.type === 'COMPROMISED') problems.push(`${name}: a COMPROMISED record needs "compromiseAtTrace"`);
+    }
+    // "requires" must not contain a cycle (the records would never appear).
+    const visiting = new Set();
+    const done = new Set();
+    const walk = (id, trail) => {
+      if (done.has(id) || !byId.has(id)) return;
+      if (visiting.has(id)) { problems.push(`evidence "requires" cycle: ${[...trail, id].join(' -> ')}`); return; }
+      visiting.add(id);
+      for (const next of byId.get(id).requires ?? []) walk(next, [...trail, id]);
+      visiting.delete(id);
+      done.add(id);
+    };
+    for (const id of ids) walk(id, []);
+    // Tiers of one command must be contiguous, or a tier could never be reached.
+    for (const kind of ['scan', 'intercept']) {
+      const tiers = [...new Set(records.filter((item) => item.found === kind).map((item) => item.tier))].sort((a, b) => a - b);
+      tiers.forEach((tier, index) => { if (tier !== index + 1) problems.push(`evidence ${kind} tiers must be 1, 2, 3 ... without gaps (found ${tiers.join(',')})`); });
+    }
+    // Reachability, per route: every record can be obtained by someone who follows the rules.
+    if (!problems.length) {
+      const reachable = new Set();
+      for (const route of ROUTES) {
+        const visible = records.filter((item) => !item.route || item.route === route);
+        const have = new Set();
+        for (let progress = true; progress;) {
+          progress = false;
+          for (const item of visible) {
+            if (have.has(item.id) || !(item.requires ?? []).every((id) => have.has(id))) continue;
+            const ok = item.found === 'connect' ? item.connects.some(([a, b]) => have.has(a) && have.has(b)) : true;
+            if (ok) { have.add(item.id); progress = true; }
+          }
+        }
+        for (const item of visible) {
+          if (!have.has(item.id)) problems.push(`evidence "${item.id}" can never be obtained on the ${route} route`);
+          else reachable.add(item.id);
+        }
+      }
+    }
+    return problems;
+  }
+
+  const options = { types: data.EVIDENCE_TYPES, found: data.EVIDENCE_FOUND, traceWindow: CASE.traceWindow };
+  const clone = () => structuredClone(data.EVIDENCE);
+  const real = validateEvidence(data.EVIDENCE, options);
+  real.forEach((problem) => fail(problem));
+  if (!real.length) pass(`valid: ${data.EVIDENCE.length} records (${data.EVIDENCE.filter((item) => item.type === 'INTEL').length} INTEL), codes ${data.EVIDENCE[0].code}..${data.EVIDENCE.at(-1).code}`);
+
+  // The validator itself: each mutation of the real data must be reported.
+  const mutations = [
+    ['a duplicate id', (r) => { r[1].id = r[0].id; }, 'duplicate id'],
+    ['a duplicate code', (r) => { r[1].code = r[0].code; }, 'duplicate code'],
+    ['a link to an unknown id', (r) => { r[0].links.push('nowhere'); }, 'unknown id "nowhere"'],
+    ['a connects entry with an unknown id', (r) => { r.find((i) => i.id === 'intel-chain').connects[0][1] = 'nowhere'; }, 'unknown id "nowhere"'],
+    ['an INTEL record without pairs', (r) => { delete r.find((i) => i.id === 'intel-chain').connects; }, 'at least one pair'],
+    ['a requires cycle', (r) => { r.find((i) => i.id === 'net-beacon').requires = ['net-relay-chain']; }, 'cycle'],
+    ['an encrypted record without a duration', (r) => { delete r.find((i) => i.id === 'srv-ledger').decryptSeconds; }, 'positive "decryptSeconds"'],
+    ['an encrypted original record', (r) => { Object.assign(r.find((i) => i.id === 'page-markup'), { encrypted: true, decryptSeconds: 4 }); }, 'original puzzle path'],
+    ['a fragile original record', (r) => { r.find((i) => i.id === 'page-style').compromiseAtTrace = 30; }, 'never lost'],
+    ['a COMPROMISED record without a threshold', (r) => { delete r.find((i) => i.id === 'ram-residue').compromiseAtTrace; }, 'needs "compromiseAtTrace"'],
+    ['a threshold beyond the trace window', (r) => { r.find((i) => i.id === 'srv-ledger').compromiseAtTrace = 9999; }, 'at most the trace window'],
+    ['a scan tier gap', (r) => { r.find((i) => i.id === 'ram-residue').tier = 3; }, 'tiers must be 1, 2, 3'],
+    ['a record that can never appear', (r) => { r.find((i) => i.id === 'net-relay-chain').requires = ['intel-chain']; }, 'can never be obtained'],
+    ['an INTEL pair across the routes', (r) => { r.find((i) => i.id === 'intel-cleanup-unknown').connects = [['watcher-log', 'ghost-script']]; }, 'other route'],
+    ['a text that prints a key layer', (r) => { r[0].detail = 'the second part is --sdb9-part-two'; }, 'prints a key layer'],
+    ['an unknown type', (r) => { r[0].type = 'RUMOUR'; }, 'unknown type'],
+    ['a position outside the map', (r) => { r[0].x = 140; }, 'x and y must be numbers'],
+  ];
+  for (const [name, mutate, needle] of mutations) {
+    const records = clone();
+    mutate(records);
+    expect(validateEvidence(records, options).some((problem) => problem.includes(needle)), `the validator reports ${name}`);
+  }
+
+  // Every place the code names an evidence id must point at a record the original path can really reach.
+  const ids = new Set(data.EVIDENCE.map((item) => item.id));
+  const original = new Map(data.EVIDENCE.filter((item) => ['cat', 'story', 'echo'].includes(item.found)).map((item) => [item.id, item]));
+  const references = new Map(); // id -> where
+  const add = (id, where) => references.set(`${id}\u0000${where}`, { id, where });
+  for (const file of (await readdir(js(''), { recursive: true })).filter((name) => name.endsWith('.js')).sort()) {
+    if (file === path.join('story-data', 'evidence.js')) continue;
+    const text = await readFile(js(file), 'utf8');
+    for (const match of text.matchAll(/\bdiscover\(\s*['"]([\w-]+)['"]/g)) add(match[1], `${file} discover(...)`);
+    for (const match of text.matchAll(/caseFile\(\s*['"]discover['"]\s*,\s*['"]([\w-]+)['"]/g)) add(match[1], `${file} caseFile('discover', ...)`);
+  }
+  Object.entries(level.LEVEL01_FILE_EVIDENCE).forEach(([file, id]) => add(id, `LEVEL01_FILE_EVIDENCE "${file}"`));
+  Object.entries(level.LEVEL01_SOURCE_FILES).forEach(([file, entry]) => add(entry.evidence, `LEVEL01_SOURCE_FILES "${file}"`));
+  let badReference = 0;
+  for (const { id, where } of references.values()) {
+    if (!ids.has(id)) { fail(`${where} names the evidence id "${id}", which does not exist`); badReference++; }
+    else if (!original.has(id)) { fail(`${where} discovers "${id}", which is found by ${data.EVIDENCE.find((item) => item.id === id).found}, not by a plain discover`); badReference++; }
+  }
+  if (!badReference) pass(`${references.size} evidence reference(s) in the code name existing, plainly discoverable records`);
+  expect(!KEY_LEAK.test(JSON.stringify(data.EVIDENCE)), 'no evidence text prints a key layer');
+  expect(ids.size === data.EVIDENCE.length && data.ORIGINAL_IDS.every((id) => ids.has(id)), 'the original nine records are still there');
+}
+
+// ---- the evidence state machine of the case file (phase 4.2), without a DOM
+{
+  console.log('\ncase file state machine');
+  const { createCaseFile } = await import(js('casefile.js'));
+  const { CASE: CASEQ } = await import(js('story-data/constants.js'));
+  const cues = [];
+  let secs = 120;
+  const trigger = {
+    hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
+  };
+  const make = (route) => {
+    const file = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => cues.push(cue) } });
+    file.start(route);
+    file.chooseTrust(route);
+    secs = 120;
+    cues.length = 0;
+    return file;
+  };
+  const codes = (list) => list.map((item) => item.code).join(',');
+
+  {
+    const file = make('unknown');
+    expect(file.discover('lock-header') === true && file.discover('lock-header') === false, 'discover returns true once, then false');
+    expect(trigger.hidden === false, 'the first evidence reveals the CASE FILE trigger');
+    expect(file.discover('watcher-log') === false, 'the other route\'s record cannot be discovered');
+    expect(file.discover('net-beacon') === false && file.discover('srv-ledger') === false, 'a plain discover cannot open intercept or scan records');
+    expect(file.snapshot().discoveries.join() === 'lock-header' && cues.join() === 'evidence-unlock', 'a discovery is readable and plays evidence-unlock once');
+
+    const first = file.scan();
+    expect(first.tier === 1 && codes(first.found) === 'e12,e13', `scan 1 reveals the relay files (${codes(first.found)})`);
+    expect(file.snapshot().evidence['srv-handshake'] === 'locked' && file.snapshot().evidence['srv-ledger'] === 'locked' && !('ram-residue' in file.snapshot().evidence), 'scan 1 leaves them locked and the deep record hidden');
+    const second = file.scan();
+    expect(codes(second.found) === 'e14' && file.scan().found.length === 0, 'scan 2 (deep) reveals the volatile record, scan 3 finds nothing');
+    expect(file.find('e13')?.id === 'srv-ledger' && file.find('SRV-LEDGER')?.code === 'e13' && file.find('ram-res')?.id === 'ram-residue', 'find accepts a code, an id in any case and a unique prefix');
+    expect(file.find('net-beacon') === null && file.find('e10') === null, 'a record that is still hidden cannot be named');
+
+    expect(codes(file.intercept().found) === 'e10' && file.snapshot().evidence['net-beacon'] === 'unlocked', 'intercept 1 captures the beacon (readable)');
+    const frame = file.intercept();
+    expect(codes(frame.found) === 'e11' && file.snapshot().evidence['net-relay-chain'] === 'locked', 'intercept 2 captures the encrypted frame (locked)');
+    expect(file.intercept().found.length === 0, 'intercept 3 finds nothing');
+
+    expect(file.dump('relay/ledger.enc').reason === 'encrypted' && file.dump('nope.txt').reason === 'unknown', 'dump refuses an encrypted file and an unknown path');
+    const dumped = file.dump('relay/handshake.log');
+    expect(dumped.ok && file.snapshot().evidence['srv-handshake'] === 'unlocked' && file.dump('relay/handshake.log').reason === 'already', 'dump reads a plain scan file once');
+
+    expect(file.startDecrypt('e10').reason === 'not-encrypted', 'decrypt refuses a record that is not encrypted');
+    const job = file.startDecrypt('e11');
+    expect(job.ok && job.seconds === CASEQ.decryptSeconds.relayChain, `decrypt starts with the configured duration (${job.seconds} s)`);
+    expect(file.startDecrypt('e13').reason === 'busy' && file.jobStatus()?.id === 'net-relay-chain', 'only one decrypt runs at a time');
+    expect(file.finishDecrypt()?.id === 'net-relay-chain' && file.snapshot().evidence['net-relay-chain'] === 'decrypted' && file.jobStatus() === null, 'finishDecrypt makes the record decrypted and ends the job');
+    expect(file.startDecrypt('e11').reason === 'done', 'a decrypted record cannot be decrypted again');
+
+    expect(file.connect('e10', 'e11').ok && file.snapshot().evidence['intel-chain'] === 'unlocked', 'connect reveals the INTEL record of a related pair');
+    expect(file.connect('e11', 'e10').reason === 'already', 'connecting the same pair again says so');
+    expect(file.connect('e10', 'e12').reason === 'none', 'unrelated records have no relation');
+    expect(file.connect('e1', 'e2').reason === 'locked' || file.connect('e1', 'e2').reason === 'unknown', 'a pair with a record the player does not hold is refused');
+    file.discover('page-markup');
+    expect(file.connect('lock-header', 'page-markup').ok && file.connect('e1', 'e3').reason === 'unknown', 'connect accepts the original records (and refuses one that was not found yet)');
+    expect(file.connect('e13', 'e12').reason === 'locked', 'a locked record cannot be connected until it is opened');
+    expect(file.connect('route-note', 'ghost-script').reason === 'unknown', 'the other route\'s records cannot be named');
+    expect(cues.includes('relay-connect') && cues.includes('evidence-decrypt'), 'connect and decrypt play their cues');
+    file.start('unknown');
+    expect(Object.keys(file.snapshot().evidence).length === 0 && file.snapshot().scans === 0 && file.jobStatus() === null, 'start() resets the evidence, the counters and the job');
+  }
+
+  {
+    const file = make('unknown');
+    file.discover('route-note');
+    file.discover('ghost-script');
+    expect(file.connect('e5', 'e7').ok && file.snapshot().evidence['intel-cleanup-unknown'] === 'unlocked', 'the unknown route gets its own intel');
+    const watcher = make('watcher');
+    watcher.discover('watcher-log');
+    watcher.discover('ghost-script');
+    expect(watcher.connect('e6', 'e7').ok && watcher.snapshot().evidence['intel-cleanup-watcher'] === 'unlocked' && watcher.find('route-note') === null, 'the watcher route gets its own intel and cannot see the other route\'s');
+  }
+
+  {
+    // Evidence the player does not hold yet is lost at its threshold; evidence they hold never is.
+    const file = make('unknown');
+    file.scan();
+    file.tick(CASEQ.compromiseAt.residue + 1);
+    expect(!('ram-residue' in file.snapshot().evidence), 'nothing is lost above the first threshold');
+    file.tick(CASEQ.compromiseAt.residue);
+    expect(file.snapshot().evidence['ram-residue'] === 'compromised' && cues.includes('breach-alert'), 'the volatile record is lost at its threshold (even though it was never seen) with a breach-alert');
+    expect(file.scan().found.length === 0 && file.dump('mem/trace-agent.bin').reason === 'compromised', 'a lost record is not revealed by a later scan and cannot be dumped');
+    file.intercept();
+    file.intercept();
+    secs = CASEQ.compromiseAt.ledger + 10;
+    const started = file.startDecrypt('e13');
+    expect(started.ok, 'a decrypt can start before the threshold');
+    file.tick(CASEQ.compromiseAt.relayChain);
+    expect(file.snapshot().evidence['net-relay-chain'] === 'compromised', 'the locked relay frame is lost at its threshold');
+    file.tick(CASEQ.compromiseAt.ledger);
+    expect(file.jobStatus()?.lost === true && file.finishDecrypt() === null && file.snapshot().evidence['srv-ledger'] === 'compromised', 'a decrypt of a record that is lost meanwhile fails and the record is compromised');
+    expect(file.startDecrypt('e13').reason === 'compromised' && file.connect('e13', 'e12').reason === 'compromised' || file.connect('e13', 'e12').reason === 'locked', 'a lost record cannot be decrypted or connected');
+
+    const keep = make('unknown');
+    keep.scan();
+    secs = 100;
+    keep.startDecrypt('e13');
+    expect(keep.finishDecrypt()?.id === 'srv-ledger', 'a record decrypted in time is kept');
+    keep.tick(1);
+    expect(keep.snapshot().evidence['srv-ledger'] === 'decrypted', 'a record the player holds is never taken away');
+    expect(keep.compromiseCheck(Number.NaN).length === 0 && keep.compromiseCheck(null).length === 0, 'compromiseCheck ignores a missing trace');
+    // The original puzzle records are never fragile: a tick at 1 s changes none of them.
+    const orig = make('unknown');
+    ['lock-header', 'page-markup', 'page-style', 'page-script'].forEach((id) => orig.discover(id));
+    orig.tick(1);
+    expect(['lock-header', 'page-markup', 'page-style', 'page-script'].every((id) => orig.snapshot().evidence[id] === 'unlocked'), 'the key layer records stay readable at 1 s');
+  }
+
+  {
+    // What the board is given (phase 4.5/4.6): getView() is plain data and never carries text the player may not read.
+    for (const [route, other] of [['unknown', 'watcher-log'], ['watcher', 'route-note']]) {
+      const file = make(route);
+      file.scan();
+      secs = CASEQ.compromiseAt.ledger + 10;
+      const view = file.getView();
+      const stub = view.items.find((item) => item.id === other);
+      expect(stub?.state === 'sealed' && !stub.title && !stub.summary && !stub.detail && stub.code === '--', `route ${route}: the other branch shows as a sealed stub without text`);
+      expect(!view.items.some((item) => item.type === 'INTEL' && item.state === 'sealed'), `route ${route}: INTEL of the other branch is not shown at all`);
+      expect(view.total === view.items.filter((item) => item.state !== 'sealed').length, `route ${route}: sealed stubs are not counted`);
+      const locked = view.items.find((item) => item.id === 'srv-ledger');
+      expect(locked.state === 'locked' && !locked.summary && !locked.detail && !locked.source && locked.title, 'a locked record shows its title and no content');
+      const hidden = view.items.find((item) => item.id === 'page-markup');
+      expect(hidden.state === 'hidden' && !hidden.title && !hidden.detail, 'a story record that was not found shows as an unobserved placeholder');
+      expect(!view.items.some((item) => item.id === 'net-beacon' || item.id === 'intel-layers'), 'scan and intel records appear only once seen');
+    }
+    const file = make('unknown');
+    file.scan();
+    secs = CASEQ.compromiseAt.ledger + 25;
+    expect(file.getView().items.find((item) => item.id === 'srv-ledger').atRisk === false, 'a record far from its threshold is not at risk');
+    secs = CASEQ.compromiseAt.ledger + 15;
+    expect(file.getView().items.find((item) => item.id === 'srv-ledger').atRisk === true, 'a locked record within 20 s of its threshold is at risk');
+    file.tick(CASEQ.compromiseAt.ledger);
+    const lost = file.getView().items.find((item) => item.id === 'srv-ledger');
+    const real = (await import(js('story-data/evidence.js'))).EVIDENCE.find((item) => item.id === 'srv-ledger');
+    expect(lost.state === 'compromised' && lost.atRisk === false && lost.detail && lost.detail !== real.detail && lost.title !== real.title, 'a lost record is shown scrambled, not as its real text');
+    expect(lost.source === '', 'a lost record shows no provenance');
+  }
+}
+
+// ---- the hacking commands (phase 4.3), driven with a fake clock and the real registry and case file
+{
+  console.log('\nhacking commands');
+  const { registerHackingCommands } = await import(js('hacking-commands.js'));
+  const { createCaseFile } = await import(js('casefile.js'));
+  const { createRegistry } = await import(js('commands.js'));
+  const hackingData = await import(js('story-data/hacking.js'));
+  const { CASE: TUNING } = await import(js('story-data/constants.js'));
+
+  let clock = 1000; // ms; casefile.js and hacking-commands.js read performance.now()
+  const realNow = performance.now.bind(performance);
+  performance.now = () => clock;
+  try {
+    const rows = [];
+    const played = [];
+    const line = (text = '', cls = '') => { const row = { textContent: text, cls }; rows.push(row); return row; };
+    const output = () => rows.map((row) => row.textContent).join('\n');
+    let secs = 120;
+    let onSleep = () => {};
+    const trigger = {
+      hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, querySelector: () => ({ textContent: '' }), setAttribute() {}, addEventListener() {},
+    };
+    const setup = (route) => {
+      secs = 120;
+      clock = 1000;
+      rows.length = 0;
+      played.length = 0;
+      onSleep = () => {};
+      const caseFile = createCaseFile({ trigger, getTraceLeft: () => secs, audio: { play: (cue) => played.push(cue) } });
+      caseFile.start(route);
+      caseFile.chooseTrust(route);
+      const session = {
+        async sleep(ms) { clock += ms; secs -= ms / 1000; caseFile.tick(secs); onSleep(); },
+      };
+      const registry = createRegistry();
+      registerHackingCommands(registry, {
+        line, audio: { play: (cue) => played.push(cue) }, session, caseFile, motionReduced: () => false, terminal: { close() {} },
+      });
+      const env = { trusted: route, trace: { left: () => secs, set: (n) => { secs = n; } }, play: { over: null } };
+      const run = (command) => { rows.length = 0; return registry.dispatch(command, env, line); };
+      return { caseFile, registry, env, run, startedAt: clock };
+    };
+
+    {
+      const { caseFile, registry, env, run } = setup('unknown');
+      const help = registry.helpLines(env).map(([text]) => text).join('\n');
+      expect(['scan', 'intercept', 'dump <file>', 'decrypt <id>', 'connect <a> <b>'].every((usage) => help.includes(usage)), 'help lists scan, intercept, dump, decrypt and connect');
+
+      const before = clock;
+      await run('scan');
+      expect(output().includes('scan: 10.0.2.0/24') && output().includes('new nodes: 2') && /e12 {2}relay\/handshake\.log/.test(output()) && /e13 {2}relay\/ledger\.enc {2}\[enc\]/.test(output()), `scan 1 lists the two relay files (${rows.length} lines)`);
+      expect(clock - before >= TUNING.scanSeconds[0] * 1000 && caseFile.snapshot().scans === 1, `scan 1 takes ${TUNING.scanSeconds[0]} s of real time and counts`);
+      expect(played.includes('decrypt-progress') && played.includes('cmd-run'), 'scan plays cmd-run and the decrypt-progress ticks');
+      await run('scan');
+      expect(output().includes('deep scan') && output().includes('trace-agent page') && output().includes('new nodes: 1'), 'scan 2 is the deep scan and finds the volatile page');
+      await run('scan');
+      expect(output().includes('nothing new') && caseFile.snapshot().scans === 2, 'scan 3 is instant and changes nothing');
+
+      played.length = 0;
+      await run('intercept');
+      expect(output().includes('capture: eth0') && output().includes('captured: e10') && played.filter((cue) => cue === 'packet-intercept').length === 3, 'intercept 1 trickles three packets and captures the beacon');
+      await run('intercept');
+      expect(/captured: e11 {2}Relay handshake frame {2}\[enc\]/.test(output()) && output().includes('read with: decrypt <id>'), 'intercept 2 captures the encrypted frame');
+      await run('intercept');
+      expect(output().includes('nothing of interest'), 'intercept 3 finds nothing');
+
+      await run('dump');
+      expect(output().includes('relay/handshake.log  e12') && output().includes('relay/ledger.enc  e13 [enc]'), 'dump without an argument lists the files a scan found');
+      await run('dump relay/handshake.log');
+      expect(output().includes('03:14:08 REGISTER guest=4097') && output().includes('[evidence] e12'), 'dump prints the file and the evidence line');
+      await run('dump ./relay/ledger.enc');
+      expect(output().includes('encrypted. use decrypt e13'), 'dump points an encrypted file at decrypt');
+      await run('dump nothing.txt');
+      expect(output().includes('no such file'), 'dump says "no such file" for an unknown path');
+
+      await run('decrypt');
+      expect(output().includes('e13') && !output().includes('e10'), 'decrypt without an argument lists the locked encrypted nodes');
+      await run('decrypt e10');
+      expect(output().includes('e10 is not encrypted'), 'decrypt refuses a node that is not encrypted');
+      await run('decrypt zz9');
+      expect(output().includes('zz9: no such node'), 'decrypt says "no such node" for an unknown name');
+      const t0 = clock;
+      await run('decrypt e11');
+      expect(output().includes('[ok] decrypted: Relay handshake frame') && output().includes('relay 4') && clock - t0 >= TUNING.decryptSeconds.relayChain * 1000, `decrypt prints the frame after ${TUNING.decryptSeconds.relayChain} s of real time`);
+      expect(caseFile.snapshot().evidence['net-relay-chain'] === 'decrypted' && caseFile.snapshot().job === null && played.includes('evidence-decrypt'), 'decrypt leaves the record decrypted and no job behind');
+      await run('decrypt e11');
+      expect(output().includes('already decrypted'), 'decrypting twice is refused');
+
+      await run('connect');
+      expect(output().includes('usage: connect <id> <id>') && output().includes('readable: e10 e11 e12'), 'connect without arguments lists what can be connected');
+      await run('connect e10 e11');
+      expect(output().includes('intel: One exit') && output().includes('[evidence] e16') && played.includes('relay-connect'), 'connect reveals the INTEL record');
+      secs = 100;
+      await run('connect e10 e12');
+      expect(output().includes('no relation between e10 and e12') && secs === 100 - TUNING.connectMissCost, `a connect with no relation costs ${TUNING.connectMissCost} trace seconds`);
+      await run('connect e13 e12');
+      expect(output().includes('e13 is not readable yet'), 'connect refuses a locked node');
+      await run('connect e10 e10');
+      expect(output().includes('pick two different nodes'), 'connect refuses one node twice');
+    }
+
+    {
+      // The trace ends in the middle of a decrypt: the job stops, nothing is left behind.
+      const { caseFile, env, run } = setup('unknown');
+      await run('scan');
+      let sleeps = 0;
+      onSleep = () => { if (++sleeps === 3) env.play.over = 'TRACE COMPLETE'; };
+      await run('decrypt e13');
+      expect(output().includes('decrypt: interrupted') && caseFile.snapshot().job === null && caseFile.snapshot().evidence['srv-ledger'] === 'locked', 'a decrypt stops when the trace ends and leaves the record locked');
+    }
+
+    {
+      // The record is overwritten by the trace while it is being decrypted.
+      const { caseFile, run } = setup('unknown');
+      await run('scan');
+      secs = TUNING.compromiseAt.ledger + 3;
+      await run('decrypt e13');
+      expect(output().includes('overwritten by the trace') && caseFile.snapshot().evidence['srv-ledger'] === 'compromised' && caseFile.snapshot().job === null, 'a decrypt of a record the trace overwrites meanwhile fails');
+    }
+
+    {
+      // A record decrypted too late is lost before the player can start; the shell says so.
+      const { run } = setup('watcher');
+      await run('scan');
+      secs = TUNING.compromiseAt.ledger - 1;
+      await run('decrypt e13');
+      expect(output().includes('data corrupted, cannot recover'), 'decrypt refuses a record that is already lost');
+    }
+
+    // The words: documentation addresses only, no key, every message used exists.
+    const text = JSON.stringify(hackingData);
+    const addresses = text.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g) ?? [];
+    const documentation = (address) => /^(192\.0\.2|198\.51\.100|203\.0\.113|10\.0\.2|127\.0\.0)/.test(address);
+    expect(addresses.every(documentation), `only documentation-range addresses appear in the command text (${addresses.filter((a) => !documentation(a)).join(', ') || 'none outside'})`);
+    expect(!/sdb9-part|--sdb9|ghost[-\s]+shell|shell[-\s]+1337/i.test(text), 'no command text prints a key layer');
+    const source = await readFile(js('hacking-commands.js'), 'utf8');
+    const used = [...source.matchAll(/msg\('(\w+)'/g)].map((match) => match[1]);
+    expect(used.every((key) => key in hackingData.MESSAGES), `every message the commands use exists (${used.filter((key) => !(key in hackingData.MESSAGES)).join(', ') || 'all'})`);
+    expect(Object.keys(hackingData.DUMP_FILES).every((file) => hackingData.DUMP_FILES[file].length) && Object.keys(hackingData.DECRYPTED).length === 2, 'every dumped file and decrypted record has text');
+  } finally {
+    performance.now = realNow;
+  }
+}
+
+// ---- the trace topology (phase 4.4)
+{
+  console.log('\ntrace topology');
+  const { topologyState, topologyLines } = await import(js('topology.js'));
+  const { TOPOLOGY_NODES } = await import(js('story-data/hacking.js'));
+  const { CASE: TUNING } = await import(js('story-data/constants.js'));
+  expect(TOPOLOGY_NODES.length === TUNING.hops + 2, `the path has you, ${TUNING.hops} relays and the target`);
+  expect(TOPOLOGY_NODES.every((node) => /^(10\.0\.2\.|198\.51\.100\.|203\.0\.113\.|\[REDACTED\])/.test(node.address)), 'only documentation addresses on the path');
+  expect(/█|REDACTED/.test(TOPOLOGY_NODES.at(-1).address) && /█/.test(TOPOLOGY_NODES.at(-2).address), 'the last relay and the target are redacted');
+  const at = (secs) => topologyState(secs);
+  expect(at(TUNING.traceWindow).reached === 0 && at(TUNING.traceWindow).hopsLeft === TUNING.hops + 1 && at(480).percent === 0, 'before the window nothing is reached');
+  expect(at(0).reached === TUNING.hops + 1 && at(0).hopsLeft === 0 && at(0).percent === 100, 'at 0 s the target is reached');
+  let previous = -1;
+  let monotonic = true;
+  for (let secs = TUNING.traceWindow; secs >= 0; secs--) {
+    const { reached } = at(secs);
+    if (reached < previous) monotonic = false;
+    previous = reached;
+  }
+  expect(monotonic, 'the reached count never goes down as time runs out');
+  expect(at(-5).percent === 100 && at(9999).percent === 0, 'out-of-range seconds are clamped');
+  const lines = topologyLines(TUNING.traceWindow / 2);
+  expect(lines.every((row) => row.length <= 34), `every status line fits a phone (longest ${Math.max(...lines.map((row) => row.length))})`);
+  expect(lines[0].startsWith('trace [') && lines.at(-1).startsWith('hops remaining: '), 'bar first, hops last');
+  expect(lines.filter((row) => row.startsWith('[x]')).length === at(TUNING.traceWindow / 2).reached + 1, 'rows marked reached = you + reached nodes');
+  expect(!lines.some((row) => /\[?x\]? .*REDACTED/.test(row)) || at(TUNING.traceWindow / 2).reached === TUNING.hops + 1, 'the target stays unmarked until reached');
+}
+
 console.log(failures ? `\n${failures} problem(s)` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

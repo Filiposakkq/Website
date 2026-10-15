@@ -10,6 +10,7 @@ node tools/smoke.mjs                 # every scenario
 node tools/smoke.mjs --only=victory  # scenarios whose name contains "victory"
 node tools/smoke.mjs --list          # print scenario names
 node tools/smoke.mjs --serial        # run one scenario at a time (easier to read logs)
+node tools/smoke.mjs --jobs=8        # at most 8 scenarios at once (default 14; all 27 at once exhausted the audio device)
 ```
 
 Starts its own static server on a free port (serving `sites/fsociety00/public` on `127.0.0.1`,
@@ -35,6 +36,8 @@ Notes:
 
 ## `validate-story.mjs` — story data and engine check (phase 3)
 
+Since phase 4.3 it also drives the real `hacking-commands.js` with a fake clock (scan, intercept, dump, decrypt, connect, trace ending during a decrypt) and checks that the command text uses only documentation-range addresses and never prints a key layer.
+
 ```sh
 node tools/validate-story.mjs            # self-test, then validate and dry-run the story data
 node tools/validate-story.mjs --verbose  # also list the cues and labels the story uses
@@ -46,6 +49,13 @@ and that branches, choices, `end` and the skip rules behave. Step 2 loads `js/st
 against the real registries (`js/audio/patches.js` cues and scenes, the case file API in `js/casefile.js`, the glitch
 names) and walks the story with a recording host once per combination of choices. `run` nodes (bespoke visual beats)
 are not called in a dry run, so it proves the node graph, not what the screen looks like. Exit code 1 on any problem.
+
+Phase 4 added an **evidence** section: it validates `js/story-data/evidence.js` (unique ids and short codes, types, `found`
+values, positions, `links`/`requires`/`connects` ids, no `requires` cycle, scan and intercept tiers without gaps, every
+record reachable on both trust routes, encrypted and fragile records only where the original puzzle path stays open, no
+text that prints a key layer), proves with 17 mutations of the real data that each kind of mistake is reported, and
+checks that every `discover('<id>')` call, every `caseFile('discover', '<id>')` story node and every id in
+`story-data/level01.js` names an existing record that a plain `discover` may reach.
 
 ## `transcript.mjs` — playthrough text recorder and differ (phase 3)
 
@@ -85,7 +95,7 @@ It judges numbers, not taste: the owner still has to listen (listening checklist
 ## `check-fonts.sh` — minimum font size
 
 ```sh
-tools/check-fonts.sh          # ignores .case-* and .developer-* (phases 4 and 7 own those)
+tools/check-fonts.sh          # ignores .developer-* (phase 7 owns it); .case-* is checked since phase 4.5
 tools/check-fonts.sh --all    # whole file; required to pass from phase 7 on
 ```
 
@@ -106,6 +116,7 @@ as text on light hover fills (`#000`) show up as LOW and can be ignored.
 
 ## Known flakiness and cost (added 2026-10-13)
 
+- Phase 4 (27 scenarios): all at once, two scenarios failed with `AudioContext encountered an error from the audio device` and two real-time ones timed out in `reachTrustChoice`; the runner now caps the parallel scenarios (`--jobs`, default 14) and the full run then failed only `reduced: typing ticks are rate limited ...` (it also failed on baseline `main` in a parallel run and passes alone: its 30 instant keystrokes are spread over time under load).
 - In a **parallel** run two scenarios (`reduced: log role...` and `desktop: trust unknown -> victory`) once timed out (14/16); run alone (`--only=...` or `--serial`) they passed 16/16. If a full run shows 1-2 failures, rerun just those scenarios before concluding anything. Do not "fix" a timeout by deleting an assertion.
 - A full run takes minutes because the story runs in real time. On a limited usage budget: run `node --check` on changed files for wip commits, run the relevant `--only=` scenarios while developing, and the full suite when a sub-step is finished and before the handoff. Save the output to a file and show only the summary (`tail`).
 - The suite does not check that no `AudioContext` exists before the launch click, nor `body.quiet-motion` without the media query (phase 2 adds both).

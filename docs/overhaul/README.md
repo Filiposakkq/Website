@@ -71,7 +71,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 | 1 | Foundation & bug fixes | merged | — | `overhaul/phase-1-foundation` | PR #4, squash commit `841cad0` | all rows done, smoke 16/16, owner tested the preview on phone and PC; review findings carried over, see "Known issues carried over" |
 | 2 | Audio | merged | 1 | `overhaul/phase-02-audio` | PR #7, squash commit `b0ea8ee` | all rows done, smoke 20/20, audio-lint 0 problems; **not yet listened to**: owner checklist "Phase 2 only" |
 | 3 | Story & boot | merged | 1 | `overhaul/phase-3-story` | PR #10, squash commit `1bbc40d` | all rows 3.1–3.10 done, smoke 21/21, validate-story ok; **not heard/seen**: new boot sounds and length (~38 s est.), phone layout of the new boot; see the handoff report |
-| 4 | Evidence board | todo | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | | |
+| 4 | Evidence board | in review | 1, 3 (2 optional) | `overhaul/phase-4-evidence` | PR #12 (not merged by Claude) | rows 4.1 to 4.7 done; handoff report in the phase file; owner test on the preview pending (touch, sounds, screen reader, tuning feel) |
 | 5 | Animations | todo | 1 (3 recommended) | `overhaul/phase-5-animations` | | |
 | 6 | TRACED game over | todo | 1, 2, 3, 5 | `overhaul/phase-6-traced` | | |
 | 7 | Developer panel | todo | 1; best after 2–6 | `overhaul/phase-7-devpanel` | | |
@@ -364,7 +364,7 @@ None of these is a regression and none blocks the game; each has a home phase.
 | Issue | Home |
 |---|---|
 | 41 of 73 `@keyframes` animate `filter`, `box-shadow`, `text-shadow`, `clip-path`, `letter-spacing`, colors, `background-position`, `top`; one transition animates `top`, `left`, `font-size` (rule: only `transform`/`opacity`) | Phase 5 |
-| 26 font-size declarations below 11px in `.case-*` (player-facing on phones) and `.developer-*` (`tools/check-fonts.sh --all` lists them) | Phase 4 (`.case-*`), phase 7 (`.developer-*`) |
+| 5 font-size declarations below 11px in `.developer-*` (`tools/check-fonts.sh --all` lists them); `.case-*` was fixed in phase 4.5 | Phase 7 (`.developer-*`) |
 | The DEV `boot` route calls `runStory()` directly, so the ambient-interval cleanup in `startStory`'s `finally` does not run when it ends normally (localhost only) | Phase 7 |
 | Skip control (lower right) still covers text on small phones and its idle look is a compromise: rework it (HOLD TO SKIP label, circular hold progress, placed above the prompt, 3 s hold kept, smoke test keeps using a real mouse press). The hold state is per session since phase 3.2 (`js/skip-control.js`) | Phase 5 (visuals) |
 | Trace times (480 / 120 / 120 / 60, `hint` 30 s) are untuned: named constants in `story-data/constants.js`, to be tuned after the owner's phone tests. (The per-scene policy is done in phase 3.5: `running` floors at TRACE PENDING, `lethal` after the trust choice, `close` at the ghost script; HUD look is phase 5.4) | Owner tuning; phase 5 (HUD look, 5.4) |
@@ -394,3 +394,4 @@ None of these is a regression and none blocks the game; each has a home phase.
 | 2026-10-14 | Phase 2: no `audio.setMasterVolume()` (not trivial, volume UI is out of scope); brief names that match existing sounds are aliases; new cues are registered only, wired by phases 3, 4 and 6 | Default; see the phase 2 handoff report |
 | 2026-10-13 | Skip control made smaller and with a more transparent background (not a lower text opacity, which fails 4.5:1) because it covered text on phones | Done in the post-phase-1 docs PR |
 | 2026-10-13 | Phase 2 branch is `overhaul/phase-02-audio` (owner's instruction), not `overhaul/phase-2-audio` as the docs said | Decided by owner |
+| 2026-10-15 | Phase 4 decisions (evidence as data, `decrypt` blocks the shell, loss thresholds, sealed stubs, board optional for the win, no timer in the case file): see "Decisions made in phase 4" in `phase-04-evidence-board.md` | Default; owner to confirm in review |

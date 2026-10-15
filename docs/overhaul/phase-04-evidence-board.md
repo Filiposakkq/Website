@@ -134,14 +134,95 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 
 | Step | Status | Commit | Notes |
 |---|---|---|---|
-| 4.1 EVIDENCE schema migration + validator | todo | | |
-| 4.2 State machine + casefile methods | todo | | |
-| 4.3 Commands scan / intercept / dump / decrypt / connect | todo | | |
-| 4.4 Topology module (extra 8) + trace --status | todo | | |
-| 4.5 Board layout + native dialog + mobile + a11y + fonts | todo | | |
-| 4.6 Ghost trail + COMPROMISED handling | todo | | |
-| 4.7 Tuning and playtests | todo | | |
+| 4.1 EVIDENCE schema migration + validator | done | `864dd72` | records in `story-data/evidence.js` (19: original 9, 5 network, 5 INTEL), `CASE` constants, evidence validator with 17 mutations; smoke 21/21 on a snapshot (**last green commit: `864dd72`**) |
+| 4.2 State machine + casefile methods | done | `6e3e8fc` | hidden/locked/unlocked/decrypted/compromised, `scan intercept dump find startDecrypt finishDecrypt connect compromiseCheck tick`; 45 Node checks in `validate-story`; `trace.onTick` feeds the loss rule; board still the legacy view until 4.5; smoke 21/21 on a snapshot (**last green commit: `6e3e8fc`**) |
+| 4.3 Commands scan / intercept / dump / decrypt / connect | done | `d875fab` | `hacking-commands.js` + `story-data/hacking.js`; 31 Node checks with a fake clock (incl. trace ending mid-decrypt, record overwritten mid-decrypt, no key text, documentation IPs); 2 new smoke scenarios; smoke 23/23 on a snapshot (**last green commit: this 4.3 commit**); browser look of the commands on a phone width: unverified |
+| 4.4 Topology module (extra 8) + trace --status | done | `e0ac15d` | `topology.js`, `trace --status`, real hop count in plain `trace`, 11 Node checks; board view `createTopologyView` written but not shown until 4.5; smoke 23/23 on a snapshot (**last green commit: this 4.4 commit**); the one-line trace status for the corner HUD was not done (phase 5 owns the HUD look) |
+| 4.5 Board layout + native dialog + mobile + a11y + fonts | done | `40a9bf8` | `board-ui.js` (native dialog, 2x2 panes / phone tabs, own live region, map with pan/zoom/pinch/keyboard, connect by rows or nodes), casefile has no DOM code, `.case-*` CSS rewritten at >= 11px, `check-fonts.sh` no longer skips `.case-*`; 2 new smoke scenarios (wide + phone); full smoke 24/25 on the first run, the one failure is the known parallel-load flake `typing ticks are rate limited`, which passes alone (**last green commit: this 4.5 commit**). Unverified: real touch pinch on a device, screen reader output, iOS Safari dialog behavior |
+| 4.6 Ghost trail + COMPROMISED handling | done | `c20b06d` | sealed stubs of the other branch in `getView()`, lost records shown scrambled with `AT RISK` warnings, scrambled text hidden from screen readers; 10 Node checks and 1 smoke scenario (**last green commit: `c20b06d`**, 26/27 with the known flake) |
+| 4.7 Tuning and playtests | done | `c20b06d` | tuning notes below (scripted only, **no human playtest: unverified**), keyboard-only smoke scenario with the accessibility tree, tracker, changelog, owner checklist, handoff report |
 
 ## Implementation notes
 
 _(Keep a **Resume point** block first. It is advisory and goes stale, so write it at the **start of every session** after re-deriving the state from the code, and again if you stop early: branch + head commit, `last green commit`, step in progress, anything broken or half-edited, failing tests, next command. Mark the previous block `(historical)`. Then append here)_
+
+### Resume point (2026-10-15, session 1, phase complete)
+
+- Branch `overhaul/phase-4-evidence`; every row 4.1 to 4.7 is done; handoff report below. Remaining: the owner's review, the preview test on a phone and a desktop, and the merge (not done by Claude).
+- If a review finds issues: fix on this branch, re-run `node tools/smoke.mjs`, `node tools/validate-story.mjs`, `bash tools/check-fonts.sh`, update the Checkpoint log.
+- Next phases: 5 (animations: the board has `data-reveal-index` hooks and a plain opacity fade; `.topo-*` and the board are phase 5 material for a glitch-in), 6 (the TRACED sequence can reuse `js/topology.js`), 7 (developer panel: jump routes could pre-fill evidence).
+
+### Resume point (session 1, started 2026-10-15) (historical)
+
+- Branch `overhaul/phase-4-evidence`, created from `main` `872407f` (phase 3 merged, PR #10/#11). Head at the time of writing: `872407f` plus this docs commit.
+- `last green commit`: none yet. Baseline on unmodified `main` (`872407f`): `validate-story` ok, `check-fonts.sh --all` fails with the 26 known `.case-*`/`.developer-*` declarations. Full smoke baseline: 20 of 21 passed, `reduced: typing ticks are rate limited ...` failed in the parallel run (`tools/README.md` lists two scenarios that were flaky once under parallel load; re-run alone before treating it as a regression, result in the log below).
+- Step in progress: 4.1 (schema migration + validator). Nothing half-edited.
+- Next command: `node tools/validate-story.mjs` after the schema move, then `node --check` on the changed files.
+- The old "Current state (baseline `8ea680b`)" section above is stale (casefile.js is 707 lines, `level01.js` registers commands through `commands.js`, the story is data). Re-derived state: `docs/state/story.md` and the code.
+
+### Decisions made in phase 4 (2026-10-15)
+
+Defaults chosen without the owner (nobody was there to ask). Change them by editing the data, not the code.
+
+| Decision | Why |
+|---|---|
+| **The evidence records are data** in `js/story-data/evidence.js`; **every tuning number** (scan, intercept and decrypt times, loss thresholds, hop count, cost of a wrong `connect`) is `CASE` in `js/story-data/constants.js`, not "at the top of `casefile.js`" as this phase file said | Since phase 3 the repo keeps text and numbers in `story-data/`; `validate-story` imports both in Node. `casefile.js` points there in its header |
+| `decrypt` **blocks the shell** (progress line, no other command while it runs) and the trace keeps running; it stops cleanly when the trace expires; it uses real time (`session.sleep`), not the reduced-motion `wait`, so the cost is the same for everybody | Background jobs need a job id, `abort` handling and concurrency with the read loop; blocking keeps the loop single-threaded and phone friendly. The tension comes from the HUD ticking |
+| **`COMPROMISED` is both a type and a state.** The type marks volatile records (`ram-residue`); any record may have `compromiseAtTrace`. A record that the player does **not hold yet** (hidden or locked) is **lost for good** when the trace reaches the threshold; a record they already read is never taken away. No repair command | Stakes without ever removing information the player has; the plan allowed "simply lost" |
+| Evidence can have a **short code** (`e1`..`e19`); every command accepts the code, the id, or a unique id prefix. Only records already seen can be named | Typing `decrypt e11` on a phone is easy; naming a hidden record would leak it |
+| **The key layers are untouched.** The three original page records and the original nine are never encrypted and never fragile (validator-enforced); INTEL only points toward the page (`source map`), never prints a layer; the board is optional for the win | CLAUDE.md "Do not break" |
+| `scan` has two tiers (local network, then a deep scan); `intercept` has two tiers; later runs find nothing and are instant. A `connect` with no relation costs `CASE.connectMissCost` trace seconds | The plan's "limited re-scans or increasing cost" knobs; the penalty stops brute-forcing pairs |
+| The other route's records are shown as **sealed stubs** ("SEALED // OTHER BRANCH"), not hidden completely | The plan: "hidden or suspiciously incomplete"; the story bible already promised this label |
+| The case file starts **no timer**: the level shell calls `caseFile.tick(secs)` from `trace.onTick` | Phase 4 rule "do not start a second timer"; the session owns the trace interval |
+
+### Tuning notes (4.7, 2026-10-15)
+
+All numbers are `CASE` in `js/story-data/constants.js`. **No human playtested them**: the figures below are arithmetic and scripted runs (unverified as a feel).
+
+| What | Number | Reasoning |
+|---|---|---|
+| The puzzle window | 120 s after the trust choice (`TRACE.afterTrust`); `CASE.traceWindow` follows it | The board mechanics must fit inside it and stay optional |
+| `scan` | 3 s, then 4 s (deep) | One scan before reading the page costs 3 s of 120 |
+| `intercept` | 3 s + 3 s | Same |
+| `decrypt` | relay frame 6 s, ledger 8 s | A player who runs everything (scan 3 + 4, intercept 3 + 3, decrypts 14) spends about 27 s of typing and waiting plus the commands themselves; a hint costs 30 s, so the whole board costs less than one hint |
+| Loss thresholds (seconds left) | memory record 90, ledger 35, relay frame 45 | The memory record is lost after about 30 s of the window if the deep scan has not found it; the others only when the player is already in the last third. A held record is never lost |
+| Wrong `connect` | 3 s of trace | Stops pair brute-forcing (the board has ~14 readable records at most), small enough not to end a run |
+| Topology | 4 relays + target; the path advances every 24 s of the 120 s window | `floor(progress x 5)` |
+
+What a scripted run showed: the smoke scenario "scan, intercept, dump, decrypt, connect -> victory" wins the original way after using every command. The "trust unknown / watcher -> victory" scenarios never open the board, so the board is optional for the win (decision below). The tuning to check by hand: does a careful player finish the page layers and still have time for one decrypt, and does a lazy player feel the memory record disappear at 90 s.
+
+### 4.5 and 4.6 notes (2026-10-15)
+
+- The board is `js/board-ui.js`; `casefile.js` has no DOM code any more (it gives `getView()` and `subscribe`). The board draws on 'data' notifications and once per trace tick; it starts no timer and opens only while a dialog exists.
+- On a phone (max-width 720px) the four panes are tabs. In that layout selecting a row pans the map so the selected node is on screen; the connect flow works through rows as well as nodes because the 720 px map does not fit a 390 px pane at a readable size (fit never goes below 0.75).
+- Lost records are shown with scrambled text made once when they are lost (no flicker); the scrambled copy is `aria-hidden` and an sr-only sentence says the record is overwritten.
+- `trace --status` and the board both use `js/topology.js`; the board shows the six path nodes as a list, not as boxes.
+- Not done: the one-line trace in the corner HUD (phase 5 owns the HUD look); the board does not start `decrypt` (terminal only); tab completion.
+
+### More decisions made in phase 4 (2026-10-15)
+
+| Decision | Why |
+|---|---|
+| **The board is optional for the win.** Nothing in the puzzle checks the case file | CLAUDE.md "Do not break": the three-layer key and `unlock` must keep working; the plan asked to record this |
+| The board stays closed to the player until the first record exists (as before): `#caseTrigger` is hidden until then | Unchanged behavior |
+| The board does not pause the trace | The plan's wording (the timer continues while the board is open) was kept from the old board |
+| The board has no `decrypt` button; it connects, selects and shows | The decrypt costs real time and blocks the shell; a button would need a second progress UI (phase 5 / 9 if wanted) |
+| Pinch zoom uses pointer events (two pointers); no gesture library | No dependencies |
+
+## Handoff report (2026-10-15)
+
+**Done:** rows 4.1 to 4.7. The evidence is data (`js/story-data/evidence.js`: 19 records with a state machine hidden / locked / unlocked / decrypted / compromised); five new terminal commands (`scan`, `intercept`, `dump`, `decrypt`, `connect`, in `js/hacking-commands.js`, text in `js/story-data/hacking.js`); `trace --status` and the ASCII trace path (`js/topology.js`, also in the board); the board is a native `<dialog>` (`js/board-ui.js`) with four panes (wide) or four tabs (phone), its own live region, pan / zoom / pinch / keyboard map and connect-by-selecting; ghost trail (sealed stubs of the other branch) and lost evidence (scrambled, `AT RISK`). `.case-*` is at 11 px or more and `tools/check-fonts.sh` no longer skips it.
+
+**Verified (last green commit = the head of this branch before the PR):** full `node tools/smoke.mjs` on a snapshot (27 scenarios; see the log row of 4.7 and the PR text for the exact result), `node tools/validate-story.mjs` (evidence schema + 17 mutation tests, 45 state machine checks, 31 command checks with a fake clock, 11 topology checks, view checks), `bash tools/check-fonts.sh` OK, `node --check` on every changed file. The smoke scenarios cover: every new command and a win afterwards, a decrypt followed by trace expiry and a reboot, the board dialog on a wide screen and a phone (4 panes / tabs, no horizontal overflow, text >= 11 px, connect, Escape, focus return), a keyboard-only run with the accessibility tree, and lost / sealed evidence.
+
+**Intentional behavior changes:** the CASE FILE board looks and works differently (the old overlay with three tabs is gone); `trace` prints a real hop count (`relays: n / 4`) instead of `7 / 9`; new `help` entries; the three original puzzle layers and `unlock` are unchanged.
+
+**Unverified:** every number as a feel (no human playtest); sounds of `board-open`, `node-select`, `decrypt-progress`, `packet-intercept`, `evidence-unlock`, `evidence-decrypt`, `relay-connect`, `breach-alert`, `cmd-run`, `cmd-fail` in the new places (nobody listened); touch pinch on a real device; screen reader output on a real screen reader (only Playwright's accessibility tree was checked); Safari / iOS `<dialog>` and `matchMedia` behavior; the board layout in a landscape phone; contrast of the new colors (not run through `tools/contrast.mjs`).
+
+**Not done / carried over:** one-line trace in the corner HUD (phase 5); reveal / glitch animation of the board nodes (phase 5; hooks `data-reveal-index` are in); a `decrypt` button on the board; tab completion; the root `README.md` still describes the old board (phase 9 updates it).
+
+**Smoke result of the final run (27 scenarios, snapshot of the head, `--jobs` default 14):** 26 passed, 1 failed: `reduced: typing ticks are rate limited ...` (flake, passes alone, also failed on baseline). Before the runner got a concurrency cap, all 27 at once failed 4 scenarios from load (audio device error, timeouts); each passes alone.
+
+**Flake:** `reduced: typing ticks are rate limited and ignore modifier and navigation keys` failed once in a parallel full run and passes alone (documented in `tools/README.md`); re-run it alone before treating it as a regression.
+
+**Notes for the next phases:** add a record in `story-data/evidence.js` and run `node tools/validate-story.mjs` (it checks ids, reachability, that nothing leaks a key layer); a command that gives evidence calls the case file methods, never the DOM; the board reads `caseFile.getView()` and re-draws on `subscribe`; `createTopologyView(container).update(secsLeft)` is the live path view for phase 6.

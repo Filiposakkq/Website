@@ -10,6 +10,24 @@ export const TRACE = {
   hintCost: 30, // what one `hint` costs
 };
 
+/**
+ * The evidence board and the hacking commands `scan`, `intercept`, `dump`, `decrypt`, `connect` (phase 4). This is the one
+ * place to tune them. The window is short (`TRACE.afterTrust` after the trust choice, `hint` takes 30 s off), so
+ * everything here is optional depth, never a requirement: the key is still found by reading the page layers.
+ * Playtest numbers are unverified until the owner has played them (see the phase 4 notes).
+ */
+export const CASE = {
+  hops: 4, // relays between the guest and the target on the trace map (topology.js); the target is hop 5
+  traceWindow: TRACE.afterTrust, // the trace length that "100 %" on the map means
+  scanSeconds: [3, 4], // run time of scan 1 (local network) and scan 2 (deep scan); later scans are instant
+  interceptSeconds: [3, 3], // run time of intercept 1 and intercept 2; later captures are instant
+  decryptSeconds: { relayChain: 6, ledger: 8 }, // how long `decrypt` runs for each locked record
+  // Evidence the player does not hold yet (hidden or locked) is lost when the trace has this many seconds left.
+  compromiseAt: { relayChain: 45, ledger: 35, residue: 90 },
+  connectMissCost: 3, // trace seconds a `connect` that finds no relation costs (stops brute forcing)
+  progressStepMs: 250, // how often a running job redraws its progress line (once per second with reduced motion)
+};
+
 /** How long the skip control has to be held. */
 export const SKIP_HOLD_MS = 3000;
 

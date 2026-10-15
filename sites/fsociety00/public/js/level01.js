@@ -1,9 +1,11 @@
 import { sourcePartThree, whisperSourcePart } from './source.js';
 import { formatClock } from './util.js';
+import { topologyState, topologyLines } from './topology.js';
 import { isAbortError } from './session.js';
 import { createRegistry } from './commands.js';
 import { registerSystemCommands } from './system-commands.js';
-import { TRACE } from './story-data/constants.js';
+import { registerHackingCommands } from './hacking-commands.js';
+import { TRACE, CASE } from './story-data/constants.js';
 import { SYSTEM_FILES } from './story-data/system.js';
 import {
   LEVEL01_HINTS, LEVEL01_FILES, LEVEL01_FILE_ROUTE, LEVEL01_FILE_EVIDENCE, LEVEL01_LS, LEVEL01_SOURCE_FILES,
@@ -192,13 +194,16 @@ export function createLevel01(ctx) {
   });
 
   registry.register({
-    name: 'trace', usage: 'trace', summary: 'show monitoring status',
-    run(_args, env) {
+    name: 'trace', usage: 'trace [--status]', summary: 'show monitoring status',
+    run(args, env) {
       audio.play('trace-status');
-      const closing = env.trace.left() < 120;
+      const left = env.trace.left();
+      const closing = left < 120;
+      const state = topologyState(left);
       line(`trace:  ${closing ? 'CLOSING' : 'ACTIVE'}`, closing ? 'warn' : '');
-      line(`eta:    ${formatClock(env.trace.left())}`, 'dim');
-      line('relays: 7 / 9', 'dim');
+      line(`eta:    ${formatClock(left)}`, 'dim');
+      line(`relays: ${state.relaysReached} / ${CASE.hops}`, 'dim');
+      if (args.includes('--status')) topologyLines(left).forEach((row) => line(row, 'dim'));
     },
   });
 
@@ -224,6 +229,9 @@ export function createLevel01(ctx) {
       line('read each with: cat page/<file>', 'dim');
     },
   });
+
+  // scan, intercept, dump, decrypt, connect: the evidence mechanics (hacking-commands.js). All optional.
+  registerHackingCommands(registry, ctx);
 
   // The two routes each get their own command; the other route sees them as unknown or as a usage line.
   registry.register({
@@ -274,6 +282,9 @@ export function createLevel01(ctx) {
       play.over = 'TRACE COMPLETE';
       abortCommand();
     };
+    // The case file loses evidence the player has not collected when the trace gets close (once per trace second:
+    // the case file starts no timer of its own).
+    trace.onTick = (secs) => caseFile.tick(secs);
     // The trace sound (tick, warn, critical) is attached where the trace is created (story.js, trace-sound.js).
 
     while (!play.solved && !play.over) {
@@ -282,12 +293,14 @@ export function createLevel01(ctx) {
       if (play.over) break;
       if (raw === null) {
         trace.onEnd = null;
+        trace.onTick = null;
         return false;
       }
       await registry.dispatch(raw, env, line);
     }
 
     trace.onEnd = null;
+    trace.onTick = null;
     if (play.over) {
       await gameOver(trace, play.over);
       return false;

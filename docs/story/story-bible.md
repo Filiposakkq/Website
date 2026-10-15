@@ -51,7 +51,7 @@ The other route's evidence appears as "SEALED // OTHER BRANCH".
 - **Key:** three layers read from the page (a `<meta>`, a CSS custom property, a console message); the parts are named in the hints and the readme. **Do not print or move them in docs or code without keeping all three discoverable.**
 - **ghost.sh:** steps CLOSE TRACE REQUEST, END REMOTE SESSION, REVOKE GUEST TOKEN, CLOSE LOCAL SHELL; label `FSOCIETY // CONTAINMENT ROUTINE`.
 - **The list:** erased people; the player is record **4097** ("SESSION DOSSIER 4097"); "that is how they find people." (S:1180).
-- **Fictional data only:** all IPs are `203.0.113.x`; E Corp, build date 2015, relay id 0515, `guest@fsociety00`, relays `7 / 9`. Never real IPs, locations or identities.
+- **Fictional data only:** all IPs are `203.0.113.x`; E Corp, build date 2015, relay id 0515, `guest@fsociety00`, relays `n / 4` (the real hop count from `topology.js`, `CASE.hops`). Never real IPs, locations or identities.
 - **Timers:** 480 s at the start, 120 s after the trust choice, 120 s after the unlock; `hint` costs 30 s; watcher takeover sets 60 s at 8x speed.
 - **Case file items** (C:3-105): `lock-header`, `page-markup`, `page-style`, `page-script`, `route-note`, `watcher-log`, `ghost-script`, `erased-list`, `elliot-echo`. Outcomes: VERIFIED HANDOFF, UNVERIFIED HANDOFF, CONTAINED EXIT, OPEN RELAY EXIT, SESSION COMPROMISED, LOCKED OUT, TRACE COMPLETE. Footer: "EVIDENCE IS NOT IDENTITY // VERIFY EVERY CHANNEL".
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // End-to-end smoke test for the fsociety00 game. See tools/README.md.
 //
-//   node tools/smoke.mjs [--only=<substring>] [--list] [--serial] [--headed]
+//   node tools/smoke.mjs [--only=<substring>] [--list] [--serial] [--jobs=<n>] [--headed]
 
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -317,6 +317,219 @@ scenarios.push({
     if (hud.text !== '00:00' || hud.label !== 'TRACE COMPLETE') {
       throw new Error(`expired HUD should read 00:00 / TRACE COMPLETE, got ${JSON.stringify(hud)}`);
     }
+  },
+});
+
+// Phase 4.3: the hacking commands build the case file in real time and the key is still solved afterwards.
+scenarios.push({
+  name: 'desktop: scan, intercept, dump, decrypt, connect -> victory',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'type', reduced: false });
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'new nodes: 2', 30000);
+    await sleep(500);
+    await sendCommand(page, 'intercept');
+    await waitOutput(page, 'captured: e10', 30000);
+    await sleep(500);
+    await sendCommand(page, 'dump relay/handshake.log');
+    await waitOutput(page, '[evidence] e12');
+    await sendCommand(page, 'connect e10 e12');
+    await waitOutput(page, 'no relation between e10 and e12');
+    await sendCommand(page, 'trace --status');
+    await waitOutput(page, 'hops remaining:');
+    const leaked = await page.evaluate(() => /sdb9-part|ghost[-\s]shell|shell[-\s]1337/i.test(document.getElementById('output').textContent.replace(/unlock ghost shell 1337/g, '')));
+    if (leaked) throw new Error('a hacking command printed a key layer');
+    await winGame(page);
+  },
+});
+
+// Phase 4.3: a decrypt runs to the end, then the trace ends -> clean game over; reboot leaves no job or timer behind.
+// (The trace ending in the middle of a decrypt is covered in tools/validate-story.mjs: a record cannot be decrypted
+// late enough in the UI because the volatile records are overwritten before the last seconds.)
+scenarios.push({
+  name: 'desktop: decrypt, then trace expiry -> game over -> reboot',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'type', reduced: false });
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'new nodes: 2', 30000);
+    await sleep(500);
+    await sendCommand(page, 'decrypt e13');
+    await waitOutput(page, '[ok] decrypted: ', 30000);
+    await sleep(500);
+    await loseByTraceExpiry(page);
+    await rebootAndVerify(page, { reduced: false });
+    await sleep(500);
+    const pending = await page.evaluate(async () => (await import('/js/session.js')).currentSession().pending());
+    if (pending > 6) throw new Error(`${pending} timer handle(s) look too many after the reboot`);
+  },
+});
+
+// Phase 4.5: the evidence board is a native dialog with four panes (wide) or four tabs (phone).
+async function buildBoardEvidence(page) {
+  await sendCommand(page, 'scan');
+  await waitOutput(page, 'new nodes: 2', 30000);
+  await sendCommand(page, 'dump relay/handshake.log');
+  await waitOutput(page, '[evidence] e12');
+  await sendCommand(page, 'decrypt e13');
+  await waitOutput(page, '[ok] decrypted:', 30000);
+}
+
+const boardState = (page) => page.evaluate(() => {
+  const dialog = document.querySelector('dialog.case-dialog');
+  const visible = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
+  return {
+    open: !!dialog?.open,
+    legacyDialogs: document.querySelectorAll('div[role="dialog"]').length,
+    panes: [...document.querySelectorAll('.case-pane')].filter(visible).map((el) => el.id),
+    tabsVisible: visible(document.querySelector('.case-tabs')),
+    nodes: document.querySelectorAll('.case-node').length,
+    rows: [...document.querySelectorAll('.case-row')].map((el) => el.textContent),
+    live: dialog?.querySelector('[role="status"]')?.textContent ?? '',
+    focusInside: !!dialog?.contains(document.activeElement),
+    pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    paneOverflow: [...document.querySelectorAll('.case-pane-body')].filter(visible).some((el) => el.scrollWidth > el.clientWidth + 1),
+    smallest: Math.min(...[...dialog?.querySelectorAll('*') ?? []].filter((el) => el.childNodes.length && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())).map((el) => parseFloat(getComputedStyle(el).fontSize))),
+  };
+});
+
+for (const [label, contextOptions] of [['desktop', REDUCED], ['mobile', { ...MOBILE, reducedMotion: 'reduce' }]]) {
+  scenarios.push({
+    name: `reduced: ${label === 'mobile' ? 'phone ' : ''}evidence board dialog, map, connect, escape`,
+    contextOptions,
+    async run({ page }) {
+      await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+      await buildBoardEvidence(page);
+      await sleep(300);
+      await page.locator('#caseTrigger').click();
+      await page.waitForSelector('dialog.case-dialog[open]');
+      let board = await boardState(page);
+      if (!board.open || board.legacyDialogs !== 0) throw new Error(`board should be one native dialog: ${JSON.stringify(board)}`);
+      if (!board.focusInside) throw new Error('focus should move into the board');
+      if (board.pageOverflow || board.paneOverflow) throw new Error(`the board overflows horizontally: ${JSON.stringify(board)}`);
+      if (board.smallest < 11) throw new Error(`board text below 11px: ${board.smallest}`);
+      if (!board.rows.some((row) => row.includes('e13') && row.includes('DECRYPTED'))) throw new Error(`e13 should be listed as decrypted: ${JSON.stringify(board.rows)}`);
+      await page.locator('.case-row', { hasText: 'e12' }).click();
+      if (label === 'desktop') {
+        if (board.panes.length !== 4 || board.tabsVisible) throw new Error(`wide layout shows four panes and no tabs: ${JSON.stringify(board)}`);
+      } else {
+        if (board.panes.length !== 1 || !board.tabsVisible) throw new Error(`phone layout shows one pane and the tabs: ${JSON.stringify(board)}`);
+        await page.locator('#caseTab-trace').click();
+        await page.waitForSelector('#casePane-trace:not([hidden])');
+        const topo = await page.evaluate(() => document.querySelectorAll('.topo-node').length);
+        if (topo !== 6) throw new Error(`the trace pane should show six path nodes, shows ${topo}`);
+        await page.locator('#caseTab-map').click();
+        await page.waitForSelector('#casePane-map:not([hidden])');
+        const inside = await page.evaluate(() => {
+          const net = document.querySelector('.case-network').getBoundingClientRect();
+          const node = [...document.querySelectorAll('.case-node')].find((n) => n.textContent.includes('e12')).getBoundingClientRect();
+          return node.left >= net.left - 1 && node.right <= net.right + 1 && node.top >= net.top - 1 && node.bottom <= net.bottom + 1;
+        });
+        if (!inside) throw new Error('the selected node should be panned fully into the phone map');
+        await page.locator('#caseTab-evidence').click();
+        await page.waitForSelector('#casePane-evidence:not([hidden])');
+      }
+      if (process.env.SMOKE_SHOTS) await page.screenshot({ path: path.join(process.env.SMOKE_SHOTS, `board-${label}.png`) });
+      // Connect on the board: handshake log + decrypted ledger -> intel (rows on the phone, nodes on a wide screen).
+      await page.locator('.case-action').click();
+      await page.locator(label === 'desktop' ? '.case-node' : '.case-row', { hasText: 'e13' }).click();
+      await page.waitForFunction(() => [...document.querySelectorAll('.case-row')].some((el) => el.textContent.includes('e17')));
+      board = await boardState(page);
+      if (!board.live.includes('Intel')) throw new Error(`the live region should announce the intel: "${board.live}"`);
+      if (board.legacyDialogs !== 0) throw new Error('a role=dialog div appeared');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+      const focus = await page.evaluate(() => document.activeElement?.id);
+      if (focus !== 'caseTrigger') throw new Error(`focus should return to the CASE FILE button, is on ${focus}`);
+      // Reopen from the keyboard, close with the close button.
+      await page.locator('#caseTrigger').press('Enter');
+      await page.waitForSelector('dialog.case-dialog[open]');
+      await page.locator('.case-close').click();
+      await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+      await winGame(page);
+    },
+  });
+}
+
+// Phase 4.6: evidence the trace overwrites is shown corrupted; the branch not taken stays as a sealed stub.
+scenarios.push({
+  name: 'reduced: board shows lost evidence and the sealed branch',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await sendCommand(page, 'scan');
+    await waitOutput(page, 'new nodes: 2', 30000);
+    await sendCommand(page, 'hint'); // -30 s: the volatile memory record (threshold 90 s) is overwritten
+    await waitOutput(page, 'markup, styles, and script.', 30000);
+    await sleep(1500);
+    await page.locator('#caseTrigger').click();
+    await page.waitForSelector('dialog.case-dialog[open]');
+    const rows = await page.evaluate(() => [...document.querySelectorAll('.case-row')].map((el) => el.textContent));
+    if (!rows.some((row) => row.includes('LOST'))) throw new Error(`a lost record should be listed: ${JSON.stringify(rows)}`);
+    if (!rows.some((row) => row.includes('SEALED // OTHER BRANCH'))) throw new Error(`the other branch should show as a sealed stub: ${JSON.stringify(rows)}`);
+    await page.locator('.case-row', { hasText: 'LOST' }).first().click();
+    const detail = await page.evaluate(() => ({
+      text: document.querySelector('.case-detail').textContent,
+      hiddenCopy: document.querySelector('.case-lost')?.getAttribute('aria-hidden'),
+      spoken: document.querySelector('.case-detail .sr-only')?.textContent,
+    }));
+    if (!detail.text.includes('DATA CORRUPTED') || detail.hiddenCopy !== 'true' || !detail.spoken) throw new Error(`a lost record must say so and hide its scrambled text from screen readers: ${JSON.stringify(detail)}`);
+    await page.locator('.case-row', { hasText: 'SEALED' }).first().click();
+    const sealed = await page.evaluate(() => document.querySelector('.case-detail').textContent);
+    if (!sealed.includes('branch you did not take')) throw new Error(`the sealed stub should explain itself: ${sealed}`);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+  },
+});
+
+// Phase 4.7: the board can be used with the keyboard alone, and its accessibility tree names the dialog, list and map.
+scenarios.push({
+  name: 'reduced: board keyboard-only run and accessibility tree',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await playToShell(page, { who: 'unknown', how: 'click', reduced: true });
+    await buildBoardEvidence(page);
+    await sleep(300);
+    await page.locator('#caseTrigger').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    const focusKind = () => page.evaluate(() => {
+      const el = document.activeElement;
+      return el?.className?.split?.(' ')[0] || el?.tagName;
+    });
+    // Tab from the close button to a list row, select the second row with Enter.
+    for (let i = 0; i < 6 && (await focusKind()) !== 'case-row'; i++) await page.keyboard.press('Tab');
+    if ((await focusKind()) !== 'case-row') throw new Error(`Tab should reach the evidence list, is on ${await focusKind()}`);
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    const selected = await page.evaluate(() => document.querySelector('.case-row[aria-current="true"]')?.textContent ?? '');
+    if (!selected.includes('e13')) throw new Error(`Enter on the second row should select e13, selected: "${selected}"`);
+    const synced = await page.evaluate(() => document.querySelector('.case-node.is-selected')?.textContent ?? '');
+    if (!synced.includes('e13')) throw new Error(`the map node should follow the list selection: "${synced}"`);
+    // The map: arrows pan, + and - zoom, Home fits.
+    await page.locator('.case-network').focus();
+    const transform = () => page.evaluate(() => document.querySelector('.case-map-world').style.transform);
+    const before = await transform();
+    await page.keyboard.press('+');
+    const zoomed = await transform();
+    if (zoomed === before) throw new Error('+ should zoom the map');
+    await page.keyboard.press('ArrowLeft');
+    if ((await transform()) === zoomed) throw new Error('ArrowLeft should pan the zoomed map');
+    await page.keyboard.press('Home');
+    if ((await transform()) !== before) throw new Error('Home should fit the map again');
+    // The accessibility tree (when this Playwright has ariaSnapshot).
+    const dialog = page.locator('dialog.case-dialog');
+    if (typeof dialog.ariaSnapshot === 'function') {
+      const tree = await dialog.ariaSnapshot();
+      for (const needle of ['dialog', 'heading "CASE FILE // INTELLIGENCE DASHBOARD"', 'button "Close the evidence board"', 'list', 'group "Evidence map']) {
+        if (!tree.includes(needle)) throw new Error(`the accessibility tree misses ${needle}:\n${tree.slice(0, 600)}`);
+      }
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    const focus = await page.evaluate(() => document.activeElement?.id);
+    if (focus !== 'caseTrigger') throw new Error(`focus should return to the CASE FILE button, is on ${focus}`);
   },
 });
 
@@ -894,7 +1107,17 @@ if (flag('serial')) {
   results = [];
   for (const scenario of selected) results.push(await runScenario(browser, server, scenario));
 } else {
-  results = await Promise.all(selected.map((scenario) => runScenario(browser, server, scenario)));
+  // A pool of at most `--jobs` (default 14) scenarios at a time: with 27 in parallel the audio device and the CPU
+  // run out (AudioContext errors, real-time scenarios past their timeouts), which is load, not a regression.
+  const jobs = Math.max(1, Number(option('jobs')) || 14);
+  results = new Array(selected.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(jobs, selected.length) }, async () => {
+    while (next < selected.length) {
+      const index = next++;
+      results[index] = await runScenario(browser, server, selected[index]);
+    }
+  }));
 }
 await browser.close();
 server.close();
