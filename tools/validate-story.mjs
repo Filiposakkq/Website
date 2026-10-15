@@ -254,6 +254,19 @@ if (story) {
   }
 }
 
+// ---- the case file introduction in the story (phase 4b.1, 4b.2)
+if (story) {
+  console.log('\ncase file introduction');
+  const flat = story.segments.flatMap((segment) => segment.nodes);
+  const at = (test) => flat.findIndex(test);
+  const inbox = at((node) => node.type === 'cmd' && /inbox\/001\.msg/.test(node.text));
+  const available = flat.map((node, index) => (node.type === 'case' && node.call === 'makeAvailable' ? index : -1)).filter((index) => index >= 0);
+  const traceStart = at((node) => node.type === 'trace' && node.do === 'start');
+  expect(inbox >= 0 && traceStart >= 0, 'the inbox message and the trace start are in the story');
+  expect(available.length === 1, `the story makes the case file available exactly once (${available.length})`);
+  expect(available[0] > inbox && available[0] < traceStart, 'the case file becomes available after the inbox message and before the trace starts');
+}
+
 // ---- the command registry and the system commands (phase 3.8 / 3.9)
 {
   console.log('\ncommands');
@@ -576,6 +589,18 @@ if (story) {
     ['lock-header', 'page-markup', 'page-style', 'page-script'].forEach((id) => orig.discover(id));
     orig.tick(1);
     expect(['lock-header', 'page-markup', 'page-style', 'page-script'].every((id) => orig.snapshot().evidence[id] === 'unlocked'), 'the key layer records stay readable at 1 s');
+  }
+
+  {
+    // Phase 4b.1: the story's first mention opens the board; before it the button stays hidden.
+    const file = make('unknown');
+    expect(trigger.hidden === true, 'after start() the CASE FILE button is hidden');
+    expect(file.makeAvailable() === true && trigger.hidden === false, 'makeAvailable reveals the CASE FILE button');
+    expect(file.makeAvailable() === false, 'makeAvailable is safe to call twice (false the second time)');
+    expect(file.getView().events.some((entry) => entry.title === 'CASE FILE AVAILABLE'), 'the timeline records that the board became available');
+    expect(file.snapshot().discoveries.length === 0, 'making the board available discovers no evidence');
+    file.start('unknown');
+    expect(trigger.hidden === true, 'start() (a reboot) hides the button again');
   }
 
   {

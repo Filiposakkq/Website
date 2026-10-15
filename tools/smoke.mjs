@@ -336,6 +336,60 @@ scenarios.push({
   },
 });
 
+// Phase 4b.1: the CASE FILE button stays hidden until the story mentions the case file (right after the inbox message)
+// and is available from then on, on both routes. The real-time run proves it is hidden at the start and that the
+// node still runs when the intro is skipped; the reduced-motion run is the quick check of the whole path.
+for (const who of ['unknown', 'watcher']) {
+  scenarios.push({
+    name: `desktop: the CASE FILE button is hidden at the start and available after the skipped intro (trust ${who})`,
+    contextOptions: DESKTOP,
+    async run({ page }) {
+      await initialize(page);
+      const triggerHidden = () => page.evaluate(() => document.getElementById('caseTrigger').hidden);
+      if (!(await triggerHidden())) throw new Error('the CASE FILE button must be hidden before the story mentions the case file');
+      await reachTrustChoice(page, { reduced: false });
+      if (await triggerHidden()) throw new Error('the CASE FILE button must be visible once the intro (skipped) has passed the inbox message');
+      await chooseTrust(page, who, 'click');
+      await reachPuzzle(page);
+      await sendCommand(page, 'board');
+      await page.waitForSelector('dialog.case-dialog[open]');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    },
+  });
+}
+scenarios.push({
+  name: 'reduced: the CASE FILE button is available at the trust choice and opens the board',
+  contextOptions: REDUCED,
+  async run({ page }) {
+    await initialize(page);
+    await reachTrustChoice(page, { reduced: true });
+    const shown = await page.evaluate(() => {
+      const button = document.getElementById('caseTrigger');
+      return !button.hidden && button.getAttribute('aria-label');
+    });
+    if (!shown) throw new Error('the CASE FILE button should be visible at the trust choice');
+    await page.locator('#caseTrigger').click();
+    await page.waitForSelector('dialog.case-dialog[open]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.case-dialog'));
+    await chooseTrust(page, 'unknown', 'click');
+    await reachPuzzle(page);
+  },
+});
+scenarios.push({
+  name: 'desktop: a developer jump into the puzzle makes the case file available',
+  contextOptions: DESKTOP,
+  async run({ page }) {
+    await initialize(page);
+    await devRoute(page, 'puzzle');
+    await waitShown(page, '#caseTrigger', 30000);
+    await sendCommand(page, 'board');
+    await page.waitForSelector('dialog.case-dialog[open]');
+    await page.keyboard.press('Escape');
+  },
+});
+
 // Phase 4.3: the hacking commands build the case file in real time and the key is still solved afterwards.
 scenarios.push({
   name: 'desktop: scan, intercept, dump, decrypt, connect -> victory',

@@ -83,8 +83,8 @@ Commit and push after **every row** (see "Checkpoints" in the master README). Up
 | Step | Status | Commit | Notes |
 |---|---|---|---|
 | 4b.0 Re-verify + start log | done | `75d1266` | branch pushed; findings in "Re-verification (4b.0)" below; baseline smoke on `main` `bad4a0b`: 26 of 27 in the parallel run, the 27th (`reduced: typing ticks ...`, a known load flake) passes alone |
-| 4b.0b Trace window after trust = 300 s | in progress | | code and docs committed, full smoke running on a snapshot (result recorded in the next commit) |
-| 4b.1 Availability at the first mention | todo | | |
+| 4b.0b Trace window after trust = 300 s | done | `25bfc45` | window 300 s, loss thresholds as shares (113 / 88 / 225 s left), spoken line, docs, smoke serves a 120 s test window + one scenario for the shipped value. **last green commit: `25bfc45`**: full smoke 25/28 in the parallel run; the 3 failures (`reduced: typing ticks ...` and two real-time desktop scenarios that timed out in `reachTrustChoice` while other tools ran) all pass alone on the same snapshot; `validate-story`, `audio-lint` (0 problems) and `check-fonts` pass |
+| 4b.1 Availability at the first mention | in progress | | `makeAvailable()`, the story node (`caseBriefing`), developer routes, validator and 4 smoke scenarios written and passing alone; full smoke still to run |
 | 4b.2 Explanation by a character | todo | | needs the owner's answers above |
 | 4b.3 Board command pane | todo | | |
 | 4b.4 Tests | todo | | |

@@ -9,7 +9,7 @@ import { rand } from '../util.js';
 import { TRACE } from './constants.js';
 import {
   line, blank, type, say, typing, cmd, svc, wait, sfx, scene, gfx, flash, burst, corrupt, blackout, rain, logo,
-  wipe, trace, run, parts,
+  wipe, trace, caseFile, run, parts,
 } from './dsl.js';
 
 const transmission = [
@@ -92,6 +92,11 @@ const guestSession = [
   type('look closer.', 'warn', 90),
   wait(1200),
   blank(),
+];
+
+// The first mention of the case file (phase 4b): right after the inbox message the CASE FILE button appears.
+const caseBriefing = [
+  caseFile('makeAvailable'),
 ];
 
 // The countdown appears in the middle of the screen, hangs there for a moment, then docks to the corner.
@@ -201,5 +206,5 @@ const watcherBreaksIn = [
 ];
 
 export const intro = [
-  ...transmission, ...hello, ...guestSession, ...brief, ...cutOff, ...watcherBreaksIn,
+  ...transmission, ...hello, ...guestSession, ...caseBriefing, ...brief, ...cutOff, ...watcherBreaksIn,
 ];

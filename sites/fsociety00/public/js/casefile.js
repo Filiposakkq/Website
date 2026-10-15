@@ -73,6 +73,13 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     notify('data');
   }
 
+  /** Plays the reveal animation of the CASE FILE button again (the class is removed first so it restarts). */
+  function revealTrigger() {
+    trigger.classList.remove('case-trigger--revealed');
+    void trigger.offsetWidth;
+    trigger.classList.add('case-trigger--revealed');
+  }
+
   function updateTrigger() {
     trigger.hidden = !state.boardUnlocked;
     trigger.querySelector('.case-count').textContent = pad2(state.discoveries.size);
@@ -110,12 +117,24 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
     else state.items.set(item.id, next);
     if (READABLE.includes(next)) state.discoveries.add(item.id);
     else state.discoveries.delete(item.id);
+    // The fallback of `makeAvailable`: the first record that leaves `hidden` opens the board when the story has not
+    // (a developer jump into the puzzle, a test that drives the case file alone).
     if (!state.boardUnlocked && next !== 'hidden') {
       state.boardUnlocked = true;
-      trigger.classList.remove('case-trigger--revealed');
-      void trigger.offsetWidth;
-      trigger.classList.add('case-trigger--revealed');
+      revealTrigger();
     }
+  }
+
+  /**
+   * The story's first mention of the case file (phase 4b): the CASE FILE button appears and can be used from here on.
+   * Before this the button stays hidden. Returns true when it was new. Safe to call twice; `start()` takes it away again.
+   */
+  function makeAvailable() {
+    if (state.boardUnlocked) return false;
+    state.boardUnlocked = true;
+    revealTrigger();
+    recordEvent('system', 'CASE FILE AVAILABLE', 'The board can be opened from the corner of the screen.');
+    return true;
   }
 
   /** Makes a record readable: `cat`, a story beat or the easter egg. Returns true when it was new. */
@@ -502,6 +521,7 @@ export function createCaseFile({ trigger, getTraceLeft = () => null, setTraceLef
 
   return {
     start,
+    makeAvailable,
     discover,
     chooseTrust,
     markHint,
