@@ -20,6 +20,10 @@ Written 2026-10-13 from the "Touches" line of each phase file. It is the file-le
 | `sites/main/public/*` | | | | | | | **only this** | |
 | `tools/*` | audio-lint | validate-story | | perf | | font lint | | all |
 
+| `js/casefile.js`, `js/board-ui.js` | | | 4 rework | | | | | |
+
+(Phase 4b, added 2026-10-15, edits `casefile.js`, `board-ui.js`, `hacking-commands.js`/`commands.js`, story data and the `.case-*` CSS region; run it after phase 4 and before or apart from 5.)
+
 ## What can run at the same time
 
 - **Phase 8 (main site)** only touches `sites/main`; it can run any time, in parallel with anything.

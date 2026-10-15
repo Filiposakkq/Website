@@ -58,6 +58,7 @@ Phase files:
 | 6 | [`phase-06-traced-game-over.md`](phase-06-traced-game-over.md) | The "TRACED" game-over sequence |
 | 7 | [`phase-07-developer-panel.md`](phase-07-developer-panel.md) | Fix and extend the developer panel (localhost + preview, never production) |
 | 8 | [`phase-08-main-site.md`](phase-08-main-site.md) | Main site: tokens, accessibility, performance |
+| 4b | [`phase-04b-case-file-intro.md`](phase-04b-case-file-intro.md) | Case file available from the first story mention, a character explains it, board command line |
 | 9 | [`phase-09-extras-and-polish.md`](phase-09-extras-and-polish.md) | Mobile quick-actions (extra 4), source viewer (extra 5), final QA, docs |
 
 ---
@@ -77,6 +78,7 @@ Update this table in every phase's pull request. Status values: `todo`, `in prog
 | 7 | Developer panel | todo | 1; best after 2–6 | `overhaul/phase-7-devpanel` | | |
 | 8 | Main site | todo | — (independent) | `overhaul/phase-8-main-site` | | |
 | 9 | Extras & polish | todo | all others | `overhaul/phase-9-polish` | | |
+| 4b | Case file from the first story mention, explained by a character, with a board command line (owner request 2026-10-15) | todo | 1, 3, 4 | `overhaul/phase-4b-case-file` | | not part of the original plan; open questions in the phase file |
 
 ### Dependency graph and what can run in parallel
 
@@ -377,6 +379,7 @@ None of these is a regression and none blocks the game; each has a home phase.
 
 | Date | Decision / question | Status |
 |---|---|---|
+| 2026-10-15 | New phase 4b (owner request): the case file becomes available at the first mention in the story, a **character** explains it (not an overlay), and the board gets a command line with **board-only commands**. Open: which character, which beat, final command set | Decided by owner; details open |
 | 2026-10-13 | Developer panel is available on `localhost` and on Cloudflare preview URLs, never on production. **Open:** the exact preview hostname pattern (assumed `*.workers.dev`, unverified) and whether the production Workers' own `workers.dev` URLs are disabled (otherwise the panel would show there too) | Decided by owner; pattern for the owner to confirm |
 | 2026-10-13 | "hello, friend." was off-screen in the real reveal and the ghost panel was painted under the terminal text; fixed on branch `fix/hello-center-ghost-mobile` (not part of any phase) | Done, owner to merge |
 | 2026-10-11 | Extras 1, 2, 3, 7 are out of scope; extras 4, 5, 6, 8 are in | Decided by owner |
