@@ -11,7 +11,7 @@ Read [`README.md`](README.md) first. Added 2026-10-15 at the owner's request (no
 
 1. **When:** the case file becomes available **at the first mention in the story**, which is **right after the inbox message** (`cat ~/inbox/001.msg`, before the Level 01 intro), not at boot and not only on the first discovered record. Before that mention the trigger stays hidden.
 2. **Command line:** inside the board there is a small command line that runs **board commands only** (a limited set; the shell keeps the puzzle). It does not replace the shell.
-3. **Explanation:** **a character explains the board** in dialogue (story-driven), not an overlay tutorial. The speaker is a **third character who stays a complete mystery** (neither `unknown` nor `watcher`): no name, no backstory, no explanation of who it is or why it helps. This is deliberate and is recorded in `docs/story/story-bible.md` as an intended open end, not a loose end to fix. The wording still needs the owner's approval.
+3. **Explanation:** **a character explains the board** in dialogue (story-driven), not an overlay tutorial. The speaker is a **third character who stays a complete mystery** (neither `unknown` nor `watcher`), shown as **`<???>` in blue** (decided): no name, no backstory, no explanation of who it is or why it helps. This is deliberate and is recorded in `docs/story/story-bible.md` as an intended open end, not a loose end to fix. The wording still needs the owner's approval.
 4. **Board commands are new evidence commands** (not the shell's), and where one depends on the trace the rules in 4b.3 apply.
 5. **The window after the trust choice becomes 5 minutes** (300 s) instead of 2 (120 s): task 4b.0b. The start of the trace (480 s before the trust choice) is **not** changed.
 
@@ -23,7 +23,7 @@ The evidence board stops being something the player stumbles on. A character int
 
 ### 4b.1 First mention and availability
 
-- [ ] The beat is **right after the inbox message** is read (decided). It is a node in the story data (`story-data/intro.js` or wherever the inbox scene lives), not code. The new voice appears for the first time here: a new voice label in `story-data/voices.js` (handle is an open question), styled so that it is clearly neither `unknown` nor `watcher`.
+- [ ] The beat is **right after the inbox message** is read (decided). It is a node in the story data (`story-data/intro.js` or wherever the inbox scene lives), not code. The new voice appears for the first time here: a new voice in `story-data/voices.js` (`mystery: { name: '???', nameCls: 'voice-blue', cls: 'voice-blue', quiet: false }`, the same shape as `unknown` and `watcher`), rendered as `<???>`. Blue is a new CSS class `.voice-blue`; candidate `#4da6ff` on the black background is 8.21:1 (checked with `node tools/contrast.mjs`; `#3d8bff` is 6.34:1), both pass AA. Keep it clearly different from the cyan `#76dcff` of `.ghosted-id`. Under reduced motion and for screen readers the line is announced as `??? says: ...`.
 - [ ] That node calls a small host action (for example `caseFile.makeAvailable()`), which reveals the trigger (the existing reveal animation) and sets `boardUnlocked`. Today `boardUnlocked` is set by the first discovered record (`setState` in `casefile.js`): keep that as a fallback so a developer jump into the puzzle still works.
 - [ ] The trigger is reachable by keyboard and touch from that moment; `board` in the shell opens it as before. A dev route that skips the intro must make the board available.
 - [ ] The Level 01 puzzle, the three-layer key and `unlock` are untouched. The board stays optional for the win.
@@ -37,7 +37,7 @@ The evidence board stops being something the player stumbles on. A character int
 ### 4b.3 Board command line
 
 - [ ] A command pane in the board dialog (`board-ui.js`): an input with a visible label, an output log inside the dialog, `Enter` to run, history with the up arrow, `Esc` closes the board as before. It must work with the on-screen keyboard (the input stays visible above it) and with a screen reader (its own live region, as the board already has).
-- [ ] Board commands only: **new evidence commands**, not copies of the shell (decided). Proposed set (owner can change): `help`, `list` (records with state), `open <id|code>` (select a record in the board), `scan`, `intercept`, `decrypt <id|code>`, `connect <a> <b>`, `trace` (same as `trace --status`), `close`.
+- [ ] Board commands only: **new evidence commands, every one of them about evidence** (decided), not copies of the shell. Set: `help` (lists the board commands), `list` (records with state), `open <id|code>` (select a record in the board), `scan`, `intercept`, `dump`, `decrypt <id|code>`, `connect <a> <b>`, `close` (closes the board). `trace --status` stays a shell command (it is not evidence; the map is shown in the board anyway). Typing a shell-only word in the pane answers `use the shell for that`.
 - [ ] **Trace dependency (resolve before building).** The board is available from the inbox on, i.e. **before the trace exists** (it starts at the Level 01 intro) and later while it is `running` (cannot expire, floors at TRACE PENDING) and `lethal` (after the trust choice). Rules to implement, each as data in the command definitions (for example `needs: 'none' | 'trace'`), and to test: (a) before the trace has started, only the read-only commands (`help`, `list`, `open`, `close`) work; `scan`, `intercept`, `decrypt`, `connect` answer with one in-world line such as "no active link yet"; (b) while the trace is `running` before the trust choice they work and take their run time, but their trace cost (`connectMissCost`, `hintCost`-style costs) is **not charged** because the trace cannot be hurt yet; (c) after the trust choice (`lethal`) they behave exactly as phase 4 built them; (d) **verify in the code** how the evidence loss thresholds (`CASE.compromiseAt`, measured in trace seconds left) behave in `running` mode and before the trace exists: a record must never be lost while the trace is not lethal (unverified: the phase 4 notes do not say); (e) the board and `trace` command show `TRACE PENDING` / no trace honestly instead of a false countdown. Names are data in a registry (reuse `commands.js` with a `scope: 'board'` group, so that `help` is generated and the validator checks it). Commands that cost time or trace behave **exactly** as in the shell: one implementation, two entry points (the shell and the board pane call the same functions in `hacking-commands.js`).
 - [ ] A shell-only command typed in the board answers `use the shell for that` (no new behaviour, no shell access from the board).
 - [ ] `decrypt` still blocks input while it runs (phase 4 decision); the board pane shows the same progress line.
@@ -46,10 +46,9 @@ The evidence board stops being something the player stumbles on. A character int
 
 ## Open questions for the owner (answer before building 4b.2)
 
-- The third character: its handle or label in the terminal (for example `<???>`, a number, or a symbol), its typing style and colour, and whether it speaks only here or may return later. It stays unexplained either way.
+- The third character: label `<???>` and colour blue are decided. Still open: its typing style (the sound and speed of its text; proposal: slightly slower than `unknown`, no typing ticks, like `Mr. Robot`'s quiet voice) and whether it speaks only here or may return later. It stays unexplained either way.
 - On the watcher route the same voice must still make sense (the sealed-branch evidence is shown as `SEALED // OTHER BRANCH`).
-- Final command set for the board pane.
-- Answered: speaker is a third mystery character; beat is right after the inbox message; board commands are new evidence commands.
+- Answered: speaker is a third mystery character shown as `<???>` in blue; beat is right after the inbox message; board commands are new evidence-only commands (list above).
 
 ## Tasks (checklist)
 
