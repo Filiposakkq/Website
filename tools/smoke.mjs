@@ -420,6 +420,7 @@ scenarios.push({
       '<???> scan finds what is hidden. decrypt opens what is sealed.',
       '<???> both cost time. the trace does not wait.',
       '<???> what you do not hold, the trace will take.',
+      '<???> this line is not logged. keep it that way.',
       '<???> the board has a line of its own. type help.',
       '<???> it is optional. use it.',
     ];

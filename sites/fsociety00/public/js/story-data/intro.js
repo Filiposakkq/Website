@@ -124,6 +124,8 @@ const caseBriefing = [
   wait(1000),
   say('mystery', 'what you do not hold, the trace will take.', { speed: 65 }),
   wait(1000),
+  say('mystery', 'this line is not logged. keep it that way.', { speed: 65 }),
+  wait(1000),
   say('mystery', 'the board has a line of its own. type help.', { speed: 65 }),
   wait(900),
   say('mystery', 'it is optional. use it.', { speed: 65 }),
