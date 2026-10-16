@@ -1,6 +1,6 @@
 # Architecture and rules
 
-Valid after: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15. Verify claims with `grep`, not line numbers.
+Valid after: phase 4b (PR #14), `main` `4f6d0de` (as written by the phase PRs; not re-checked against the code since: unverified). Verify claims with `grep`, not line numbers.
 
 ## Core ideas
 

@@ -1,6 +1,6 @@
 # UI, CSS and the developer panel
 
-Valid after: phase 4b.3 (branch `overhaul/phase-4b-case-file`, verified 2026-10-15, smoke 38 of 38 on `bb599e7`); earlier: phase 3 (PR #10), `main` `1bbc40d`, verified 2026-10-15; the board rows updated by phase 4.5 (branch `overhaul/phase-4-evidence`).
+Valid after: phase 4b (PR #14), `main` `4f6d0de` (as written by the phase PRs; not re-checked against the code since: unverified)
 
 | File | Role |
 |---|---|
